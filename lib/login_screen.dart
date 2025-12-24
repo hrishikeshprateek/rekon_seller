@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'otp_verification_screen.dart';
+import 'auth_service.dart';
+import 'create_password_screen.dart';
+import 'create_mpin_screen.dart';
 import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -13,28 +19,150 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
   // Controllers
-  final _idController = TextEditingController();
+  final _licenseController = TextEditingController();
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool _isObscure = true;
   bool _isLoading = false;
-  bool _rememberMe = false;
 
-  Future<void> _login() async {
+  @override
+  void dispose() {
+    _licenseController.dispose();
+    _mobileController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendOTP() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      // Simulate API call
-      await Future.delayed(const Duration(milliseconds: 1000));
+      final authService = Provider.of<AuthService>(context, listen: false);
+
+      // Always call ValidateLicense API (password is optional - can be empty)
+      final password = _passwordController.text.trim();
+      debugPrint('[LoginScreen] Calling ValidateLicense with password: ${password.isEmpty ? "(empty)" : "(provided)"}');
+
+      final result = await authService.validateLicense(
+        licenseNumber: _licenseController.text.trim(),
+        mobile: _mobileController.text.trim(),
+        password: password, // Can be empty string
+      );
 
       if (!mounted) return;
 
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
-      );
-
       setState(() => _isLoading = false);
+
+      debugPrint('[LoginScreen] ValidateLicense result success: ${result['success']}');
+      debugPrint('[LoginScreen] ValidateLicense result: $result');
+
+      if (result['success']) {
+        // ValidateLicense succeeded, check flags to decide next screen
+        final data = result['data'];
+        debugPrint('[LoginScreen] ValidateLicense success, data: $data');
+        debugPrint('[LoginScreen] data type: ${data.runtimeType}');
+        debugPrint('[LoginScreen] CreatePasswd raw value: ${data is Map ? data['CreatePasswd'] : 'data is not a Map'}');
+        debugPrint('[LoginScreen] CreatePasswd type: ${data is Map ? data['CreatePasswd']?.runtimeType : 'N/A'}');
+
+        // More robust flag detection - check multiple variations
+        bool createPass = false;
+        bool createMPin = false;
+
+        if (data is Map) {
+          // Check CreatePasswd
+          final cpValue = data['CreatePasswd'];
+          if (cpValue == true) {
+            createPass = true;
+          } else if (cpValue is String && cpValue.toLowerCase() == 'true') {
+            createPass = true;
+          } else if (cpValue is bool && cpValue) {
+            createPass = true;
+          }
+
+          // Check CreateMPin
+          final cmValue = data['CreateMPin'];
+          if (cmValue == true) {
+            createMPin = true;
+          } else if (cmValue is String && cmValue.toLowerCase() == 'true') {
+            createMPin = true;
+          } else if (cmValue is bool && cmValue) {
+            createMPin = true;
+          }
+        }
+
+        debugPrint('[LoginScreen] CreatePasswd=$createPass, CreateMPin=$createMPin');
+
+        if (createPass) {
+          debugPrint('[LoginScreen] Navigating to CreatePasswordScreen');
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => CreatePasswordScreen(
+            mobile: _mobileController.text.trim(),
+            licenseNumber: _licenseController.text.trim(),
+          )));
+          return;
+        }
+        if (createMPin) {
+          debugPrint('[LoginScreen] Navigating to CreateMpinScreen');
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => CreateMpinScreen(
+            mobile: _mobileController.text.trim(),
+            licenseNumber: _licenseController.text.trim(),
+          )));
+          return;
+        }
+        // Otherwise navigate to home
+        debugPrint('[LoginScreen] Navigating to HomeScreen');
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+        return;
+       } else {
+         // Login failed - show error
+         debugPrint('[LoginScreen] ValidateLicense FAILED');
+         debugPrint('[LoginScreen] Full result: $result');
+         debugPrint('[LoginScreen] Message: ${result['message']}');
+         debugPrint('[LoginScreen] Data: ${result['data']}');
+         debugPrint('[LoginScreen] Raw: ${result['raw']}');
+
+         // Extract message with fallback
+         String message = 'Failed to login';
+         if (result['message'] != null && result['message'].toString().isNotEmpty) {
+           message = result['message'].toString();
+         } else if (result['data'] is Map && result['data']['Message'] != null) {
+           message = result['data']['Message'].toString();
+         } else if (result['data'] is Map && result['data']['message'] != null) {
+           message = result['data']['message'].toString();
+         }
+
+         debugPrint('[LoginScreen] Final error message: $message');
+
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(
+             content: Text(message),
+             backgroundColor: Colors.red,
+             duration: const Duration(seconds: 4),
+           ),
+         );
+
+         // Also show a dialog with full debug JSON so the developer can copy it
+         if (result['raw'] != null || result['data'] != null) {
+           showDialog<void>(
+             context: context,
+             builder: (ctx) {
+               return AlertDialog(
+                 title: const Text('Login debug info'),
+                 content: SingleChildScrollView(
+                   child: SelectableText(
+                     const JsonEncoder.withIndent('  ').convert(result),
+                     style: const TextStyle(fontSize: 12),
+                   ),
+                 ),
+                 actions: [
+                   TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
+                 ],
+               );
+             },
+           );
+         }
+       }
     }
   }
 
@@ -105,18 +233,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         // --- 2. INPUT FIELDS (Compact Typography) ---
 
-                        // Seller ID
+                        // License Number
                         TextFormField(
-                          controller: _idController,
+                          controller: _licenseController,
                           textInputAction: TextInputAction.next,
                           style: const TextStyle(fontSize: 14),
                           decoration: _materialDecoration(
                               context,
-                              label: 'Seller ID',
-                              hint: 'e.g. VEN-1023',
+                              label: 'License Number',
+                              hint: 'e.g. ONS07726',
                               icon: Icons.badge_outlined
                           ),
-                          validator: (v) => (v?.isEmpty ?? true) ? 'Seller ID is required' : null,
+                          validator: (v) => (v?.isEmpty ?? true) ? 'License number is required' : null,
                         ),
                         const SizedBox(height: 16),
 
@@ -124,9 +252,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextFormField(
                           controller: _mobileController,
                           keyboardType: TextInputType.phone,
-                          textInputAction: TextInputAction.next,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          textInputAction: TextInputAction.done,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(10),
+                          ],
                           style: const TextStyle(fontSize: 14),
+                          onFieldSubmitted: (_) => _sendOTP(),
                           decoration: _materialDecoration(
                               context,
                               label: 'Mobile Number',
@@ -135,72 +267,33 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           validator: (v) {
                             if (v == null || v.isEmpty) return 'Mobile number is required';
-                            if (v.length < 10) return 'Enter a valid 10-digit number';
+                            if (v.length != 10) return 'Enter a valid 10-digit number';
                             return null;
                           },
                         ),
-                        const SizedBox(height: 16),
 
-                        // Password
+                        const SizedBox(height: 12),
+                        // Optional Password - if filled, app will attempt direct login with ValidateLicense
                         TextFormField(
                           controller: _passwordController,
-                          obscureText: _isObscure,
+                          obscureText: true,
                           textInputAction: TextInputAction.done,
                           style: const TextStyle(fontSize: 14),
-                          onFieldSubmitted: (_) => _login(),
                           decoration: _materialDecoration(
                               context,
-                              label: 'Password',
-                              hint: 'Enter your password',
+                              label: 'Password (optional)',
+                              hint: 'Enter password to login directly',
                               icon: Icons.lock_outline
-                          ).copyWith(
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _isObscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                                color: colorScheme.onSurfaceVariant,
-                                size: 20,
-                              ),
-                              onPressed: () => setState(() => _isObscure = !_isObscure),
-                            ),
                           ),
-                          validator: (v) => (v?.isEmpty ?? true) ? 'Password is required' : null,
                         ),
 
-                        // --- 3. OPTIONS ---
-                        const SizedBox(height: 8),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                SizedBox(
-                                  height: 20, width: 20,
-                                  child: Checkbox(
-                                    value: _rememberMe,
-                                    onChanged: (v) => setState(() => _rememberMe = v!),
-                                    activeColor: colorScheme.primary,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text("Remember me", style: TextStyle(fontSize: 13, color: colorScheme.onSurface)),
-                              ],
-                            ),
-                            TextButton(
-                              onPressed: () {},
-                              style: TextButton.styleFrom(padding: EdgeInsets.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                              child: const Text("Forgot Password?", style: TextStyle(fontSize: 13)),
-                            )
-                          ],
-                        ),
+                        const SizedBox(height: 32),
 
-                        const SizedBox(height: 24),
-
-                        // --- 4. LOGIN BUTTON ---
+                        // --- 3. LOGIN BUTTON ---
                         SizedBox(
                           height: 48,
                           child: FilledButton(
-                            onPressed: _isLoading ? null : _login,
+                            onPressed: _isLoading ? null : _sendOTP,
                             style: FilledButton.styleFrom(
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -223,6 +316,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                 letterSpacing: 0.5,
                               ),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Info text
+                        Text(
+                          "Password is optional. If not set, you'll be asked to create one.",
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],

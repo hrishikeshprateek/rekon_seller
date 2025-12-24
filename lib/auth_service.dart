@@ -1,33 +1,684 @@
 // filepath: /Users/hrishikeshprateek/AndroidStudioProjects/reckon_seller_2_0/lib/auth_service.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'models/user_model.dart';
+import 'dart:io';
+import 'app_navigator.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 class AuthService with ChangeNotifier {
-  // API configuration - will be updated with new APIs later
-  static const String baseUrl = 'https://your-api-endpoint.com'; // TODO: Update this
+  // API configuration
+  // Updated base URL (new API host + path)
+  static const String baseUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder';
+  static const String tenantId = 'com.reckon.reckon_biz_report';
+  // Updated API header package name
+  static const String packageName = 'com.reckon.reckonbiz';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final Dio _dio = Dio();
+
+  // package name used in API header
+  String get packageNameHeader => packageName;
+
 
   Completer<void>? _autoLoginCompleter;
 
   String? _accessToken;
+  String? _jwtToken;
+  String? _refreshToken;
+  UserModel? _currentUser;
+
   String? get accessToken => _accessToken;
+  String? get jwtToken => _jwtToken;
+  UserModel? get currentUser => _currentUser;
+  bool get isAuthenticated => _accessToken != null && _jwtToken != null;
 
-  bool get isAuthenticated => _accessToken != null;
-
-  // Simplified login - no API call for now
-  Future<void> login(String email, String password) async {
-    // TODO: Replace with actual API call when available
-    // For now, just simulate login
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Set a dummy token
-    _accessToken = 'dummy_access_token';
-    await _storage.write(key: 'access_token', value: _accessToken);
-    notifyListeners();
+  AuthService() {
+    _dio.options.baseUrl = baseUrl;
+    _dio.options.connectTimeout = const Duration(seconds: 30);
+    _dio.options.receiveTimeout = const Duration(seconds: 30);
   }
 
+  // Helper to ensure response data is a Map<String, dynamic>
+  Map<String, dynamic> _normalizeResponse(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is String) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) return decoded;
+        return {'Message': raw};
+      } catch (_) {
+        return {'Message': raw};
+      }
+    }
+    if (raw == null) return {'Message': 'Empty response'};
+    try {
+      final decoded = jsonDecode(jsonEncode(raw));
+      if (decoded is Map<String, dynamic>) return decoded;
+      return {'Message': decoded.toString()};
+    } catch (_) {
+      return {'Message': 'Unknown response format'};
+    }
+  }
+
+  // Get device info (you can enhance this with device_info_plus package)
+  String get deviceId => '14319366a2e9f11';
+  String get deviceName => 'unknown Android Android SDK built for arm64';
+
+  /// Validate license / login using the new ValidateLicense API
+  Future<Map<String, dynamic>> validateLicense({
+    required String licenseNumber,
+    required String mobile,
+    required String password,
+    String countryCode = '91',
+    String apkName = 'com.reckon.reckonbiz',
+    String appRole = 'SalesMan',
+    int vCode = 31,
+    String versionName = '1.7.23',
+    String lRole = 'SalesMan',
+  }) async {
+    try {
+      final payload = {
+        'lApkName': apkName,
+        'LicNo': licenseNumber,
+        'MobileNo': mobile,
+        'Password': password,
+        'CountryCode': countryCode,
+        'app_role': appRole,
+        'LoginDeviceId': deviceId,
+        'device_name': deviceName,
+        'v_code': vCode,
+        'version_name': versionName,
+        'lRole': lRole,
+      };
+
+      final response = await _dio.post(
+        '/ValidateLicense',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': packageNameHeader,
+          },
+        ),
+      );
+
+      // Robust parsing: response.data may be Map, String, or other.
+      dynamic raw = response.data;
+      debugPrint('[AuthService] Raw response from API: $raw');
+      debugPrint('[AuthService] Raw response type: ${raw.runtimeType}');
+
+      Map<String, dynamic> data;
+      if (raw is Map<String, dynamic>) {
+        data = raw;
+        debugPrint('[AuthService] Response is already a Map');
+      } else if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          if (decoded is Map<String, dynamic>) {
+            data = decoded;
+            debugPrint('[AuthService] Response was String, decoded to Map');
+          } else {
+            data = {'Message': raw};
+            debugPrint('[AuthService] Response was String, but not valid JSON');
+          }
+        } catch (_) {
+          // not JSON, store raw string in Message
+          data = {'Message': raw};
+          debugPrint('[AuthService] Response was String, but JSON decode failed');
+        }
+      } else if (raw == null) {
+        data = {'Message': 'Empty response'};
+        debugPrint('[AuthService] Response was null');
+      } else {
+        // try to convert to Map via jsonEncode -> decode
+        try {
+          final decoded = jsonDecode(jsonEncode(raw));
+          if (decoded is Map<String, dynamic>) {
+            data = decoded;
+            debugPrint('[AuthService] Response was other type, converted to Map');
+          } else {
+            data = {'Message': decoded.toString()};
+            debugPrint('[AuthService] Response was other type, converted but not Map');
+          }
+        } catch (_) {
+          data = {'Message': 'Unknown response format'};
+          debugPrint('[AuthService] Response was other type, conversion failed');
+        }
+      }
+
+      debugPrint('[AuthService] Final parsed data: $data');
+
+      // Check if user needs to create password or MPIN FIRST - before checking Status
+      debugPrint('[AuthService] ===== FLAG DETECTION START =====');
+      debugPrint('[AuthService] Raw data: $data');
+      debugPrint('[AuthService] data["CreatePasswd"] = ${data['CreatePasswd']}');
+      debugPrint('[AuthService] data["CreatePasswd"] type = ${data['CreatePasswd']?.runtimeType}');
+      debugPrint('[AuthService] data["CreateMPin"] = ${data['CreateMPin']}');
+      debugPrint('[AuthService] data["CreateMPin"] type = ${data['CreateMPin']?.runtimeType}');
+      debugPrint('[AuthService] data["Status"] = ${data['Status']}');
+      debugPrint('[AuthService] data["Status"] type = ${data['Status']?.runtimeType}');
+
+      // BULLETPROOF flag detection - handle all possible cases
+      bool needsCreatePass = false;
+      bool needsCreateMPin = false;
+
+      // Check CreatePasswd
+      final cpValue = data['CreatePasswd'];
+      if (cpValue == true) {
+        needsCreatePass = true;
+        debugPrint('[AuthService] CreatePasswd detected: == true');
+      } else if (cpValue is bool && cpValue) {
+        needsCreatePass = true;
+        debugPrint('[AuthService] CreatePasswd detected: bool && cpValue');
+      } else if (cpValue?.toString().toLowerCase() == 'true') {
+        needsCreatePass = true;
+        debugPrint('[AuthService] CreatePasswd detected: string "true"');
+      } else if (cpValue?.toString() == '1') {
+        needsCreatePass = true;
+        debugPrint('[AuthService] CreatePasswd detected: string "1"');
+      }
+
+      // Check CreateMPin
+      final cmValue = data['CreateMPin'];
+      if (cmValue == true) {
+        needsCreateMPin = true;
+        debugPrint('[AuthService] CreateMPin detected: == true');
+      } else if (cmValue is bool && cmValue) {
+        needsCreateMPin = true;
+        debugPrint('[AuthService] CreateMPin detected: bool && cmValue');
+      } else if (cmValue?.toString().toLowerCase() == 'true') {
+        needsCreateMPin = true;
+        debugPrint('[AuthService] CreateMPin detected: string "true"');
+      } else if (cmValue?.toString() == '1') {
+        needsCreateMPin = true;
+        debugPrint('[AuthService] CreateMPin detected: string "1"');
+      }
+
+      debugPrint('[AuthService] FINAL: needsCreatePass = $needsCreatePass');
+      debugPrint('[AuthService] FINAL: needsCreateMPin = $needsCreateMPin');
+      debugPrint('[AuthService] ===== FLAG DETECTION END =====');
+
+      // If user needs to create password or MPIN, return success even if Status is false
+      // This allows UI to navigate to password/mpin creation screens
+      debugPrint('[AuthService] CHECKPOINT 1: About to check if needsCreatePass || needsCreateMPin');
+      debugPrint('[AuthService] CHECKPOINT 1: needsCreatePass=$needsCreatePass, needsCreateMPin=$needsCreateMPin');
+
+      if (needsCreatePass || needsCreateMPin) {
+        debugPrint('[AuthService] CHECKPOINT 2: ENTERED THE IF BLOCK - Will return success');
+        debugPrint('[AuthService] User needs to create password/mpin. CreatePasswd=$needsCreatePass, CreateMPin=$needsCreateMPin');
+        final returnValue = {
+          'success': true,
+          'message': data['Message'] ?? 'Please create password/MPIN',
+          'data': data,
+          'raw': raw,
+        };
+        debugPrint('[AuthService] CHECKPOINT 3: RETURNING SUCCESS with data containing CreatePasswd');
+        debugPrint('[AuthService] Return value success: ${returnValue['success']}');
+        return returnValue;
+      }
+
+      debugPrint('[AuthService] CHECKPOINT 4: DID NOT ENTER CreatePasswd block, continuing to Status check');
+
+      // If backend explicitly returned Status: false (and no password/mpin needed), treat as failure
+      if (data.containsKey('Status') && (data['Status'] == false || data['Status']?.toString().toLowerCase() == 'false')) {
+        return {
+          'success': false,
+          'message': data['Message'] ?? data['message'] ?? 'Login failed (Status false)',
+          'data': data,
+          'raw': raw,
+        };
+      }
+
+      // If API returns AccessToken, consider it successful login
+      final hasAccessToken = (data['AccessToken'] != null && data['AccessToken'].toString().isNotEmpty);
+      final statusTrue = data['Status'] == true || (data['Status']?.toString().toLowerCase() == 'true');
+
+      if (hasAccessToken || statusTrue) {
+        // Only persist tokens if user doesn't need to create password/mpin
+        if (!needsCreatePass && !needsCreateMPin) {
+          _accessToken = data['AccessToken']?.toString();
+          // Some APIs return only AccessToken - use it as jwt token for Authorization header
+          _jwtToken = _accessToken;
+
+          // Map profile to our UserModel (Profile may be null)
+          final profileRaw = data['Profile'];
+          Map<String, dynamic>? profile;
+          if (profileRaw is Map<String, dynamic>) {
+            profile = profileRaw;
+          } else if (profileRaw is String) {
+            try {
+              final p = jsonDecode(profileRaw);
+              if (p is Map<String, dynamic>) profile = p;
+            } catch (_) {}
+          }
+          if (profile != null) {
+            _currentUser = UserModel.fromProfileJson(profile);
+          }
+
+          // Persist
+          if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
+          if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
+          if (_currentUser != null) await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+
+          notifyListeners();
+        }
+
+        return {
+          'success': true,
+          'message': data['Message'] ?? 'Login successful',
+          'data': data,
+        };
+      }
+
+      return {
+        'success': false,
+        'message': data['Message'] ?? 'Login failed',
+        'data': data,
+      };
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        // try to get a useful message from error response
+        'message': e.response?.data is Map ? (e.response?.data['Message'] ?? e.response?.data['message']) : (e.response?.data?.toString() ?? e.message ?? 'Network error'),
+        'data': null,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+      };
+    }
+  }
+
+  /// Send OTP to mobile number
+  Future<Map<String, dynamic>> sendOTP({
+    required String mobile,
+    required String licenseNumber,
+    String countryCode = '91',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/login/otp',
+        data: {
+          'mobile': mobile,
+          'license_number': licenseNumber,
+          'country_code': countryCode,
+        },
+        options: Options(
+          headers: {
+            'X-Tenant-Id': tenantId,
+            'Content-Type': 'application/json',
+            'package_name': packageNameHeader,
+            'device_id': deviceId,
+            'device_name': deviceName,
+          },
+        ),
+      );
+
+      final data = _normalizeResponse(response.data);
+      // If backend explicitly returned Status: false, treat as failure
+      if (data.containsKey('Status') && (data['Status'] == false || data['Status']?.toString().toLowerCase() == 'false')) {
+        return {
+          'success': false,
+          'message': data['Message'] ?? data['message'] ?? 'Operation failed (Status false)',
+          'data': data,
+          'raw': response.data,
+        };
+      }
+      return {
+        'success': data['success'] == true || data['success']?.toString() == '1',
+        'message': data['message'] ?? data['Message'] ?? 'Unknown error',
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data is Map ? (e.response?.data['message'] ?? e.response?.data['Message']) : (e.response?.data?.toString() ?? e.message ?? 'Network error'),
+        'data': null,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+      };
+    }
+  }
+
+  /// Verify OTP and login
+  Future<Map<String, dynamic>> verifyOTP({
+    required String mobile,
+    required String licenseNumber,
+    required String otp,
+    String countryCode = '91',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/login/verify',
+        data: {
+          'mobile': mobile,
+          'license_number': licenseNumber,
+          'country_code': countryCode,
+          'otp': otp,
+        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': packageNameHeader,
+            'device_id': deviceId,
+            'device_name': deviceName,
+          },
+        ),
+      );
+
+      final data = _normalizeResponse(response.data);
+      // If backend explicitly returned Status: false, treat as failure
+      if (data.containsKey('Status') && (data['Status'] == false || data['Status']?.toString().toLowerCase() == 'false')) {
+        return {
+          'success': false,
+          'message': data['Message'] ?? data['message'] ?? 'Operation failed (Status false)',
+          'data': data,
+          'raw': response.data,
+        };
+      }
+      if (data['success'] == true || data['success']?.toString() == '1') {
+        // Attempt to read nested 'data' field which may hold tokens
+        final nested = data['data'];
+        if (nested is Map<String, dynamic>) {
+          try {
+            final loginResponse = LoginResponse.fromJson({'success': true, 'message': data['message'] ?? '', 'rs': data['rs'] ?? 0, 'data': nested});
+            if (loginResponse.data != null) {
+              _accessToken = loginResponse.data!.token;
+              _jwtToken = loginResponse.data!.jwtToken;
+              _refreshToken = loginResponse.data!.refreshToken;
+              _currentUser = loginResponse.data!.user;
+
+              await _storage.write(key: 'access_token', value: _accessToken);
+              await _storage.write(key: 'jwt_token', value: _jwtToken);
+              await _storage.write(key: 'refresh_token', value: _refreshToken);
+              await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+
+              notifyListeners();
+            }
+            return {'success': true, 'message': data['message'] ?? 'Login successful', 'data': nested, 'raw': response.data};
+          } catch (_) {
+            return {'success': true, 'message': data['message'] ?? 'Success', 'data': data, 'raw': response.data};
+          }
+        }
+        return {'success': true, 'message': data['message'] ?? 'Success', 'data': data, 'raw': response.data};
+      }
+
+      return {'success': false, 'message': data['message'] ?? data['Message'] ?? 'Verification failed', 'data': data, 'raw': response.data};
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data['message'] ?? e.message ?? 'Network error',
+        'data': null,
+        'raw': e.response?.data,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+        'raw': null,
+      };
+    }
+  }
+
+  /// Validate mobile OTP endpoint (new API)
+  Future<Map<String, dynamic>> validateMobileOTP({
+    required String mobile,
+    required String otp,
+    String countryCode = '91',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/ValidateMobileOTP',
+        data: {
+          'MobileNo': mobile,
+          'OTP': otp,
+          'CountryCode': countryCode,
+        },
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': packageNameHeader,
+            if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
+          },
+        ),
+      );
+
+      final data = _normalizeResponse(response.data);
+      // If backend explicitly returned Status: false, treat as failure
+      if (data.containsKey('Status') && (data['Status'] == false || data['Status']?.toString().toLowerCase() == 'false')) {
+        return {
+          'success': false,
+          'message': data['Message'] ?? data['message'] ?? 'Operation failed (Status false)',
+          'data': data,
+          'raw': response.data,
+        };
+      }
+      // If API returns AccessToken, treat as successful and persist
+      final hasAccessToken = (data['AccessToken'] != null && data['AccessToken'].toString().isNotEmpty);
+      final statusTrue = data['Status'] == true || (data['Status']?.toString().toLowerCase() == 'true');
+      if (hasAccessToken || statusTrue) {
+        _accessToken = data['AccessToken']?.toString();
+        _jwtToken = _accessToken;
+        final profile = data['Profile'] is Map<String, dynamic> ? data['Profile'] as Map<String, dynamic> : null;
+        if (profile != null) _currentUser = UserModel.fromProfileJson(profile);
+        if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
+        if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
+        if (_currentUser != null) await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+        notifyListeners();
+        return {'success': true, 'message': data['Message'] ?? 'OTP Verified', 'data': data, 'raw': response.data};
+      }
+
+      return {'success': false, 'message': data['Message'] ?? data['message'] ?? 'OTP verification failed', 'data': data, 'raw': response.data};
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null};
+    } catch (e) {
+      return {'success': false, 'message': 'An unexpected error occurred: ${e.toString()}', 'data': null};
+    }
+  }
+
+  /// Create or set user password
+  /// Uses endpoint POST /forgotpassword with payload: { licNo, countryCode, password }
+  Future<Map<String, dynamic>> createPassword({
+    required String mobile,
+    required String password,
+    String countryCode = '91',
+    String? licenseNumber,
+  }) async {
+    try {
+      // Use licenseNumber when available; otherwise fallback to mobile (keeps backward compatibility)
+      final lic = (licenseNumber != null && licenseNumber.isNotEmpty) ? licenseNumber : mobile;
+
+      final payload = {
+        'licNo': lic,
+        'countryCode': countryCode,
+        'password': password,
+      };
+
+      final response = await _dio.post(
+        '/forgotpassword',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': packageNameHeader,
+            // Note: curl example does not include Authorization; omit it here for parity.
+          },
+        ),
+      );
+
+      final data = _normalizeResponse(response.data);
+      final success = data['success'] == true || data['Status'] == true || (data['status']?.toString().toLowerCase() == 'true');
+      return {
+        'success': success,
+        'message': data['message'] ?? data['Message'] ?? (success ? 'Password created' : 'Failed to create password'),
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data?.toString() ?? e.message ?? 'Network error',
+        'data': null,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+      };
+    }
+  }
+
+  /// Create / set MPIN (6-digit) - uses new endpoint '/saveMpin'
+  Future<Map<String, dynamic>> createMPin({
+    required String mobile,
+    required String mpin,
+    String countryCode = '91',
+    String? licenseNumber,
+  }) async {
+    try {
+      final payload = {
+        'mobileNo': mobile,
+        'countryCode': countryCode,
+        'mPin': mpin,
+      };
+      // licenseNumber not used by new endpoint but keep for compatibility
+
+      final response = await _dio.post(
+        '/saveMpin',
+        data: payload,
+        options: Options(headers: {
+          'Content-Type': 'application/json',
+          'package_name': packageNameHeader,
+        }),
+      );
+
+      final data = _normalizeResponse(response.data);
+      final success = data['success'] == true || data['Status'] == true || (data['status']?.toString().toLowerCase() == 'true');
+      return {
+        'success': success,
+        'message': data['message'] ?? data['Message'] ?? (success ? 'MPIN created' : 'Failed to create MPIN'),
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null, 'raw': e.response?.data};
+    } catch (e) {
+      return {'success': false, 'message': 'An unexpected error occurred: ${e.toString()}', 'data': null, 'raw': null};
+    }
+  }
+
+  /// Validate MPIN endpoint
+  Future<Map<String, dynamic>> validateMpin({
+    required String mobile,
+    required String mpin,
+    String countryCode = '91',
+  }) async {
+    try {
+      final payload = {
+        'mobileNo': mobile,
+        'countryCode': countryCode,
+        'mpin': mpin,
+      };
+      final response = await _dio.post('/validaeMpin', data: payload, options: Options(headers: {
+        'Content-Type': 'application/json',
+        'package_name': packageNameHeader,
+      }));
+      final data = _normalizeResponse(response.data);
+      return {
+        'success': data['Status'] == true || data['status']?.toString() == 'true',
+        'message': data['Message'] ?? data['message'] ?? '',
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null, 'raw': e.response?.data};
+    } catch (e) {
+      return {'success': false, 'message': 'Unexpected: ${e.toString()}', 'data': null, 'raw': null};
+    }
+  }
+
+  /// Refresh Access Token using stored refresh token. Assumes endpoint '/RefreshToken'
+  Future<Map<String, dynamic>> refreshAccessToken() async {
+    if (_refreshToken == null) {
+      return {'success': false, 'message': 'No refresh token available'};
+    }
+    try {
+      final payload = {'RefreshToken': _refreshToken};
+      final response = await _dio.post('/RefreshToken', data: payload, options: Options(headers: {
+        'Content-Type': 'application/json',
+        'package_name': packageNameHeader,
+      }));
+      final data = _normalizeResponse(response.data);
+      final ok = data['Status'] == true || (data['AccessToken'] != null && data['AccessToken'].toString().isNotEmpty);
+      if (ok) {
+        _accessToken = data['AccessToken']?.toString() ?? _accessToken;
+        _jwtToken = _accessToken;
+        if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
+        if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
+        return {'success': true, 'data': data};
+      }
+      return {'success': false, 'message': data['Message'] ?? 'Failed to refresh', 'data': data};
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null};
+    } catch (e) {
+      return {'success': false, 'message': 'Unexpected: ${e.toString()}', 'data': null};
+    }
+  }
+
+  /// Show MPIN prompt (dialog) and attempt to validate and refresh tokens. Returns true if refresh succeeded.
+  Future<bool> promptForMpinAndRefresh({required String mobile, String countryCode = '91'}) async {
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null) return false;
+
+    final mpinController = TextEditingController();
+    final res = await showDialog<bool>(
+      context: navigator.context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Enter MPIN'),
+          content: TextField(
+            controller: mpinController,
+            keyboardType: TextInputType.number,
+            obscureText: true,
+            maxLength: 6,
+            decoration: const InputDecoration(hintText: '6-digit MPIN'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+            TextButton(onPressed: () async {
+              Navigator.of(ctx).pop(true);
+            }, child: const Text('Submit')),
+          ],
+        );
+      },
+    );
+
+    if (res != true) return false;
+    final mpin = mpinController.text.trim();
+    if (mpin.length != 6) return false;
+
+    final v = await validateMpin(mobile: mobile, mpin: mpin, countryCode: countryCode);
+    if (v['success'] != true) return false;
+    final r = await refreshAccessToken();
+    return r['success'] == true;
+  }
+
+  /// Try auto login from stored tokens
   Future<void> tryAutoLogin() async {
     if (_autoLoginCompleter != null) {
       return _autoLoginCompleter!.future;
@@ -38,6 +689,14 @@ class AuthService with ChangeNotifier {
     try {
       if (await _storage.containsKey(key: 'access_token')) {
         _accessToken = await _storage.read(key: 'access_token');
+        _jwtToken = await _storage.read(key: 'jwt_token');
+        _refreshToken = await _storage.read(key: 'refresh_token');
+
+        final userDataJson = await _storage.read(key: 'user_data');
+        if (userDataJson != null) {
+          _currentUser = UserModel.fromJson(jsonDecode(userDataJson));
+        }
+
         notifyListeners();
       }
       _autoLoginCompleter!.complete();
@@ -48,17 +707,19 @@ class AuthService with ChangeNotifier {
     return _autoLoginCompleter!.future;
   }
 
+  /// Logout user
   Future<void> logout() async {
     _accessToken = null;
+    _jwtToken = null;
+    _refreshToken = null;
+    _currentUser = null;
     await _storage.deleteAll();
     _autoLoginCompleter = null;
     notifyListeners();
   }
 
-  // Placeholder for future API integration
-  Future<void> refreshToken() async {
-    // TODO: Implement token refresh when API is available
-    logout();
+  /// Get JWT token for API calls
+  String? getAuthHeader() {
+    return _jwtToken != null ? 'Bearer $_jwtToken' : null;
   }
 }
-

@@ -1,0 +1,478 @@
+{
+  "appTitle": "New Dashboard Seller",
+  "bg_color": "#F5F5F5",
+  "app_bar": {
+    "bg_color": "#F5F5F5",
+    "text_color": "#000000",
+    "show_search": true,
+    "show_profile": true
+  },
+  "userInfo": {
+    "loginLabel": "Login: Name",
+    "roleLabel": "Role: Seller"
+  },
+  "banner_list": {
+    "visible": true,
+    "bg_color": "#FFFFFF",
+    "banners": [
+      {
+        "id": 1,
+        "image": "https://via.placeholder.com/800x300/13A2DF/FFFFFF?text=Banner+1",
+        "title": "Welcome to Reckon",
+        "visible": true,
+        "link": ""
+      },
+      {
+        "id": 2,
+        "image": "https://via.placeholder.com/800x300/1E5FA6/FFFFFF?text=Banner+2",
+        "title": "Special Offers",
+        "visible": true,
+        "link": ""
+      },
+      {
+        "id": 3,
+        "image": "https://via.placeholder.com/800x300/4CAF50/FFFFFF?text=Banner+3",
+        "title": "New Products",
+        "visible": true,
+        "link": ""
+      }
+    ]
+  },
+  "order_status": {
+    "visible": true,
+    "bg_color": "#13A2DF",
+    "level_color": "#00000",
+    "title": "Order Status",
+    "date": "",
+    "amount": 0,
+    "currency": "₹",
+    "id": 0,
+    "status": "No Active Order"
+  },
+  "order_history": {
+    "visible": true,
+    "bg_color": "#FFFFFF",
+    "level_color": "#000000",
+    "title": "Order History",
+    "total_orders_count": 0,
+    "total_orders_amount": 0,
+    "invoices_count": 0,
+    "invoices_amount": 0
+  },
+  "new_arrival": {
+    "visible": true,
+    "bg_color": "#FFFFFF",
+    "level_color": "#000000",
+    "title": "New Arrival",
+    "arrival_list": []
+  },
+  "brands": {
+    "visible": true,
+    "bg_color": "#FFFFFF",
+    "level_color": "#000000",
+    "title": "Brands",
+    "brand_list": []
+  },
+  "testimonials": {
+    "visible": false,
+    "bg_color": "#FFFFFF",
+    "level_color": "#000000",
+    "title": "Testimonials",
+    "testimonials_list": []
+  },
+  "tenantDetail": {
+    "show_increase_decrease_button": false,
+    "show_disc_pcs": true,
+    "show_add_details_bottom_sheet": true,
+    "show_item_composition": true,
+    "show_additional_discount": true,
+    "enable_screenshot": true,
+    "show_free_qty": true,
+    "minordervalue": 1000,
+    "show_stock": true,
+    "show_rate": true,
+    "show_disc_per": true,
+    "show_item_refnumber": true,
+    "show_item_category": true,
+    "show_item_mfgcomp": true,
+    "includetax": "0",
+    "show_mrp": true,
+    "show_scheme": true,
+    "enable_price": true,
+    "negativestock": true,
+    "show_item_remark": false,
+    "show_product_desc": false,
+    "show_location": true,
+    "show_manual_scheme": true
+  },
+  "tags": [
+    "DeliveryTime",
+    "Professionalism",
+    "ProductQuality",
+    "Others"
+  ],
+  "sections": [
+    {
+      "id": "sale_order",
+      "title": "Sale Order",
+      "bg_color": "#13A2DF",
+      "level_color": "#1E5FA6",
+      "visible": true,
+      "items": [
+        {
+          "id": "order_entry",
+          "label": "Order Entry",
+          "icon": "add_shopping_cart_rounded",
+          "route": "OrderEntryPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "1",
+          "image": ""
+        },
+        {
+          "id": "my_cart",
+          "label": "My Cart",
+          "icon": "shopping_cart_outlined",
+          "route": "MyCartPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "2",
+          "image": ""
+        },
+        {
+          "id": "order_book",
+          "label": "Order Book",
+          "icon": "menu_book_rounded",
+          "route": "OrderBookPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "3",
+          "image": ""
+        },
+        {
+          "id": "order_status",
+          "label": "Order Status",
+          "icon": "pending_actions_rounded",
+          "route": "OrderStatusPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "4",
+          "image": ""
+        }
+      ]
+    },
+    {
+      "id": "receipts",
+      "title": "Receipts",
+      "bg_color": "#13A2DF",
+      "level_color": "#1E5FA6",
+      "visible": true,
+      "items": [
+        {
+          "id": "receipt_entry",
+          "label": "Receipt Entry",
+          "icon": "receipt_long_rounded",
+          "route": "CreateReceiptScreen",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "5",
+          "image": ""
+        },
+        {
+          "id": "receipt_book",
+          "label": "Receipt Book",
+          "icon": "library_books_rounded",
+          "route": "ReceiptBookPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "6",
+          "image": ""
+        }
+      ]
+    },
+    {
+      "id": "accounts",
+      "title": "Accounts",
+      "bg_color": "#13A2DF",
+      "level_color": "#1E5FA6",
+      "visible": true,
+      "items": [
+        {
+          "id": "statement",
+          "label": "Statement",
+          "icon": "description_outlined",
+          "route": "StatementPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "7",
+          "image": ""
+        },
+        {
+          "id": "outstanding",
+          "label": "Outstanding",
+          "icon": "account_balance_wallet_outlined",
+          "route": "OutstandingPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "8",
+          "image": ""
+        },
+        {
+          "id": "trial_balance",
+          "label": "Trial Balance",
+          "icon": "balance_rounded",
+          "route": "TrialBalancePage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "9",
+          "image": ""
+        },
+        {
+          "id": "bank",
+          "label": "Bank",
+          "icon": "account_balance_rounded",
+          "route": "BankPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "10",
+          "image": ""
+        }
+      ]
+    },
+    {
+      "id": "delivery_collection",
+      "title": "Delivery & Collection",
+      "bg_color": "#13A2DF",
+      "level_color": "#1E5FA6",
+      "visible": true,
+      "items": [
+        {
+          "id": "delivery_collection",
+          "label": "Delivery & Collection",
+          "icon": "local_shipping_outlined",
+          "route": "DeliveryCollectionPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "11",
+          "image": ""
+        },
+        {
+          "id": "delivery_book",
+          "label": "Delivery Book",
+          "icon": "delivery_dining_outlined",
+          "route": "DeliveryBookPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "12",
+          "image": ""
+        }
+      ]
+    },
+    {
+      "id": "purchase_order",
+      "title": "Purchase Order",
+      "bg_color": "#13A2DF",
+      "level_color": "#1E5FA6",
+      "visible": true,
+      "items": [
+        {
+          "id": "po_book",
+          "label": "PO Book",
+          "icon": "shopping_bag_outlined",
+          "route": "POBookPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "13",
+          "image": ""
+        }
+      ]
+    },
+    {
+      "id": "stock_report",
+      "title": "Stock Report",
+      "bg_color": "#13A2DF",
+      "level_color": "#1E5FA6",
+      "visible": true,
+      "items": [
+        {
+          "id": "stock_sales",
+          "label": "Stock & Sales",
+          "icon": "inventory_2_outlined",
+          "route": "StockSalesPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "14",
+          "image": ""
+        },
+        {
+          "id": "closing_stock",
+          "label": "Closing Stock",
+          "icon": "warehouse_outlined",
+          "route": "ClosingStockPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "15",
+          "image": ""
+        },
+        {
+          "id": "dump_stock",
+          "label": "Dump Stock",
+          "icon": "delete_sweep_outlined",
+          "route": "DumpStockPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "16",
+          "image": ""
+        },
+        {
+          "id": "near_expiry",
+          "label": "Near Expiry",
+          "icon": "access_time_rounded",
+          "route": "NearExpiryPage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "17",
+          "image": ""
+        },
+        {
+          "id": "shortage",
+          "label": "Shortage",
+          "icon": "trending_down_rounded",
+          "route": "ShortagePage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "18",
+          "image": ""
+        }
+      ]
+    },
+    {
+      "id": "sale_report",
+      "title": "Sale Report",
+      "bg_color": "#13A2DF",
+      "level_color": "#1E5FA6",
+      "visible": true,
+      "items": [
+        {
+          "id": "itemwise_sale",
+          "label": "Itemwise Sale",
+          "icon": "category_outlined",
+          "route": "ItemwiseSalePage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "19",
+          "image": ""
+        },
+        {
+          "id": "partywise_sale",
+          "label": "Partywise Sale",
+          "icon": "people_outline_rounded",
+          "route": "PartywiseSalePage",
+          "visible": true,
+          "is_active": true,
+          "bg_card": "#FFFFFF",
+          "color_title": "#1E5FA6",
+          "type": "20",
+          "image": ""
+        }
+      ]
+    }
+  ],
+  "extras": [
+    {
+      "id": "notification",
+      "label": "Notification",
+      "icon": "notifications_outlined",
+      "route": "NotificationPage",
+      "visible": true,
+      "is_active": true,
+      "bg_card": "#FFFFFF",
+      "color_title": "#1E5FA6",
+      "type": "21",
+      "image": ""
+    },
+    {
+      "id": "refer_and_earn",
+      "label": "Refer and Earn",
+      "icon": "card_giftcard_rounded",
+      "route": "ReferAndEarnPage",
+      "visible": true,
+      "is_active": true,
+      "bg_card": "#FFFFFF",
+      "color_title": "#1E5FA6",
+      "type": "22",
+      "image": ""
+    },
+    {
+      "id": "contact_support",
+      "label": "Contact Support",
+      "icon": "headset_mic_outlined",
+      "route": "ContactSupportPage",
+      "visible": true,
+      "is_active": true,
+      "bg_card": "#FFFFFF",
+      "color_title": "#1E5FA6",
+      "type": "23",
+      "image": ""
+    }
+  ],
+  "bottomNavigation": [
+    {
+      "id": "apps",
+      "label": "Apps",
+      "icon": "grid_view_outlined",
+      "selectedIcon": "grid_view_rounded"
+    },
+    {
+      "id": "reports",
+      "label": "Reports",
+      "icon": "analytics_outlined",
+      "selectedIcon": "analytics_rounded"
+    },
+    {
+      "id": "settings",
+      "label": "Settings",
+      "icon": "settings_outlined",
+      "selectedIcon": "settings_rounded"
+    }
+  ]
+}
+
