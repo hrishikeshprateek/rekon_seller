@@ -281,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: const TextStyle(fontSize: 14),
                           decoration: _materialDecoration(
                               context,
-                              label: 'Password (optional)',
+                              label: 'Password',
                               hint: 'Enter password to login directly',
                               icon: Icons.lock_outline
                           ),

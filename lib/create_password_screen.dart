@@ -101,7 +101,7 @@ class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => LoginScreen()
         ),
       ),
       body: SafeArea(

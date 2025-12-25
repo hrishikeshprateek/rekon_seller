@@ -502,10 +502,12 @@ class AuthService with ChangeNotifier {
       final lic = (licenseNumber != null && licenseNumber.isNotEmpty) ? licenseNumber : mobile;
 
       final payload = {
-        'licNo': lic,
+        'licNo': mobile,
         'countryCode': countryCode,
         'password': password,
       };
+
+      debugPrint('[AuthService.createPassword] payload: $payload');
 
       final response = await _dio.post(
         '/forgotpassword',
@@ -516,8 +518,11 @@ class AuthService with ChangeNotifier {
             'package_name': packageNameHeader,
             // Note: curl example does not include Authorization; omit it here for parity.
           },
+          contentType: Headers.jsonContentType,
         ),
       );
+
+      debugPrint('[AuthService.createPassword] raw response: ${response.data}');
 
       final data = _normalizeResponse(response.data);
       final success = data['success'] == true || data['Status'] == true || (data['status']?.toString().toLowerCase() == 'true');

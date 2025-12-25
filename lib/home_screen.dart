@@ -134,11 +134,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
 
     // Create banner list from API data
-    final banners = apiData.bannerList.banners.map((banner) {
+    // Defensive: apiData.bannerList.banners may be null -> treat as empty list
+    final apiBanners = apiData.bannerList.banners ?? <dynamic>[];
+    final banners = apiBanners.map((banner) {
+      // banner might be a simple map or an object; read apId defensively
+      final apId = (banner is Map && banner.containsKey('Ap_Id')) ? banner['Ap_Id'] : (banner?.apId ?? 0);
       return BannerItem(
-        id: banner.apId,
-        image: 'https://via.placeholder.com/800x300?text=Banner+${banner.apId}', // Placeholder
-        title: 'Banner ${banner.apId}',
+        id: apId is int ? apId : (int.tryParse(apId.toString()) ?? 0),
+        image: 'https://via.placeholder.com/800x300?text=Banner+${apId}', // Placeholder
+        title: 'Banner ${apId}',
         visible: true,
         link: '',
       );
@@ -368,8 +372,79 @@ class _HomeScreenState extends State<HomeScreen> {
       'menu_book_rounded': Icons.menu_book_rounded,
       'pending_actions_rounded': Icons.pending_actions_rounded,
       'receipt_long_rounded': Icons.receipt_long_rounded,
+      // --- backend-provided icon names (new/legacy variations) ---
+      'reorder': Icons.reorder,
+      'browse_gallery': Icons.photo_library,
+      'all_inbox': Icons.all_inbox,
+      'table_view': Icons.table_view,
+      'receipt': Icons.receipt_long,
+      'work_history': Icons.work_history,
+      'account_balance_wallet': Icons.account_balance_wallet,
+      'view_day': Icons.view_day,
+      'payment': Icons.payment,
+      'pending': Icons.pending,
+      'clear_all': Icons.clear_all,
+      'view_timeline': Icons.view_timeline,
+      'list_alt': Icons.list_alt,
+      'prem_identity': Icons.perm_identity, // likely typo from backend (perm_identity)
+      'view_list': Icons.view_list,
+      'autorenew': Icons.autorenew,
+      'error_outline': Icons.error_outline,
+      'checklist': Icons.checklist, // modern Material icon; fallback will apply if not available
+      'signal_cellular_alt': Icons.signal_cellular_alt,
+      'fact_check': Icons.fact_check,
+      'assignment': Icons.assignment,
+      'library_check_alt': Icons.library_add_check,
+      'store': Icons.store,
+      'text_fields': Icons.text_fields,
+      'mark_chat_read': Icons.mark_chat_read,
+      'report': Icons.report,
     };
-    return iconMap[iconName] ?? Icons.help_outline;
+    if (iconName.isEmpty) return Icons.help_outline;
+
+    // Create a list of candidate keys we'll try, ordered by priority.
+    final cleaned = iconName.trim();
+    final snake = cleaned.toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
+    final lower = cleaned.toLowerCase();
+    final noUnderscore = snake.replaceAll('_', '');
+    final noPrefix = snake.replaceFirst(RegExp(r'^(ic_|icon_)'), '');
+    final simplified = snake.replaceAll(RegExp(r'(_outlined|_rounded|_sharp|_filled|_two_tone|_twotone)'), '');
+
+    final candidates = <String>{}
+      ..add(snake)
+      ..add(lower)
+      ..add(simplified)
+      ..add(noUnderscore)
+      ..add(noPrefix);
+
+    // Also try variants with common suffixes the backend may send (e.g., 'outlined', 'rounded')
+    final suffixes = ['_outlined', '_rounded', '_sharp', '_filled'];
+    for (final c in List<String>.from(candidates)) {
+      for (final suf in suffixes) {
+        candidates.add('${c}$suf');
+      }
+    }
+
+    // Try all candidates against the map
+    for (final k in candidates) {
+      if (k.isEmpty) continue;
+      if (iconMap.containsKey(k)) return iconMap[k]!;
+    }
+
+    // As a last resort, try to match by removing underscores and matching substrings
+    for (final entry in iconMap.entries) {
+      final ekey = entry.key.replaceAll('_', '');
+      if (noUnderscore.isNotEmpty && ekey == noUnderscore) return entry.value;
+      if (ekey.contains(noUnderscore) || noUnderscore.contains(ekey)) return entry.value;
+    }
+
+    // Log unmatched icon names in debug so backend can adjust naming (won't spam in release)
+    assert(() {
+      debugPrint('[HomeScreen] Unmapped icon name: "$iconName" (tried: ${candidates.toList()})');
+      return true;
+    }());
+
+    return Icons.help_outline;
   }
 
   /// Robustly map a backend-provided route name (or label) to an actual widget.
@@ -701,7 +776,7 @@ class _HomeScreenState extends State<HomeScreen> {
         body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           children: [
-            if (_config!.bannerList.visible && _config!.bannerList.banners.where((b) => b.visible).isNotEmpty)
+            if (_config!.bannerList.visible && (_config!.bannerList.banners?.where((b) => b.visible).isNotEmpty ?? false))
               _buildBannerCarousel(),
 
             const SizedBox(height: 16),
@@ -712,9 +787,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSectionHeader(context, section.title, bgColor: section.bgColor, levelColor: section.levelColor),
-                  const SizedBox(height: 12),
+                  // Reduced gap between header and grid for a more compact layout
+                  const SizedBox(height: 8),
                   _buildIconGridFromConfig(context, section.items.where((item) => item.visible).toList()),
-                  const SizedBox(height: 20),
+                  // Slightly reduced space after each section
+                  const SizedBox(height: 12),
                 ],
               );
             }),
@@ -811,8 +888,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSectionHeader(BuildContext context, String title, {String? bgColor, String? levelColor}) {
     final colorScheme = Theme.of(context).colorScheme;
     final headerColor = levelColor != null ? _parseColor(levelColor) : colorScheme.primary;
+    // Slightly tighter header padding to make sections more compact
     return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 6),
+      padding: const EdgeInsets.only(top: 6, bottom: 4),
       child: Row(
         children: [
           Text(title.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: headerColor, letterSpacing: 1.1)),
@@ -824,20 +902,27 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildIconGridFromConfig(BuildContext context, List<DashboardItem> items) {
-    // Make the grid responsive: more columns on wider screens
-    final width = MediaQuery.of(context).size.width;
-    int crossAxisCount = 3;
-    double childAspectRatio = 0.95;
-    if (width >= 1000) {
-      crossAxisCount = 5;
-      childAspectRatio = 1.0;
-    } else if (width >= 700) {
-      crossAxisCount = 4;
-      childAspectRatio = 1.0;
-    } else if (width <= 360) {
-      crossAxisCount = 2;
-      childAspectRatio = 1.05;
-    }
+    // Responsive grid with a capped tile width so cards don't become too wide.
+    final screenWidth = MediaQuery.of(context).size.width;
+    // Horizontal padding used by the surrounding ListView (left + right)
+    const horizontalMargin = 16.0 * 2;
+    // Slightly tighter spacing for a denser, professional layout
+    const defaultSpacing = 8.0;
+    // Preferred max tile width (try to keep tiles compact and evenly spaced)
+    const preferredTileWidth = 120.0;
+    final usableWidth = screenWidth - horizontalMargin;
+
+    // Compute number of columns that fit the preferred width, at least 2
+    int crossAxisCount = (usableWidth + defaultSpacing) ~/ (preferredTileWidth + defaultSpacing);
+    if (crossAxisCount < 2) crossAxisCount = 2;
+    if (crossAxisCount > 5) crossAxisCount = 5;
+
+    // Calculate actual tile width after spacing
+    final totalSpacing = defaultSpacing * (crossAxisCount - 1);
+    final actualTileWidth = (usableWidth - totalSpacing) / crossAxisCount;
+    // Tile height target for a pleasant aspect ratio (slightly shorter)
+    const targetTileHeight = 120.0;
+    final childAspectRatio = actualTileWidth / targetTileHeight;
 
     return GridView.builder(
       shrinkWrap: true,
@@ -845,8 +930,8 @@ class _HomeScreenState extends State<HomeScreen> {
       itemCount: items.length,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        crossAxisSpacing: defaultSpacing,
+        mainAxisSpacing: defaultSpacing,
         childAspectRatio: childAspectRatio,
       ),
       itemBuilder: (context, index) => _buildIconTileFromConfig(context, items[index]),
@@ -860,14 +945,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final titleColor = _parseColor(item.colorTitle);
     final iconBgColor = titleColor.withValues(alpha: 0.15);
 
-    // Use configured card background when provided; otherwise fall back to theme's card color
+    // Slightly tighter card styling
     final cardColor = cardBgColor == const Color(0xFFFFFFFF) ? Theme.of(context).cardColor : cardBgColor;
-    final minTileHeight = 110.0; // professional, touch-friendly size
+    final minTileHeight = 100.0; // slightly reduced for denser layout
 
     return Card(
       elevation: 1.5,
       color: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {
@@ -877,14 +962,14 @@ class _HomeScreenState extends State<HomeScreen> {
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: minTileHeight),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 CircleAvatar(
-                  radius: 22,
+                  radius: 20,
                   backgroundColor: iconBgColor,
-                  child: Icon(_getIconData(item.icon), size: 22, color: titleColor),
+                  child: Icon(_getIconData(item.icon), size: 20, color: titleColor),
                 ),
                 const SizedBox(height: 12),
                 Text(
