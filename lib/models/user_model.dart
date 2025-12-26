@@ -40,7 +40,7 @@ class UserModel {
   }
 
   /// Construct user from ValidateLicense `Profile` structure
-  factory UserModel.fromProfileJson(Map<String, dynamic> json) {
+  factory UserModel.fromProfileJson(Map<String, dynamic> json, {String? licenseNumber}) {
     return UserModel(
       firstName: json['NAME'] ?? json['first_name'] ?? '',
       lastName: '',
@@ -49,9 +49,9 @@ class UserModel {
       mobileNumber: json['MOBILENO'] ?? json['mobile_number'] ?? '',
       userId: json['CUID']?.toString() ?? json['user_id']?.toString() ?? '',
       userActive: true,
-      userType: json['USER_TYPE'] ?? json['user_type'] ?? '',
-      address: '${json['Add1'] ?? ''} ${json['Add2'] ?? ''} ${json['Add3'] ?? ''}'.trim(),
-      licenseNumber: json['LicNo'] ?? json['license_number'] ?? '',
+      userType: json['user_type'] ?? 'SalesMan',
+      address: json['address'] ?? '',
+      licenseNumber: licenseNumber ?? '',
     );
   }
 

@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:dio/dio.dart';
+import 'dart:convert';
+import 'package:provider/provider.dart';
 import '../models/account_model.dart';
+import '../auth_service.dart';
 
 class SelectAccountPage extends StatefulWidget {
   final String title;
@@ -18,8 +23,6 @@ class SelectAccountPage extends StatefulWidget {
     this.selectedAccount,
   });
 
-  /// Show the page and return selected account
-  /// Usage: final account = await SelectAccountPage.show(context);
   static Future<Account?> show(
       BuildContext context, {
         String title = 'Select Account',
@@ -61,114 +64,104 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     super.dispose();
   }
 
-  // Mock API call - Replace with actual API
+  // --- REAL API IMPLEMENTATION ---
+
   Future<void> _loadAccounts() async {
     setState(() => _isLoading = true);
 
-    // Simulate API delay
-    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      if (auth.currentUser == null) throw 'User not logged in';
 
-    // Mock data - Replace with actual API call
-    final mockAccounts = [
-      Account(
-        id: 'P001',
-        name: 'ABC Distributors Pvt Ltd',
-        type: 'Party',
-        phone: '+91 98765 43210',
-        email: 'abc@example.com',
-        balance: 15000.0,
-        address: 'Andheri West, Mumbai, Maharashtra',
-        latitude: 19.1136,
-        longitude: 72.8697,
-      ),
-      Account(
-        id: 'P002',
-        name: 'XYZ Trading Company',
-        type: 'Party',
-        phone: '+91 98765 43211',
-        balance: -5000.0,
-        address: 'Connaught Place, Delhi, India',
-        latitude: 28.6315,
-        longitude: 77.2167,
-      ),
-      Account(
-        id: 'P003',
-        name: 'Ramesh Traders',
-        type: 'Party',
-        phone: '+91 98765 43212',
-        balance: 25000.0,
-        address: 'MG Road, Pune',
-        latitude: 18.5204,
-        longitude: 73.8567,
-      ),
-      Account(
-        id: 'B001',
-        name: 'HDFC Bank - Current A/c',
-        type: 'Bank',
-        balance: 150000.0,
-        address: 'Bandra, Mumbai',
-        latitude: 19.0596,
-        longitude: 72.8295,
-      ),
-      Account(
-        id: 'B002',
-        name: 'SBI Bank - Savings A/c',
-        type: 'Bank',
-        balance: 80000.0,
-      ),
-      Account(
-        id: 'C001',
-        name: 'Cash in Hand',
-        type: 'Cash',
-        balance: 12000.0,
-      ),
-      Account(
-        id: 'P004',
-        name: 'Suresh & Sons',
-        type: 'Party',
-        phone: '+91 98765 43213',
-        balance: 8500.0,
-        address: 'Kolkata, West Bengal',
-        latitude: 22.5726,
-        longitude: 88.3639,
-      ),
-      Account(
-        id: 'P005',
-        name: 'Modern Enterprises',
-        type: 'Party',
-        phone: '+91 98765 43214',
-        balance: -2000.0,
-        address: 'Chennai, Tamil Nadu',
-        latitude: 13.0827,
-        longitude: 80.2707,
-      ),
-      Account(
-        id: 'P006',
-        name: 'Global Supplies Inc',
-        type: 'Party',
-        phone: '+91 98765 43215',
-        email: 'global@example.com',
-        balance: 45000.0,
-        address: 'Indiranagar, Bangalore, Karnataka',
-        latitude: 12.9716,
-        longitude: 77.5946,
-      ),
-      Account(
-        id: 'B003',
-        name: 'ICICI Bank - Current',
-        type: 'Bank',
-        balance: 95000.0,
-      ),
-    ];
+      Position? position;
+      try {
+        var permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 10),
+          );
+        }
+      } catch (e) {
+        debugPrint('Location error: $e');
+      }
 
-    // Filter by account type if specified
-    _allAccounts = widget.accountType != null
-        ? mockAccounts.where((a) => a.type == widget.accountType).toList()
-        : mockAccounts;
+      String mobile = auth.currentUser!.mobileNumber.replaceAll(RegExp(r'[^0-9]'), '');
+      if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
 
-    _filteredAccounts = _allAccounts;
+      final payload = {
+        'lApkName': 'com.reckon.reckonbiz',
+        'lLicNo': auth.currentUser!.licenseNumber,
+        'lUserId': mobile,
+        'lPageNo': '1',
+        'lSize': '20',
+        'lSearchFieldValue': '',
+        'lExecuteTotalRows': '1',
+        'lMr': '',
+        'lArea': '',
+        'lCUID': auth.currentUser!.userId,
+        'ltype': '0',
+        'device_id': auth.deviceId,
+        'device_name': auth.deviceName,
+        'v_code': 31,
+        'version_name': '1.7.23',
+        'app_role': 'SalesMan',
+        'cu_id': auth.currentUser!.userId,
+        'latitude': position?.latitude.toString() ?? '',
+        'longitude': position?.longitude.toString() ?? '',
+      };
 
-    setState(() => _isLoading = false);
+      final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(seconds: 30)));
+      final response = await dio.post(
+        '/GetAccount',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      dynamic raw = response.data;
+      Map<String, dynamic> data;
+      if (raw is Map<String, dynamic>) {
+        data = raw;
+      } else if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          data = decoded is Map<String, dynamic> ? decoded : {'Message': raw};
+        } catch (_) {
+          data = {'Message': raw};
+        }
+      } else {
+        data = {'Message': 'Unknown response format'};
+      }
+
+      final accountsData = data['Account'] as List<dynamic>?;
+
+      if (accountsData != null) {
+        _allAccounts = accountsData.map((json) => Account.fromApiJson(json as Map<String, dynamic>)).toList();
+      } else {
+        _allAccounts = [];
+      }
+
+      _filteredAccounts = _allAccounts;
+
+    } catch (e) {
+      debugPrint('Error loading accounts: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load accounts: $e'), backgroundColor: Colors.red));
+      }
+      _allAccounts = [];
+      _filteredAccounts = [];
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _performSearch(String query) {
@@ -176,7 +169,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       setState(() => _filteredAccounts = _allAccounts);
       return;
     }
-
     final lowerQuery = query.toLowerCase();
     setState(() {
       _filteredAccounts = _allAccounts.where((account) {
@@ -188,56 +180,29 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   }
 
   void _selectAccount(Account account) {
-    // Return the selected account to the calling page
     Navigator.of(context).pop(account);
   }
 
   Future<void> _openMapsNavigation(Account account) async {
     if (account.latitude == null || account.longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location not available for this account'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location not available'), backgroundColor: Colors.orange));
       return;
     }
-
     final lat = account.latitude!;
     final lng = account.longitude!;
-
-    // Try Google Maps first (most common on Android)
     final googleMapsUrl = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
-
-    // Fallback to Apple Maps (iOS) or web maps
-    final appleMapsUrl = Uri.parse('https://maps.apple.com/?daddr=$lat,$lng');
     final webMapsUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
 
     try {
-      // Try to launch Google Maps app
       if (await canLaunchUrl(googleMapsUrl)) {
         await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-      }
-      // Try Apple Maps on iOS
-      else if (await canLaunchUrl(appleMapsUrl)) {
-        await launchUrl(appleMapsUrl, mode: LaunchMode.externalApplication);
-      }
-      // Fallback to web browser
-      else if (await canLaunchUrl(webMapsUrl)) {
+      } else if (await canLaunchUrl(webMapsUrl)) {
         await launchUrl(webMapsUrl, mode: LaunchMode.externalApplication);
-      }
-      else {
+      } else {
         throw 'Could not open maps';
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not open maps: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -245,8 +210,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     if (account.latitude == null || account.longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Location not available'),
-          backgroundColor: Colors.orange,
+          content: Text('Location not available for this account'),
+          backgroundColor: Colors.grey,
         ),
       );
       return;
@@ -330,13 +295,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                       maxZoom: 18.0,
                     ),
                     children: [
-                      // Map Tiles from OpenStreetMap
                       TileLayer(
                         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.example.reckon_seller_2_0',
+                        userAgentPackageName: 'com.reckon.reckonbiz',
                         tileProvider: NetworkTileProvider(),
                       ),
-                      // Marker Layer
                       MarkerLayer(
                         markers: [
                           Marker(
@@ -345,7 +308,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                             height: 80,
                             child: Column(
                               children: [
-                                // Custom marker with party name
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
@@ -382,7 +344,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                           ),
                         ],
                       ),
-                      // Attribution Layer (required by OpenStreetMap)
                       RichAttributionWidget(
                         attributions: [
                           TextSourceAttribution(
@@ -435,6 +396,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       ),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // UI IMPLEMENTATION
+  // ---------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -513,7 +478,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
             ),
           ),
 
-          // Filter Chips (if showing all types)
+          // Filter Chips
           if (widget.accountType == null)
             SizedBox(
               height: 50,
@@ -579,9 +544,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     return FilterChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (selected) {
-        // Could implement filter logic here if needed
-      },
+      onSelected: (selected) {},
       labelStyle: TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
@@ -597,7 +560,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   Widget _buildAccountCard(BuildContext context, Account account, bool isSelected) {
     final colorScheme = Theme.of(context).colorScheme;
     final hasNegativeBalance = (account.balance ?? 0) < 0;
-    final hasLocation = account.hasLocation;
+
+    // NOTE: If you are seeing "No Location" even if your DB has it,
+    // ensure your Account model correctly parses 'Latitude' and 'Longitude' from JSON.
+    final hasLocation = (account.latitude != null && account.longitude != null && account.latitude != 0 && account.longitude != 0);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -625,12 +591,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
             // Main card content
             InkWell(
               onTap: () => _selectAccount(account),
-              borderRadius: hasLocation
-                  ? const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-              )
-                  : BorderRadius.circular(16),
+              // If location exists, round only top corners, else all corners
+              borderRadius: BorderRadius.vertical(
+                top: const Radius.circular(16),
+                bottom: const Radius.circular(16), // Simplified radius to avoid visual glitches if map is forced
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -785,94 +750,93 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
               ),
             ),
 
-            // Map preview section (if location available)
-            if (hasLocation) ...[
-              const Divider(height: 1),
-              InkWell(
-                onTap: () => _showMapDialog(account),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(16),
-                  bottomRight: Radius.circular(16),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      // Small map thumbnail
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Container(
-                          width: 80,
-                          height: 60,
-                          color: colorScheme.surfaceContainerHighest,
-                          child: Stack(
-                            children: [
-                              // Static map placeholder (you can use Google Static Maps API here)
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [
-                                      colorScheme.primaryContainer.withOpacity(0.3),
-                                      colorScheme.tertiaryContainer.withOpacity(0.3),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Center(
-                                child: Icon(
-                                  Icons.map_rounded,
-                                  color: colorScheme.primary,
-                                  size: 30,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // Location info
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            // Map preview section - FORCED VISIBLE FOR UI CONSISTENCY
+            const Divider(height: 1),
+            InkWell(
+              onTap: hasLocation ? () => _showMapDialog(account) : null,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    // Small map thumbnail
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: 80,
+                        height: 60,
+                        color: colorScheme.surfaceContainerHighest,
+                        child: Stack(
                           children: [
-                            Text(
-                              'Location Available',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: colorScheme.onSurface,
+                            // Static map placeholder
+                            Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    colorScheme.primaryContainer.withOpacity(hasLocation ? 0.3 : 0.1),
+                                    colorScheme.tertiaryContainer.withOpacity(hasLocation ? 0.3 : 0.1),
+                                  ],
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Tap to view on map',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: colorScheme.onSurfaceVariant,
+                            Center(
+                              child: Icon(
+                                hasLocation ? Icons.map_rounded : Icons.location_off_rounded,
+                                color: hasLocation ? colorScheme.primary : Colors.grey,
+                                size: 30,
                               ),
                             ),
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 12),
 
-                      // Navigation button
-                      IconButton(
-                        onPressed: () => _openMapsNavigation(account),
-                        icon: const Icon(Icons.navigation_rounded),
-                        color: colorScheme.primary,
-                        tooltip: 'Navigate',
-                        style: IconButton.styleFrom(
-                          backgroundColor: colorScheme.primaryContainer.withOpacity(0.5),
-                        ),
+                    // Location info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            hasLocation ? 'Location Available' : 'No Location Data',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: hasLocation ? colorScheme.onSurface : Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            hasLocation ? 'Tap to view on map' : 'Map unavailable',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+
+                    // Navigation button
+                    IconButton(
+                      onPressed: hasLocation ? () => _openMapsNavigation(account) : null,
+                      icon: const Icon(Icons.navigation_rounded),
+                      color: colorScheme.primary,
+                      tooltip: 'Navigate',
+                      style: IconButton.styleFrom(
+                        backgroundColor: colorScheme.primaryContainer.withOpacity(hasLocation ? 0.5 : 0.1),
+                        disabledBackgroundColor: Colors.grey.withOpacity(0.1),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ],
         ),
       ),

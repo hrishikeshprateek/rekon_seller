@@ -254,7 +254,7 @@ class AuthService with ChangeNotifier {
             } catch (_) {}
           }
           if (profile != null) {
-            _currentUser = UserModel.fromProfileJson(profile);
+            _currentUser = UserModel.fromProfileJson(profile, licenseNumber: licenseNumber);
           }
 
           // Persist

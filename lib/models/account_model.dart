@@ -48,10 +48,26 @@ class Account {
     longitude: json['longitude'] as double?,
   );
 
+  // Create from API JSON
+  factory Account.fromApiJson(Map<String, dynamic> json) => Account(
+    id: json['Code'] as String,
+    name: json['Name'] as String,
+    type: 'Party', // All accounts from API are parties
+    phone: json['Mobile'] as String?,
+    email: json['Email'] as String?,
+    balance: (json['ClosBal'] as num?)?.toDouble(),
+    address: json['Address1'] as String?,
+    latitude: json['latitude'] != null && json['latitude'].toString().isNotEmpty
+        ? double.tryParse(json['latitude'].toString())
+        : null,
+    longitude: json['longitude'] != null && json['longitude'].toString().isNotEmpty
+        ? double.tryParse(json['longitude'].toString())
+        : null,
+  );
+
   // Check if account has location
   bool get hasLocation => latitude != null && longitude != null;
 
   @override
   String toString() => name;
 }
-
