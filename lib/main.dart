@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         navigatorKey: appNavigatorKey,
-        title: 'Reckon Seller',
+        title: 'Reckon BIZ360',
         theme: ThemeData(
           useMaterial3: true,
           // Using a sophisticated Teal/Blue seed
@@ -109,7 +109,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
               ),
               const SizedBox(height: 24),
               Text(
-                'Reckon Seller',
+                'Reckon BIZ360',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).colorScheme.onSurface,

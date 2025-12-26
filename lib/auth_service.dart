@@ -5,10 +5,7 @@ import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'models/user_model.dart';
-import 'dart:io';
 import 'app_navigator.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart';
 
 class AuthService with ChangeNotifier {
   // API configuration
@@ -499,10 +496,8 @@ class AuthService with ChangeNotifier {
   }) async {
     try {
       // Use licenseNumber when available; otherwise fallback to mobile (keeps backward compatibility)
-      final lic = (licenseNumber != null && licenseNumber.isNotEmpty) ? licenseNumber : mobile;
-
       final payload = {
-        'licNo': mobile,
+        'licNo': (licenseNumber != null && licenseNumber.isNotEmpty) ? licenseNumber : mobile,
         'countryCode': countryCode,
         'password': password,
       };
@@ -583,6 +578,58 @@ class AuthService with ChangeNotifier {
       return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null, 'raw': e.response?.data};
     } catch (e) {
       return {'success': false, 'message': 'An unexpected error occurred: ${e.toString()}', 'data': null, 'raw': null};
+    }
+  }
+
+  /// Change MPIN API wrapper. Uses user's mobile number.
+  Future<Map<String, dynamic>> changeMpin({String? mobile, required String oldMpin, required String newMpin, String countryCode = '91'}) async {
+    try {
+      String mob = mobile ?? _currentUser?.mobileNumber ?? '';
+      if (mob.isEmpty) {
+        return {'success': false, 'message': 'Mobile number not available', 'data': null};
+      }
+
+      // Normalize mobile number: strip non-digit chars and take last 10 digits
+      mob = mob.replaceAll(RegExp(r'[^0-9]'), '');
+      if (mob.length > 10) mob = mob.substring(mob.length - 10);
+
+      final payload = {
+        'mobileNo': mob,
+        'countryCode': countryCode,
+        'mPin': newMpin,
+        'oldMpin': oldMpin,
+      };
+
+      final response = await _dio.post(
+        '/forgetMpin',
+        data: payload,
+        options: Options(headers: {'Content-Type': 'application/json', 'package_name': packageNameHeader}),
+      );
+
+      final data = _normalizeResponse(response.data);
+      final status = data['Status'];
+      final success = (status == true) || (status?.toString().toLowerCase() == 'true');
+
+      return {
+        'success': success,
+        'message': data['Message'] ?? data['message'] ?? (success ? 'MPIN changed' : 'Failed to change MPIN'),
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data is Map
+            ? (e.response?.data['Message'] ?? e.response?.data['message'])
+            : (e.response?.data?.toString() ?? e.message ?? 'Network error'),
+        'data': null,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+      };
     }
   }
 
@@ -726,5 +773,57 @@ class AuthService with ChangeNotifier {
   /// Get JWT token for API calls
   String? getAuthHeader() {
     return _jwtToken != null ? 'Bearer $_jwtToken' : null;
+  }
+
+  /// Update password API wrapper. Uses user's mobile number as licNo by default.
+  Future<Map<String, dynamic>> updatePassword({String? licNo, required String oldPassword, required String newPassword, String countryCode = '91'}) async {
+    try {
+      String lic = licNo ?? _currentUser?.mobileNumber ?? '';
+      if (lic.isEmpty) {
+        return {'success': false, 'message': 'Mobile number not available', 'data': null};
+      }
+
+      // Normalize mobile number: strip non-digit chars and take last 10 digits
+      lic = lic.replaceAll(RegExp(r'[^0-9]'), '');
+      if (lic.length > 10) lic = lic.substring(lic.length - 10);
+
+      final payload = {
+        'licNo': lic,
+        'countryCode': countryCode,
+        'password': newPassword,
+        'oldPassword': oldPassword,
+      };
+
+      final response = await _dio.post(
+        '/updatePassword',
+        data: payload,
+        options: Options(headers: {'Content-Type': 'application/json', 'package_name': packageNameHeader}),
+      );
+
+      final data = _normalizeResponse(response.data);
+      final status = data['Status'];
+      final success = (status == true) || (status?.toString().toLowerCase() == 'true');
+
+      return {
+        'success': success,
+        'message': data['Message'] ?? data['message'] ?? (success ? 'Password updated' : 'Failed to update password'),
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data is Map
+            ? (e.response?.data['Message'] ?? e.response?.data['message'])
+            : (e.response?.data?.toString() ?? e.message ?? 'Network error'),
+        'data': null,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+      };
+    }
   }
 }

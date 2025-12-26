@@ -1,5 +1,5 @@
 {
-  "appTitle": "New Dashboard Seller",
+  "appTitle": "Reckon BIZ360",
   "bg_color": "#F5F5F5",
   "app_bar": {
     "bg_color": "#F5F5F5",
@@ -18,7 +18,7 @@
       {
         "id": 1,
         "image": "https://via.placeholder.com/800x300/13A2DF/FFFFFF?text=Banner+1",
-        "title": "Welcome to Reckon",
+        "title": "Welcome to Reckon BIZ360",
         "visible": true,
         "link": ""
       },
@@ -475,4 +475,3 @@
     }
   ]
 }
-

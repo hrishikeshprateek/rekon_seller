@@ -208,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             const SizedBox(height: 20),
                             Text(
-                              "Reckon Seller",
+                              "Reckon BIZ360",
                               textAlign: TextAlign.center,
                               style: theme.textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,

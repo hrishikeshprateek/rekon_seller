@@ -31,6 +31,7 @@ import 'pages/refer_and_earn_page.dart';
 import 'pages/contact_support_page.dart';
 import 'widgets/spotlight_search.dart';
 import 'models/dashboard_config_model.dart';
+import 'pages/settings_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -63,27 +64,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadConfig() async {
     try {
-      // Fetch from API
       final dashboardService = Provider.of<api.DashboardService>(context, listen: false);
       final response = await dashboardService.getDashboard();
 
       if (response.success && response.data != null) {
-        // Convert API data to local DashboardConfig format
-        setState(() {
-          _config = _convertApiDataToConfig(response.data!);
-          _isLoading = false;
-        });
-
-        if (_config?.bannerList.visible ?? false) {
-          _startBannerAutoPlay();
+        if (mounted) {
+          setState(() {
+            _config = _convertApiDataToConfig(response.data!);
+            _isLoading = false;
+          });
+          if (_config?.bannerList.visible ?? false) {
+            _startBannerAutoPlay();
+          }
         }
       } else {
-        // Fallback to local JSON if API fails
         await _loadLocalConfig();
       }
     } catch (e) {
       debugPrint('Error loading dashboard from API: $e');
-      // Fallback to local JSON
       await _loadLocalConfig();
     }
   }
@@ -91,24 +89,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadLocalConfig() async {
     try {
       final String jsonString = await rootBundle.loadString('assets/config/dashboard_config.json');
-      setState(() {
-        _config = DashboardConfig.fromJsonString(jsonString);
-        _isLoading = false;
-      });
-
-      if (_config?.bannerList.visible ?? false) {
-        _startBannerAutoPlay();
+      if (mounted) {
+        setState(() {
+          _config = DashboardConfig.fromJsonString(jsonString);
+          _isLoading = false;
+        });
+        if (_config?.bannerList.visible ?? false) {
+          _startBannerAutoPlay();
+        }
       }
     } catch (e) {
       debugPrint('Error loading local config: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   DashboardConfig _convertApiDataToConfig(api.DashboardData apiData) {
-    // Convert API sections to local format
     final sections = apiData.sections.where((s) => s.visible && s.items.isNotEmpty).map((section) {
       return DashboardSection(
         id: section.id.toString(),
@@ -133,15 +133,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }).toList();
 
-    // Create banner list from API data
-    // Defensive: apiData.bannerList.banners may be null -> treat as empty list
     final apiBanners = apiData.bannerList.banners ?? <dynamic>[];
     final banners = apiBanners.map((banner) {
-      // banner might be a simple map or an object; read apId defensively
       final apId = (banner is Map && banner.containsKey('Ap_Id')) ? banner['Ap_Id'] : (banner?.apId ?? 0);
       return BannerItem(
         id: apId is int ? apId : (int.tryParse(apId.toString()) ?? 0),
-        image: 'https://via.placeholder.com/800x300?text=Banner+${apId}', // Placeholder
+        image: 'https://via.placeholder.com/800x300?text=Banner+${apId}',
         title: 'Banner ${apId}',
         visible: true,
         link: '',
@@ -168,48 +165,48 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       orderStatus: apiData.orderStatus != null
           ? OrderStatus(
-              visible: apiData.orderStatus!.visible,
-              bgColor: apiData.orderStatus!.bgColor,
-              levelColor: apiData.orderStatus!.levelColor,
-              title: apiData.orderStatus!.title,
-              date: apiData.orderStatus!.date,
-              amount: apiData.orderStatus!.amount,
-              currency: '₹',
-              id: 0,
-              status: apiData.orderStatus!.status,
-            )
+        visible: apiData.orderStatus!.visible,
+        bgColor: apiData.orderStatus!.bgColor,
+        levelColor: apiData.orderStatus!.levelColor,
+        title: apiData.orderStatus!.title,
+        date: apiData.orderStatus!.date,
+        amount: apiData.orderStatus!.amount,
+        currency: '₹',
+        id: 0,
+        status: apiData.orderStatus!.status,
+      )
           : OrderStatus(
-              visible: false,
-              bgColor: '#13A2DF',
-              levelColor: '#FFFFFF',
-              title: 'Order Status',
-              date: '',
-              amount: 0,
-              currency: '₹',
-              id: 0,
-              status: 'No Active Order',
-            ),
+        visible: false,
+        bgColor: '#13A2DF',
+        levelColor: '#FFFFFF',
+        title: 'Order Status',
+        date: '',
+        amount: 0,
+        currency: '₹',
+        id: 0,
+        status: 'No Active Order',
+      ),
       orderHistory: apiData.orderHistory != null
           ? OrderHistory(
-              visible: apiData.orderHistory!.visible,
-              bgColor: apiData.orderHistory!.bgColor,
-              levelColor: apiData.orderHistory!.levelColor,
-              title: apiData.orderHistory!.title,
-              totalOrdersCount: apiData.orderHistory!.totalOrdersCount,
-              totalOrdersAmount: apiData.orderHistory!.totalOrdersAmount,
-              invoicesCount: apiData.orderHistory!.invoicesCount,
-              invoicesAmount: apiData.orderHistory!.invoicesAmount,
-            )
+        visible: apiData.orderHistory!.visible,
+        bgColor: apiData.orderHistory!.bgColor,
+        levelColor: apiData.orderHistory!.levelColor,
+        title: apiData.orderHistory!.title,
+        totalOrdersCount: apiData.orderHistory!.totalOrdersCount,
+        totalOrdersAmount: apiData.orderHistory!.totalOrdersAmount,
+        invoicesCount: apiData.orderHistory!.invoicesCount,
+        invoicesAmount: apiData.orderHistory!.invoicesAmount,
+      )
           : OrderHistory(
-              visible: false,
-              bgColor: '#FFFFFF',
-              levelColor: '#000000',
-              title: 'Order History',
-              totalOrdersCount: 0,
-              totalOrdersAmount: 0,
-              invoicesCount: 0,
-              invoicesAmount: 0,
-            ),
+        visible: false,
+        bgColor: '#FFFFFF',
+        levelColor: '#000000',
+        title: 'Order History',
+        totalOrdersCount: 0,
+        totalOrdersAmount: 0,
+        invoicesCount: 0,
+        invoicesAmount: 0,
+      ),
       newArrival: NewArrival(
         visible: apiData.newArrival.visible,
         bgColor: apiData.newArrival.bgColor,
@@ -259,7 +256,6 @@ class _HomeScreenState extends State<HomeScreen> {
       tags: apiData.tags,
       sections: sections,
       extras: [
-        // Add extras/more items
         DashboardItem(
           id: 'notification',
           label: 'Notification',
@@ -372,7 +368,6 @@ class _HomeScreenState extends State<HomeScreen> {
       'menu_book_rounded': Icons.menu_book_rounded,
       'pending_actions_rounded': Icons.pending_actions_rounded,
       'receipt_long_rounded': Icons.receipt_long_rounded,
-      // --- backend-provided icon names (new/legacy variations) ---
       'reorder': Icons.reorder,
       'browse_gallery': Icons.photo_library,
       'all_inbox': Icons.all_inbox,
@@ -386,11 +381,11 @@ class _HomeScreenState extends State<HomeScreen> {
       'clear_all': Icons.clear_all,
       'view_timeline': Icons.view_timeline,
       'list_alt': Icons.list_alt,
-      'prem_identity': Icons.perm_identity, // likely typo from backend (perm_identity)
+      'prem_identity': Icons.perm_identity,
       'view_list': Icons.view_list,
       'autorenew': Icons.autorenew,
       'error_outline': Icons.error_outline,
-      'checklist': Icons.checklist, // modern Material icon; fallback will apply if not available
+      'checklist': Icons.checklist,
       'signal_cellular_alt': Icons.signal_cellular_alt,
       'fact_check': Icons.fact_check,
       'assignment': Icons.assignment,
@@ -402,7 +397,6 @@ class _HomeScreenState extends State<HomeScreen> {
     };
     if (iconName.isEmpty) return Icons.help_outline;
 
-    // Create a list of candidate keys we'll try, ordered by priority.
     final cleaned = iconName.trim();
     final snake = cleaned.toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
     final lower = cleaned.toLowerCase();
@@ -417,7 +411,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ..add(noUnderscore)
       ..add(noPrefix);
 
-    // Also try variants with common suffixes the backend may send (e.g., 'outlined', 'rounded')
     final suffixes = ['_outlined', '_rounded', '_sharp', '_filled'];
     for (final c in List<String>.from(candidates)) {
       for (final suf in suffixes) {
@@ -425,32 +418,21 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    // Try all candidates against the map
     for (final k in candidates) {
       if (k.isEmpty) continue;
       if (iconMap.containsKey(k)) return iconMap[k]!;
     }
 
-    // As a last resort, try to match by removing underscores and matching substrings
     for (final entry in iconMap.entries) {
       final ekey = entry.key.replaceAll('_', '');
       if (noUnderscore.isNotEmpty && ekey == noUnderscore) return entry.value;
       if (ekey.contains(noUnderscore) || noUnderscore.contains(ekey)) return entry.value;
     }
 
-    // Log unmatched icon names in debug so backend can adjust naming (won't spam in release)
-    assert(() {
-      debugPrint('[HomeScreen] Unmapped icon name: "$iconName" (tried: ${candidates.toList()})');
-      return true;
-    }());
-
     return Icons.help_outline;
   }
 
-  /// Robustly map a backend-provided route name (or label) to an actual widget.
-  /// Tries multiple normalized forms so small differences from backend don't break navigation.
   Widget? _getRouteWidget(String? routeName, {String? label}) {
-    // Helper normalization: lowercase, remove spaces/underscores, remove common suffixes
     String normalize(String? s) {
       if (s == null) return '';
       var t = s.toLowerCase().trim();
@@ -465,13 +447,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final normalizedLabel = normalize(label);
 
     final routeMap = <String, Widget>{
-      // keys are normalized forms
       'orderentry': const OrderEntryPage(),
       'mycart': const MyCartPage(),
       'orderbook': const OrderBookPage(),
       'orderstatus': const OrderStatusPage(),
       'createreceipt': const CreateReceiptScreen(),
-      'receiptbook': const CreateReceiptScreen(), // fallback
+      'receiptbook': const CreateReceiptScreen(),
       'statement': const StatementPage(),
       'outstanding': const OutstandingPage(),
       'trialbalance': const TrialBalancePage(),
@@ -491,13 +472,9 @@ class _HomeScreenState extends State<HomeScreen> {
       'contactsupport': const ContactSupportPage(),
     };
 
-    // Try exact normalized route name first
     if (normalizedRoute.isNotEmpty && routeMap.containsKey(normalizedRoute)) return routeMap[normalizedRoute];
-
-    // Try normalized label as fallback
     if (normalizedLabel.isNotEmpty && routeMap.containsKey(normalizedLabel)) return routeMap[normalizedLabel];
 
-    // Try a few heuristic transforms: strip trailing s (plural), try with/without "book" suffix
     String heur(String t) => t.endsWith('s') ? t.substring(0, t.length - 1) : t;
     final h1 = heur(normalizedRoute);
     if (h1.isNotEmpty && routeMap.containsKey(h1)) return routeMap[h1];
@@ -549,7 +526,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleLogout(BuildContext context, AuthService authService) async {
-    // Show confirmation dialog
     final shouldLogout = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -573,7 +549,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (shouldLogout == true) {
-      // Show loading indicator
       if (!mounted) return;
       showDialog(
         context: context,
@@ -583,18 +558,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
 
-      // Logout
       await authService.logout();
 
       if (!mounted) return;
-
-      // Close loading dialog
       Navigator.pop(context);
-
-      // Navigate to login screen
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const LoginScreen()),
-        (route) => false,
+            (route) => false,
       );
     }
   }
@@ -611,31 +581,28 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    final appBarBg = _parseColor(_config!.appBar?.bgColor ?? _config!.bgColor);
+    final appBarText = _parseColor(_config!.appBar?.textColor ?? '#000000');
+
     return Scaffold(
       backgroundColor: _parseColor(_config!.bgColor),
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          // --- PINNED SLIVER APP BAR ---
           SliverAppBar(
-            floating: true,
+            pinned: true,
+            floating: false,
+            snap: false,
             elevation: 0,
             scrolledUnderElevation: 0,
-            toolbarHeight: 90,
+            toolbarHeight: 70,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      _parseColor(_config!.appBar?.bgColor ?? _config!.bgColor),
-                      _parseColor(_config!.appBar?.bgColor ?? _config!.bgColor),
-                    ],
-                  ),
-                ),
+                color: appBarBg,
               ),
             ),
             title: Padding(
-              padding: const EdgeInsets.only(top: 8.0),
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: Row(
                 children: [
                   Container(
@@ -643,64 +610,65 @@ class _HomeScreenState extends State<HomeScreen> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: colorScheme.primary.withAlpha(51),
+                          color: colorScheme.shadow.withOpacity(0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
                     child: CircleAvatar(
-                      radius: 22,
+                      radius: 20,
                       backgroundColor: colorScheme.primaryContainer,
-                      child: Icon(Icons.person, size: 24, color: colorScheme.onPrimaryContainer),
+                      child: Icon(Icons.person, size: 22, color: colorScheme.onPrimaryContainer),
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _config!.appTitle,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: _parseColor(_config!.appBar?.textColor ?? '#000000')),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          _buildProfileBadge(theme, _config!.userInfo.loginLabel, colorScheme.secondaryContainer, colorScheme.onSecondaryContainer),
-                          const SizedBox(width: 8),
-                          _buildProfileBadge(theme, _config!.userInfo.roleLabel, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer),
-                        ],
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _config!.appTitle,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: appBarText,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            _buildProfileBadge(theme, _config!.userInfo.loginLabel, colorScheme.secondaryContainer, colorScheme.onSecondaryContainer),
+                            _buildProfileBadge(theme, _config!.userInfo.roleLabel, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
             actions: [
               if (_config!.appBar?.showSearch ?? true)
-                Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  decoration: BoxDecoration(
-                    color: colorScheme.surface.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    onPressed: _openSpotlightSearch,
-                    icon: const Icon(Icons.search),
-                    color: colorScheme.onSurfaceVariant,
-                    tooltip: 'Search features',
-                  ),
+                IconButton(
+                  onPressed: _openSpotlightSearch,
+                  icon: const Icon(Icons.search),
+                  color: colorScheme.onSurfaceVariant,
+                  tooltip: 'Search',
                 ),
-              // Profile Menu Button
               Consumer<AuthService>(
                 builder: (context, authService, child) {
                   final user = authService.currentUser;
                   return PopupMenuButton(
                     icon: Icon(Icons.more_vert, color: colorScheme.onSurfaceVariant),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     offset: const Offset(0, 50),
                     itemBuilder: (context) => [
-                      // User Info Header
                       if (user != null)
                         PopupMenuItem(
                           enabled: false,
@@ -709,59 +677,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             children: [
                               Text(
                                 user.fullName.isNotEmpty ? user.fullName : 'User',
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: colorScheme.onSurface,
-                                ),
+                                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                user.mobileNumber,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              Text(
-                                'License: ${user.licenseNumber}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
+                              Text(user.mobileNumber, style: theme.textTheme.bodySmall),
+                              Text('License: ${user.licenseNumber}', style: theme.textTheme.bodySmall),
                               const Divider(height: 16),
                             ],
                           ),
                         ),
-                      // User Type
-                      if (user != null)
-                        PopupMenuItem(
-                          enabled: false,
-                          child: Row(
-                            children: [
-                              Icon(Icons.work_outline, size: 16, color: colorScheme.primary),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Role: ${user.userType}',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      // Logout Button
                       PopupMenuItem(
                         onTap: () => _handleLogout(context, authService),
                         child: Row(
                           children: [
                             Icon(Icons.logout, size: 18, color: Colors.red.shade700),
                             const SizedBox(width: 12),
-                            Text(
-                              'Logout',
-                              style: TextStyle(
-                                color: Colors.red.shade700,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            Text('Logout', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -774,51 +705,35 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
         body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
           children: [
-            if (_config!.bannerList.visible && (_config!.bannerList.banners?.where((b) => b.visible).isNotEmpty ?? false))
+            if (_config!.bannerList.visible && _config!.bannerList.banners.where((b) => b.visible).isNotEmpty)
               _buildBannerCarousel(),
 
-            const SizedBox(height: 16),
-
-            // Render sections
             ..._config!.sections.where((s) => s.visible).map((section) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSectionHeader(context, section.title, bgColor: section.bgColor, levelColor: section.levelColor),
-                  // Reduced gap between header and grid for a more compact layout
-                  const SizedBox(height: 8),
                   _buildIconGridFromConfig(context, section.items.where((item) => item.visible).toList()),
-                  // Slightly reduced space after each section
                   const SizedBox(height: 12),
                 ],
               );
             }),
 
-            // Extras
             if (_config!.extras.where((item) => item.visible && item.isActive).isNotEmpty) ...[
               _buildSectionHeader(context, 'More'),
-              const SizedBox(height: 12),
               _buildIconGridFromConfig(context, _config!.extras.where((item) => item.visible && item.isActive).toList()),
             ],
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        height: 70,
-        selectedIndex: _selectedBottomIndex,
-        onDestinationSelected: (i) => setState(() => _selectedBottomIndex = i),
-        elevation: 4,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        destinations: _config!.bottomNavigation.map((navItem) {
-          return NavigationDestination(
-            icon: Icon(_getIconData(navItem.icon)),
-            selectedIcon: Icon(_getIconData(navItem.selectedIcon)),
-            label: navItem.label,
-          );
-        }).toList(),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+        icon: const Icon(Icons.settings),
+        label: const Text('Settings'),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -829,7 +744,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         SizedBox(
-          height: 160,
+          height: 150,
           child: PageView.builder(
             controller: _bannerPageController,
             itemCount: visibleBanners.length,
@@ -837,21 +752,27 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (context, index) {
               final banner = visibleBanners[index];
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
                 decoration: BoxDecoration(
                   color: _parseColor(_config!.bannerList.bgColor),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [BoxShadow(color: Colors.black.withAlpha(12), blurRadius: 8, offset: const Offset(0, 4))],
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).colorScheme.shadow.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   child: CachedNetworkImage(
                     imageUrl: banner.image,
                     fit: BoxFit.cover,
-                    placeholder: (c, u) => Container(color: _parseColor(_config!.bannerList.bgColor), child: const Center(child: CircularProgressIndicator())),
+                    placeholder: (c, u) => Container(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Center(child: CircularProgressIndicator())),
                     errorWidget: (c, u, e) => Container(
-                      color: _parseColor(_config!.bannerList.bgColor),
-                      child: Center(child: Text(banner.title, style: const TextStyle(color: Colors.grey))),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                      child: Center(child: Icon(Icons.broken_image_outlined, color: Theme.of(context).colorScheme.outline)),
                     ),
                   ),
                 ),
@@ -866,62 +787,85 @@ class _HomeScreenState extends State<HomeScreen> {
             final active = i == _currentBannerIndex;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              width: active ? 20 : 8,
-              height: 8,
-              margin: const EdgeInsets.symmetric(horizontal: 4),
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(4), color: active ? Theme.of(context).colorScheme.primary : Colors.grey.withAlpha(120)),
+              width: active ? 24 : 8,
+              height: 6,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(3),
+                color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+              ),
             );
           }),
         ),
+        const SizedBox(height: 8),
       ],
     );
   }
 
   Widget _buildProfileBadge(ThemeData theme, String text, Color bg, Color fg) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      decoration: BoxDecoration(color: bg.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(8)),
-      child: Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: bg.withOpacity(0.8), width: 0.5),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: fg),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
   Widget _buildSectionHeader(BuildContext context, String title, {String? bgColor, String? levelColor}) {
     final colorScheme = Theme.of(context).colorScheme;
     final headerColor = levelColor != null ? _parseColor(levelColor) : colorScheme.primary;
-    // Slightly tighter header padding to make sections more compact
     return Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 4),
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
       child: Row(
         children: [
-          Text(title.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: headerColor, letterSpacing: 1.1)),
+          // Restored horizontal line
+          Container(width: 3, height: 14, decoration: BoxDecoration(color: headerColor, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 8),
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: headerColor,
+              letterSpacing: 0.8,
+            ),
+          ),
           const SizedBox(width: 12),
-          Expanded(child: Container(height: 1, color: headerColor.withValues(alpha: 0.22))),
+          // Expanded Title Line (Overflow Safe)
+          Expanded(
+            child: Container(
+              height: 1,
+              color: headerColor.withOpacity(0.15),
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildIconGridFromConfig(BuildContext context, List<DashboardItem> items) {
-    // Responsive grid with a capped tile width so cards don't become too wide.
     final screenWidth = MediaQuery.of(context).size.width;
-    // Horizontal padding used by the surrounding ListView (left + right)
     const horizontalMargin = 16.0 * 2;
-    // Slightly tighter spacing for a denser, professional layout
-    const defaultSpacing = 8.0;
-    // Preferred max tile width (try to keep tiles compact and evenly spaced)
-    const preferredTileWidth = 120.0;
+    const defaultSpacing = 12.0;
+    const preferredTileWidth = 100.0;
     final usableWidth = screenWidth - horizontalMargin;
 
-    // Compute number of columns that fit the preferred width, at least 2
     int crossAxisCount = (usableWidth + defaultSpacing) ~/ (preferredTileWidth + defaultSpacing);
-    if (crossAxisCount < 2) crossAxisCount = 2;
+    if (crossAxisCount < 3) crossAxisCount = 3;
     if (crossAxisCount > 5) crossAxisCount = 5;
 
-    // Calculate actual tile width after spacing
     final totalSpacing = defaultSpacing * (crossAxisCount - 1);
     final actualTileWidth = (usableWidth - totalSpacing) / crossAxisCount;
-    // Tile height target for a pleasant aspect ratio (slightly shorter)
-    const targetTileHeight = 120.0;
+
+    const targetTileHeight = 110.0;
     final childAspectRatio = actualTileWidth / targetTileHeight;
 
     return GridView.builder(
@@ -943,47 +887,51 @@ class _HomeScreenState extends State<HomeScreen> {
     final colorScheme = theme.colorScheme;
     final cardBgColor = _parseColor(item.bgCard);
     final titleColor = _parseColor(item.colorTitle);
-    final iconBgColor = titleColor.withValues(alpha: 0.15);
 
-    // Slightly tighter card styling
-    final cardColor = cardBgColor == const Color(0xFFFFFFFF) ? Theme.of(context).cardColor : cardBgColor;
-    final minTileHeight = 100.0; // slightly reduced for denser layout
+    final cardColor = cardBgColor == const Color(0xFFFFFFFF)
+        ? colorScheme.surfaceContainerLow
+        : cardBgColor;
 
-    return Card(
-      elevation: 1.5,
+    return Material(
       color: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.4), width: 1),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           final widget = _getRouteWidget(item.route, label: item.label);
           if (widget != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => widget));
         },
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: minTileHeight),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: iconBgColor,
-                  child: Icon(_getIconData(item.icon), size: 20, color: titleColor),
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: titleColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  item.label,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurface,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Icon(_getIconData(item.icon), size: 22, color: titleColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.label,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: colorScheme.onSurface,
+                  height: 1.1,
                 ),
-              ],
-            ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ),
         ),
       ),
