@@ -10,6 +10,7 @@ class UserModel {
   final String userType;
   final String address;
   final String licenseNumber;
+  final List<Store> stores; // list of stores from profile
 
   UserModel({
     required this.firstName,
@@ -22,6 +23,7 @@ class UserModel {
     required this.userType,
     required this.address,
     required this.licenseNumber,
+    this.stores = const [],
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -36,11 +38,28 @@ class UserModel {
       userType: json['user_type'] ?? '',
       address: json['address'] ?? '',
       licenseNumber: json['license_number'] ?? '',
+      stores: (json['stores'] as List<dynamic>? ?? []).map((e) => Store.fromJson(e)).toList(),
     );
   }
 
   /// Construct user from ValidateLicense `Profile` structure
   factory UserModel.fromProfileJson(Map<String, dynamic> json, {String? licenseNumber}) {
+    // Parse stores array if present
+    List<Store> parsedStores = [];
+    try {
+      final rawStores = json['Store'];
+      if (rawStores is List) {
+        parsedStores = rawStores.map((e) {
+          if (e is Map<String, dynamic>) return Store.fromJson(e);
+          try {
+            return Store.fromJson(Map<String, dynamic>.from(e));
+          } catch (_) {
+            return Store.empty();
+          }
+        }).where((s) => s.firmCode.isNotEmpty || s.name.isNotEmpty).toList();
+      }
+    } catch (_) {}
+
     return UserModel(
       firstName: json['NAME'] ?? json['first_name'] ?? '',
       lastName: '',
@@ -52,6 +71,7 @@ class UserModel {
       userType: json['user_type'] ?? 'SalesMan',
       address: json['address'] ?? '',
       licenseNumber: licenseNumber ?? '',
+      stores: parsedStores,
     );
   }
 
@@ -67,6 +87,7 @@ class UserModel {
       'user_type': userType,
       'address': address,
       'license_number': licenseNumber,
+      'stores': stores.map((s) => s.toJson()).toList(),
     };
   }
 
@@ -142,4 +163,36 @@ class LoginData {
       'user': user.toJson(),
     };
   }
+}
+
+class Store {
+  final String firmCode;
+  final String add1;
+  final String add2;
+  final String name;
+  final bool primary;
+
+  Store({required this.firmCode, required this.add1, required this.add2, required this.name, required this.primary});
+
+  factory Store.fromJson(Map<String, dynamic> json) {
+    return Store(
+      firmCode: json['FirmCode']?.toString() ?? '',
+      add1: json['Add1']?.toString() ?? '',
+      add2: json['Add2']?.toString() ?? '',
+      name: json['Name']?.toString() ?? '',
+      primary: (json['primary'] == true) || (json['primary']?.toString() == '1') || (json['primary']?.toString().toLowerCase() == 'true'),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'FirmCode': firmCode,
+      'Add1': add1,
+      'Add2': add2,
+      'Name': name,
+      'primary': primary,
+    };
+  }
+
+  factory Store.empty() => Store(firmCode: '', add1: '', add2: '', name: '', primary: false);
 }

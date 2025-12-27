@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import '../models/account_model.dart';
 import '../auth_service.dart';
@@ -51,23 +52,52 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   List<Account> _allAccounts = [];
   List<Account> _filteredAccounts = [];
   bool _isLoading = true;
+  // Pagination state
+  int _pageNo = 1;
+  final int _pageSize = 20;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  late ScrollController _scrollController;
+  String _searchQuery = '';
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
-    _loadAccounts();
+    _scrollController = ScrollController()..addListener(_onScroll);
+    _loadAccounts(reset: true);
   }
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
   }
 
-  // --- REAL API IMPLEMENTATION ---
+  // --- REAL API IMPLEMENTATION WITH PAGINATION ---
 
-  Future<void> _loadAccounts() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadAccounts({bool reset = false}) async {
+    if (reset) {
+      _pageNo = 1;
+      _hasMore = true;
+    }
+
+    // If loading more, set flag (used to show bottom loader)
+    if (!reset && !_hasMore) return; // nothing to load
+
+    if (reset) {
+      setState(() {
+        _isLoading = true;
+        _isLoadingMore = false;
+      });
+    } else {
+      setState(() {
+        _isLoadingMore = true;
+      });
+    }
 
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
@@ -96,9 +126,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         'lApkName': 'com.reckon.reckonbiz',
         'lLicNo': auth.currentUser!.licenseNumber,
         'lUserId': mobile,
-        'lPageNo': '1',
-        'lSize': '20',
-        'lSearchFieldValue': '',
+        // pagination
+        'lPageNo': _pageNo.toString(),
+        'lSize': _pageSize.toString(),
+        // search
+        'lSearchFieldValue': _searchQuery,
         'lExecuteTotalRows': '1',
         'lMr': '',
         'lArea': '',
@@ -144,39 +176,66 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
       final accountsData = data['Account'] as List<dynamic>?;
 
-      if (accountsData != null) {
-        _allAccounts = accountsData.map((json) => Account.fromApiJson(json as Map<String, dynamic>)).toList();
+      final List<Account> fetched = accountsData != null
+          ? accountsData.map((json) => Account.fromApiJson(json as Map<String, dynamic>)).toList()
+          : [];
+
+      if (reset) {
+        _allAccounts = fetched;
       } else {
-        _allAccounts = [];
+        _allAccounts.addAll(fetched);
       }
 
-      _filteredAccounts = _allAccounts;
+      // decide if there's more
+      if (fetched.length < _pageSize) {
+        _hasMore = false;
+      } else {
+        _hasMore = true;
+      }
+
+      _filteredAccounts = List<Account>.from(_allAccounts);
+
+      // increment page for next load (only if we fetched something)
+      if (fetched.isNotEmpty) _pageNo += 1;
 
     } catch (e) {
       debugPrint('Error loading accounts: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load accounts: $e'), backgroundColor: Colors.red));
       }
-      _allAccounts = [];
-      _filteredAccounts = [];
+      if (reset) {
+        _allAccounts = [];
+        _filteredAccounts = [];
+        _hasMore = false;
+      }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
   void _performSearch(String query) {
-    if (query.isEmpty) {
-      setState(() => _filteredAccounts = _allAccounts);
-      return;
-    }
-    final lowerQuery = query.toLowerCase();
-    setState(() {
-      _filteredAccounts = _allAccounts.where((account) {
-        return account.name.toLowerCase().contains(lowerQuery) ||
-            account.id.toLowerCase().contains(lowerQuery) ||
-            (account.phone?.contains(query) ?? false);
-      }).toList();
+    // debounce search and perform server-side search with pagination
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 250), () {
+      _searchQuery = query.trim();
+      _loadAccounts(reset: true);
     });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients || _isLoading || _isLoadingMore || !_hasMore) return;
+    final threshold = 200; // pixels
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final current = _scrollController.position.pixels;
+    if (maxScroll - current <= threshold) {
+      // near bottom
+      _loadAccounts(reset: false);
+    }
   }
 
   void _selectAccount(Account account) {
@@ -422,7 +481,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loadAccounts,
+            onPressed: () => _loadAccounts(reset: true),
             tooltip: 'Refresh',
           ),
         ],
@@ -522,15 +581,30 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                 ? _buildLoadingState(context)
                 : _filteredAccounts.isEmpty
                 ? _buildEmptyState(context)
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: _filteredAccounts.length,
-              itemBuilder: (context, index) {
-                final account = _filteredAccounts[index];
-                final isSelected = widget.selectedAccount?.id == account.id;
-                return _buildAccountCard(context, account, isSelected);
-              },
-            ),
+                : RefreshIndicator(
+                onRefresh: () async {
+                  await _loadAccounts(reset: true);
+                },
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: _filteredAccounts.length + (_hasMore ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index >= _filteredAccounts.length) {
+                      // loading indicator at bottom
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: _isLoadingMore ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator()) : const SizedBox.shrink(),
+                        ),
+                      );
+                    }
+                    final account = _filteredAccounts[index];
+                    final isSelected = widget.selectedAccount?.id == account.id;
+                    return _buildAccountCard(context, account, isSelected);
+                  },
+                ),
+              ),
           ),
         ],
       ),

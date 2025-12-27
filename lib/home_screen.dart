@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:reckon_seller_2_0/receipt_book.dart';
 import 'dart:async';
 
 import 'auth_service.dart';
@@ -448,28 +449,49 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final routeMap = <String, Widget>{
       'orderentry': const OrderEntryPage(),
-      'mycart': const MyCartPage(),
+      'draftorder': const OrderEntryPage(), // Map to OrderEntryPage for now
       'orderbook': const OrderBookPage(),
       'orderstatus': const OrderStatusPage(),
-      'createreceipt': const CreateReceiptScreen(),
-      'receiptbook': const CreateReceiptScreen(),
+      'receiptentry': const CreateReceiptScreen(),
+      'receiptbook': const ReceiptBookPage(),
       'statement': const StatementPage(),
+      'receivables': const OutstandingPage(),
+      'debtors': const OutstandingPage(),
+      'creditors': const OutstandingPage(),
+      'payables': const OutstandingPage(),
+      'pendingdeliveries': const DeliveryBookPage(),
+      'deliverystaus': const DeliveryCollectionPage(), // Assuming Delivery Status
+      'deliveryperformance': const DeliveryCollectionPage(),
+      'deliveryreport': const DeliveryCollectionPage(),
+      'pobook': const POBookPage(),
+      'stocksales': const StockSalesPage(),
+      'nearexpirystock': const NearExpiryPage(),
+      'stocknotsold': const ShortagePage(),
+      'dumpstock': const DumpStockPage(),
+      'salesummary': const ItemwiseSalePage(),
+      'partywisesale': const PartywiseSalePage(),
+      'productwisesale': const ItemwiseSalePage(),
+      'newlyreceived': const NotificationPage(),
+      'profitoverview': const TrialBalancePage(),
+      'storewisegp': const TrialBalancePage(),
+      'lrupdateentry': const DeliveryCollectionPage(),
+      'markasdelivered': const DeliveryCollectionPage(),
+      'transportreport': const DeliveryCollectionPage(),
+      // Existing mappings
+      'mycart': const MyCartPage(),
       'outstanding': const OutstandingPage(),
       'trialbalance': const TrialBalancePage(),
       'bank': const BankPage(),
       'deliverycollection': const DeliveryCollectionPage(),
       'deliverybook': const DeliveryBookPage(),
-      'pobook': const POBookPage(),
-      'stocksales': const StockSalesPage(),
       'closingstock': const ClosingStockPage(),
-      'dumpstock': const DumpStockPage(),
-      'nearexpiry': const NearExpiryPage(),
       'shortage': const ShortagePage(),
       'itemwisesale': const ItemwiseSalePage(),
-      'partywisesale': const PartywiseSalePage(),
       'notification': const NotificationPage(),
       'referandearn': const ReferAndEarnPage(),
       'contactsupport': const ContactSupportPage(),
+      // Add new routes here, e.g.:
+      // 'newpage': const NewPage(),
     };
 
     if (normalizedRoute.isNotEmpty && routeMap.containsKey(normalizedRoute)) return routeMap[normalizedRoute];

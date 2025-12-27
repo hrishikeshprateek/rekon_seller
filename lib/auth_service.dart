@@ -31,6 +31,8 @@ class AuthService with ChangeNotifier {
 
   String? get accessToken => _accessToken;
   String? get jwtToken => _jwtToken;
+  // Expose refresh token safely for diagnostic use
+  String? get refreshToken => _refreshToken;
   UserModel? get currentUser => _currentUser;
   bool get isAuthenticated => _accessToken != null && _jwtToken != null;
 

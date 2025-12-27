@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
+import '../models/user_model.dart';
 import '../widgets/change_password_dialog.dart';
 
 /// A Material 3 styled Settings page with sample settings options.
@@ -56,15 +57,44 @@ class _SettingsPageState extends State<SettingsPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Column(
                 children: [
-                  ListTile(
-                    leading: const CircleAvatar(child: Icon(Icons.person)),
-                    title: Text(_accountName, style: theme.textTheme.titleMedium),
-                    subtitle: const Text('Personal account'),
-                    trailing: TextButton(
-                      child: const Text('Edit'),
-                      onPressed: _editAccount,
-                    ),
-                  ),
+                  // Profile info from AuthService (login-time data)
+                  Consumer<AuthService>(builder: (ctx, auth, _) {
+                    final user = auth.currentUser;
+                    final license = user?.licenseNumber ?? '—';
+                    final name = user?.fullName.isNotEmpty == true ? user!.fullName : (user?.mobileNumber ?? '—');
+                    final stores = user?.stores ?? [];
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ListTile(
+                          leading: const CircleAvatar(child: Icon(Icons.person)),
+                          title: Text(name, style: theme.textTheme.titleMedium),
+                          subtitle: Text('LicNo: $license'),
+                          trailing: TextButton(
+                            child: const Text('Edit'),
+                            onPressed: _editAccount,
+                          ),
+                        ),
+
+                        // Stores header + list
+                        if (stores.isNotEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                            child: Text('Stores', style: theme.textTheme.labelSmall),
+                          ),
+                          // show each store
+                          for (final s in stores)
+                            ListTile(
+                              leading: const Icon(Icons.store),
+                              title: Text(s.name.isNotEmpty ? s.name : s.firmCode),
+                              subtitle: Text('${s.add1}${s.add2.isNotEmpty ? ', ${s.add2}' : ''}'),
+                              trailing: s.primary ? const Chip(label: Text('Primary')) : null,
+                            ),
+                        ],
+                      ],
+                    );
+                  }),
                   const Divider(height: 0),
                   ListTile(
                     leading: const Icon(Icons.password_outlined),
