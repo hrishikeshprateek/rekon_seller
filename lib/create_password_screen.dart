@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'login_screen.dart';
+import 'dart:convert';
 
 class CreatePasswordScreen extends StatefulWidget {
   final String mobile;
@@ -74,6 +75,25 @@ class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const LoginScreen()),
         );
+      } else {
+        // Show debug dialog with full response to help diagnose server-side issues
+        showDialog<void>(
+          context: context,
+          builder: (ctx) {
+            return AlertDialog(
+              title: const Text('Password set failed'),
+              content: SingleChildScrollView(
+                child: SelectableText(
+                  const JsonEncoder.withIndent('  ').convert(res),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              actions: [TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close'))],
+            );
+          },
+        );
+
+        // already shown a SnackBar above with message
       }
     } catch (e) {
       if (!mounted) return;
@@ -101,7 +121,7 @@ class _CreatePasswordScreenState extends State<CreatePasswordScreen> {
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: colorScheme.onSurface),
-          onPressed: () => LoginScreen()
+          onPressed: () => Navigator.of(context).pop(),
         ),
       ),
       body: SafeArea(

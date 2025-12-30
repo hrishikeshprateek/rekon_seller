@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:io';
 import '../models/delivery_task_model.dart';
 import '../receipt_entry.dart';
 
@@ -21,8 +24,13 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
   bool _isDelivered = true; // true = Delivered, false = Return
   bool _otpVerified = false;
-  List<String> _uploadedPhotos = []; // Store photo paths
+  // Store picked image files. Accepts File, XFile or String paths for robustness.
+  List<dynamic> _uploadedPhotos = [];
   String _paymentMode = 'Credit'; // Cash or Credit
+  // Delivery status when in Delivered mode
+  String _deliveryStatus = 'Delivered'; // options: Delivered, Part delivered, Not delivered
+
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -75,17 +83,84 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   }
 
   Future<void> _pickPhoto() async {
-    // Mock photo upload - in production use image_picker
-    if (_uploadedPhotos.length < 2) {
-      setState(() {
-        _uploadedPhotos.add('photo_${_uploadedPhotos.length + 1}.jpg');
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Photo ${_uploadedPhotos.length} uploaded'),
-          backgroundColor: Colors.green,
+    final choice = await showModalBottomSheet<String?>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Camera'), onTap: () => Navigator.pop(ctx, 'camera')),
+            ListTile(leading: const Icon(Icons.photo_library), title: const Text('Gallery'), onTap: () => Navigator.pop(ctx, 'gallery')),
+            ListTile(leading: const Icon(Icons.close), title: const Text('Cancel'), onTap: () => Navigator.pop(ctx, null)),
+          ],
         ),
-      );
+      ),
+    );
+
+    if (choice == null) return;
+
+    // Request permissions according to choice and handle denied/permanentlyDenied cases
+    try {
+      if (choice == 'camera') {
+        final status = await Permission.camera.request();
+        if (status.isPermanentlyDenied) {
+          await _showPermissionDialog('Camera permission is permanently denied. Please enable it from app settings.');
+          return;
+        }
+        if (!status.isGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Camera permission is required')));
+          return;
+        }
+      } else {
+        // Gallery: request photos (iOS) or storage (Android)
+        if (Platform.isAndroid) {
+          var status = await Permission.storage.request();
+          if (status.isPermanentlyDenied) {
+            await _showPermissionDialog('Storage permission is permanently denied. Please enable it from app settings.');
+            return;
+          }
+          if (!status.isGranted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage permission is required to pick images')));
+            return;
+          }
+        } else {
+          final status = await Permission.photos.request();
+          if (status.isPermanentlyDenied) {
+            await _showPermissionDialog('Photos permission is permanently denied. Please enable it from app settings.');
+            return;
+          }
+          if (!status.isGranted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photos permission is required')));
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      // If permission_handler throws on some platforms, show a helpful message
+      debugPrint('Permission request failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Permission check failed: $e')));
+      return;
+    }
+
+    try {
+      XFile? picked;
+      if (choice == 'camera') {
+        picked = await _picker.pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 1600);
+      } else {
+        picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80, maxWidth: 1600);
+      }
+
+      if (picked != null) {
+        final file = File(picked.path);
+        setState(() {
+          if (_uploadedPhotos.length < 2) _uploadedPhotos.add(file);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Photo ${_uploadedPhotos.length} added'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
     }
   }
 
@@ -95,10 +170,64 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
     });
   }
 
+  /// Normalize a dynamic list (List<String> | List<File> | List<XFile>) into internal List<File>
+  void setUploadedPhotosFromDynamicList(dynamic list) {
+    if (list is! List) return;
+    final normalized = <File>[];
+    for (final item in list) {
+      if (item is File) normalized.add(item);
+      else if (item is XFile) normalized.add(File(item.path));
+      else if (item is String) normalized.add(File(item));
+    }
+    setState(() {
+      _uploadedPhotos = normalized;
+    });
+  }
+
+  /// Convenience: accept List<String> paths and convert to File objects
+  void setUploadedPhotoPaths(List<String> paths) {
+    final files = paths.where((p) => p.isNotEmpty).map((p) => File(p)).toList();
+    setState(() => _uploadedPhotos = files);
+  }
+
+  /// Show a dialog explaining a permanently denied permission and allow opening app settings
+  Future<void> _showPermissionDialog(String message) async {
+    final open = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Permission required'),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Open Settings')),
+        ],
+      ),
+    );
+
+    if (open == true) {
+      await openAppSettings();
+    }
+  }
+
   void _submitDelivery() {
     if (_formKey.currentState!.validate()) {
       if (_isDelivered) {
-        // Delivered flow
+        // If outcome is Not delivered, treat as a return/undelivered flow
+        if (_deliveryStatus == 'Not delivered') {
+          if (_remarkController.text.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please enter reason for non-delivery'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          _completeReturn();
+          return;
+        }
+
+        // Delivered or Part delivered flow
         if (!_otpVerified) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -119,10 +248,12 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           return;
         }
 
-        if (_uploadedPhotos.length < 2) {
+        // For Part delivered we may allow 1 photo minimum; keep existing requirement of 2 for full delivered
+        final minPhotos = _deliveryStatus == 'Part delivered' ? 1 : 2;
+        if (_uploadedPhotos.length < minPhotos) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please upload 2 photos (Bill and Goods)'),
+            SnackBar(
+              content: Text('Please upload $minPhotos photo(s) (Bill and Goods)'),
               backgroundColor: Colors.red,
             ),
           );
@@ -145,7 +276,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           _completeDelivery();
         }
       } else {
-        // Return flow
+        // Return flow (explicit Return selected)
         if (_remarkController.text.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -276,32 +407,28 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
               Icons.check_circle_outline,
               colorScheme,
               [
-                Row(
-                  children: [
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('Delivered'),
-                        selected: _isDelivered,
-                        onSelected: (selected) {
-                          setState(() => _isDelivered = true);
-                        },
-                        selectedColor: Colors.green.withOpacity(0.2),
-                        checkmarkColor: Colors.green,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('Return'),
-                        selected: !_isDelivered,
-                        onSelected: (selected) {
-                          setState(() => _isDelivered = false);
-                        },
-                        selectedColor: Colors.red.withOpacity(0.2),
-                        checkmarkColor: Colors.red,
-                      ),
-                    ),
+                // Single dropdown controls the status; choosing 'Not delivered' will switch to the Return UI
+                DropdownButtonFormField<String>(
+                  initialValue: _deliveryStatus,
+                  decoration: InputDecoration(
+                    labelText: 'Delivery Status',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Delivered', child: Text('Delivered')),
+                    DropdownMenuItem(value: 'Part delivered', child: Text('Part delivered')),
+                    DropdownMenuItem(value: 'Not delivered', child: Text('Not delivered')),
                   ],
+                  onChanged: (v) => setState(() {
+                    _deliveryStatus = v ?? 'Delivered';
+                    // if status is Not delivered, treat as Return (same UI as previous Return capsule)
+                    _isDelivered = _deliveryStatus != 'Not delivered';
+                  }),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Select delivery outcome. Choosing "Not delivered" will open the Return form.',
+                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                 ),
               ],
             ),
@@ -448,26 +575,23 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                     runSpacing: 8,
                     children: [
                       ..._uploadedPhotos.asMap().entries.map((entry) {
+                        final raw = entry.value;
+                        File? file;
+                        if (raw is File) file = raw;
+                        else if (raw is XFile) file = File(raw.path);
+                        else if (raw is String) file = File(raw);
+
                         return Stack(
                           children: [
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: 100,
+                                height: 100,
                                 color: colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: colorScheme.primary),
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.image, color: colorScheme.primary, size: 32),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    entry.value,
-                                    style: const TextStyle(fontSize: 10),
-                                  ),
-                                ],
+                                child: (file != null && file.existsSync())
+                                    ? Image.file(file, fit: BoxFit.cover, width: 100, height: 100)
+                                    : Center(child: Icon(Icons.image, color: colorScheme.primary, size: 32)),
                               ),
                             ),
                             Positioned(
@@ -584,10 +708,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: Text(
-                  _isDelivered ? 'Mark as Delivered' : 'Submit Return',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
+                child: const Text('Submit', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
 
@@ -678,4 +799,3 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
     );
   }
 }
-

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
-import 'otp_verification_screen.dart';
 import 'auth_service.dart';
 import 'create_password_screen.dart';
 import 'create_mpin_screen.dart';
 import 'home_screen.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +22,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _licenseController = TextEditingController();
   final _mobileController = TextEditingController();
   final _passwordController = TextEditingController();
+  // Secure storage to persist last used license and mobile
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   bool _isLoading = false;
 
@@ -31,6 +33,34 @@ class _LoginScreenState extends State<LoginScreen> {
     _mobileController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final savedLicense = await _secureStorage.read(key: 'license');
+      final savedMobile = await _secureStorage.read(key: 'mobile');
+      if (savedLicense != null && savedLicense.isNotEmpty) {
+        _licenseController.text = savedLicense;
+      }
+      if (savedMobile != null && savedMobile.isNotEmpty) {
+        // If savedMobile contains country code, strip it (we expect 10 digits)
+        var mobile = savedMobile;
+        if (mobile.startsWith('+')) {
+          // remove + and country code if present
+          mobile = mobile.replaceAll(RegExp(r'^\+\d+'), '');
+        }
+        if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
+        _mobileController.text = mobile;
+      }
+    } catch (e) {
+      debugPrint('[LoginScreen] Failed to load saved credentials: $e');
+    }
   }
 
   Future<void> _sendOTP() async {
@@ -57,6 +87,13 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('[LoginScreen] ValidateLicense result: $result');
 
       if (result['success']) {
+        // Persist license and mobile for autofill next time
+        try {
+          await _secureStorage.write(key: 'license', value: _licenseController.text.trim());
+          await _secureStorage.write(key: 'mobile', value: _mobileController.text.trim());
+        } catch (e) {
+          debugPrint('[LoginScreen] Failed to save credentials: $e');
+        }
         // ValidateLicense succeeded, check flags to decide next screen
         final data = result['data'];
         debugPrint('[LoginScreen] ValidateLicense success, data: $data');

@@ -33,8 +33,18 @@ class AuthService with ChangeNotifier {
   String? get jwtToken => _jwtToken;
   // Expose refresh token safely for diagnostic use
   String? get refreshToken => _refreshToken;
+
+  // Public getter to expose the current logged-in user (used across UI pages)
+  // Added to fix references like `auth.currentUser` from UI code.
   UserModel? get currentUser => _currentUser;
-  bool get isAuthenticated => _accessToken != null && _jwtToken != null;
+
+  // Whether user is considered authenticated (used by UI to decide home/login)
+  bool get isAuthenticated {
+    if (_accessToken != null && _accessToken!.isNotEmpty) return true;
+    if (_jwtToken != null && _jwtToken!.isNotEmpty) return true;
+    if (_currentUser != null) return true;
+    return false;
+  }
 
   AuthService() {
     _dio.options.baseUrl = baseUrl;
@@ -497,9 +507,15 @@ class AuthService with ChangeNotifier {
     String? licenseNumber,
   }) async {
     try {
-      // Use licenseNumber when available; otherwise fallback to mobile (keeps backward compatibility)
+      // The backend expects the user's mobile number in licNo (per API examples).
+      // Prefer `mobile` here; fallback to licenseNumber only if mobile is empty.
+      String lic = (mobile.isNotEmpty) ? mobile : (licenseNumber ?? '');
+      // Normalize: keep digits only and use last 10 digits if longer
+      lic = lic.replaceAll(RegExp(r'[^0-9]'), '');
+      if (lic.length > 10) lic = lic.substring(lic.length - 10);
+
       final payload = {
-        'licNo': (licenseNumber != null && licenseNumber.isNotEmpty) ? licenseNumber : mobile,
+        'licNo': lic,
         'countryCode': countryCode,
         'password': password,
       };
@@ -767,7 +783,13 @@ class AuthService with ChangeNotifier {
     _jwtToken = null;
     _refreshToken = null;
     _currentUser = null;
-    await _storage.deleteAll();
+    // Delete only authentication/session related keys, keep saved license/mobile for autofill
+    final keysToRemove = ['access_token', 'jwt_token', 'refresh_token', 'user_data'];
+    for (final k in keysToRemove) {
+      try {
+        await _storage.delete(key: k);
+      } catch (_) {}
+    }
     _autoLoginCompleter = null;
     notifyListeners();
   }
