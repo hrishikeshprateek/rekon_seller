@@ -6,6 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'models/user_model.dart';
 import 'app_navigator.dart';
+import 'pages/mpin_entry_page.dart';
 
 class AuthService with ChangeNotifier {
   // API configuration
@@ -663,13 +664,15 @@ class AuthService with ChangeNotifier {
         'countryCode': countryCode,
         'mpin': mpin,
       };
-      final response = await _dio.post('/validaeMpin', data: payload, options: Options(headers: {
+      // Corrected endpoint name: /validateMpin
+      final response = await _dio.post('/validateMpin', data: payload, options: Options(headers: {
         'Content-Type': 'application/json',
         'package_name': packageNameHeader,
+        if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
       }));
       final data = _normalizeResponse(response.data);
       return {
-        'success': data['Status'] == true || data['status']?.toString() == 'true',
+        'success': data['Status'] == true || data['status']?.toString() == 'true' || data['success'] == true,
         'message': data['Message'] ?? data['message'] ?? '',
         'data': data,
         'raw': response.data,
@@ -681,27 +684,48 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Refresh Access Token using stored refresh token. Assumes endpoint '/RefreshToken'
+  /// Refresh Access Token using stored refresh token. Calls the absolute /refresh endpoint.
   Future<Map<String, dynamic>> refreshAccessToken() async {
-    if (_refreshToken == null) {
+    if (_refreshToken == null || _refreshToken!.isEmpty) {
       return {'success': false, 'message': 'No refresh token available'};
     }
     try {
-      final payload = {'RefreshToken': _refreshToken};
-      final response = await _dio.post('/RefreshToken', data: payload, options: Options(headers: {
+      final refreshUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/refresh';
+      final payload = {'refresh_token': _refreshToken};
+      // Use a new Dio instance so baseUrl doesn't interfere
+      final d = Dio();
+      d.options.connectTimeout = const Duration(seconds: 30);
+      d.options.receiveTimeout = const Duration(seconds: 30);
+
+      // Attach current JWT if available
+      final headers = {
         'Content-Type': 'application/json',
         'package_name': packageNameHeader,
-      }));
-      final data = _normalizeResponse(response.data);
-      final ok = data['Status'] == true || (data['AccessToken'] != null && data['AccessToken'].toString().isNotEmpty);
-      if (ok) {
-        _accessToken = data['AccessToken']?.toString() ?? _accessToken;
+        if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
+      };
+
+      final response = await d.post(refreshUrl, data: payload, options: Options(headers: headers));
+      final raw = response.data;
+      final data = _normalizeResponse(raw);
+
+      // API returns access_token and refresh_token keys (snake_case)
+      final newAccess = data['access_token'] ?? data['AccessToken'] ?? data['accessToken'];
+      final newRefresh = data['refresh_token'] ?? data['RefreshToken'] ?? data['refreshToken'];
+
+      if (newAccess != null && newAccess.toString().isNotEmpty) {
+        _accessToken = newAccess.toString();
         _jwtToken = _accessToken;
-        if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
-        if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
-        return {'success': true, 'data': data};
+        if (newRefresh != null) _refreshToken = newRefresh.toString();
+
+        await _storage.write(key: 'access_token', value: _accessToken);
+        await _storage.write(key: 'jwt_token', value: _jwtToken);
+        if (_refreshToken != null) await _storage.write(key: 'refresh_token', value: _refreshToken);
+
+        notifyListeners();
+        return {'success': true, 'data': data, 'message': data['message'] ?? 'Refreshed'};
       }
-      return {'success': false, 'message': data['Message'] ?? 'Failed to refresh', 'data': data};
+
+      return {'success': false, 'message': data['message'] ?? 'Failed to refresh token', 'data': data};
     } on DioException catch (e) {
       return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null};
     } catch (e) {
@@ -709,43 +733,24 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Show MPIN prompt (dialog) and attempt to validate and refresh tokens. Returns true if refresh succeeded.
-  Future<bool> promptForMpinAndRefresh({required String mobile, String countryCode = '91'}) async {
+  /// Show MPIN prompt (now pushes a full screen MPIN entry) and attempt to optionally refresh tokens. Returns true if validation (and optional refresh) succeeded.
+  Future<bool> promptForMpinAndRefresh({required String mobile, String countryCode = '91', bool refreshOnSuccess = false}) async {
     final navigator = appNavigatorKey.currentState;
     if (navigator == null) return false;
 
-    final mpinController = TextEditingController();
-    final res = await showDialog<bool>(
-      context: navigator.context,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Enter MPIN'),
-          content: TextField(
-            controller: mpinController,
-            keyboardType: TextInputType.number,
-            obscureText: true,
-            maxLength: 6,
-            decoration: const InputDecoration(hintText: '6-digit MPIN'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-            TextButton(onPressed: () async {
-              Navigator.of(ctx).pop(true);
-            }, child: const Text('Submit')),
-          ],
-        );
-      },
-    );
+    // Ensure mobile is normalized (digits only, last 10)
+    var mob = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+    if (mob.length > 10) mob = mob.substring(mob.length - 10);
 
-    if (res != true) return false;
-    final mpin = mpinController.text.trim();
-    if (mpin.length != 6) return false;
+    final result = await navigator.push<bool>(MaterialPageRoute(builder: (_) => MpinEntryPage(mobile: mob, allowCancel: false)));
+    if (result != true) return false;
 
-    final v = await validateMpin(mobile: mobile, mpin: mpin, countryCode: countryCode);
-    if (v['success'] != true) return false;
-    final r = await refreshAccessToken();
-    return r['success'] == true;
+    if (refreshOnSuccess) {
+      final r = await refreshAccessToken();
+      return r['success'] == true;
+    }
+
+    return true;
   }
 
   /// Try auto login from stored tokens

@@ -71,19 +71,80 @@ class AuthWrapper extends StatefulWidget {
   State<AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _AuthWrapperState extends State<AuthWrapper> {
+class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   bool _isChecking = true;
+  bool _isPromptingMpin = false; // debounce to avoid multiple prompts
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkAuth();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _handleAppResume();
+    }
+  }
+
+  Future<void> _handleAppResume() async {
+    try {
+      if (!mounted) return;
+      if (_isChecking) return;
+      if (_isPromptingMpin) return;
+
+      final authService = Provider.of<AuthService>(context, listen: false);
+      if (!authService.isAuthenticated) return;
+
+      _isPromptingMpin = true;
+      // Try to get mobile from currentUser or stored token payload
+      String mobile = authService.currentUser?.mobileNumber ?? '';
+      mobile = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+      if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
+
+      // Only validate MPIN on resume/start. Refresh should happen only when token is actually expired (handled by interceptors).
+      final ok = await authService.promptForMpinAndRefresh(mobile: mobile, refreshOnSuccess: false);
+      if (!ok) {
+        // Logout and show login screen
+        await authService.logout();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+      }
+    } catch (e) {
+      debugPrint('Error during resume MPIN check: $e');
+    } finally {
+      _isPromptingMpin = false;
+    }
   }
 
   Future<void> _checkAuth() async {
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.tryAutoLogin();
+
+      // If we have stored credentials, require MPIN validation on app start.
+      if (authService.isAuthenticated) {
+        // Try to get mobile from currentUser or stored token payload
+        String mobile = authService.currentUser?.mobileNumber ?? '';
+        // Normalize mobile: keep digits only and last 10
+        mobile = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+        if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
+
+        // On app start, only validate MPIN; do not attempt refresh here.
+        final ok = await authService.promptForMpinAndRefresh(mobile: mobile, refreshOnSuccess: false);
+        if (!ok) {
+          await authService.logout();
+        }
+      }
     } catch (e) {
       debugPrint('Auto-login error: $e');
     } finally {

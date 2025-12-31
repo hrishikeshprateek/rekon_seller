@@ -36,7 +36,8 @@ class DashboardService {
               if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
             }
 
-            final ok = await authService.promptForMpinAndRefresh(mobile: mobile ?? '');
+            // When handling a 401 we want to both validate MPIN and refresh the token.
+            final ok = await authService.promptForMpinAndRefresh(mobile: mobile ?? '', refreshOnSuccess: true);
             if (ok) {
               // Retry the failed request with updated auth header
               final options = error.requestOptions;
