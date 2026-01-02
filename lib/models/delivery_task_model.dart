@@ -19,6 +19,7 @@ class DeliveryTask {
   final double? billAmount;
   final int? itemCount;
   final double? distanceKm; // Distance from delivery man's current location
+  final String? mobile; // Optional mobile number for quick actions (call)
 
   DeliveryTask({
     required this.id,
@@ -36,6 +37,7 @@ class DeliveryTask {
     this.billAmount,
     this.itemCount,
     this.distanceKm,
+    this.mobile,
   });
 
   bool get hasLocation => latitude != null && longitude != null;
@@ -71,6 +73,7 @@ class DeliveryTask {
     'billAmount': billAmount,
     'itemCount': itemCount,
     'distanceKm': distanceKm,
+    'mobile': mobile,
   };
 
   factory DeliveryTask.fromJson(Map<String, dynamic> json) => DeliveryTask(
@@ -91,10 +94,11 @@ class DeliveryTask {
     billAmount: json['billAmount'] as double?,
     itemCount: json['itemCount'] as int?,
     distanceKm: json['distanceKm'] as double?,
+    mobile: json['mobile'] as String?,
   );
 
   // Copy with method for updating distance
-  DeliveryTask copyWith({double? distanceKm}) => DeliveryTask(
+  DeliveryTask copyWith({double? distanceKm, String? mobile}) => DeliveryTask(
     id: id,
     type: type,
     status: status,
@@ -110,6 +114,6 @@ class DeliveryTask {
     billAmount: billAmount,
     itemCount: itemCount,
     distanceKm: distanceKm ?? this.distanceKm,
+    mobile: mobile ?? this.mobile,
   );
 }
-

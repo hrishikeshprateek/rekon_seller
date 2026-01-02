@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
 import '../login_screen.dart';
@@ -14,7 +15,6 @@ class MpinEntryPage extends StatefulWidget {
 
 class _MpinEntryPageState extends State<MpinEntryPage> {
   final TextEditingController _hiddenController = TextEditingController();
-  final FocusNode _hiddenFocus = FocusNode();
   int _attemptsLeft = 3;
   String? _errorMessage;
   bool _isSubmitting = false;
@@ -22,11 +22,6 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
   @override
   void initState() {
     super.initState();
-    // Auto-focus the hidden field when screen opens
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _hiddenFocus.requestFocus();
-    });
-    // listen for input changes
     _hiddenController.addListener(_onInputChanged);
   }
 
@@ -34,7 +29,6 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
   void dispose() {
     _hiddenController.removeListener(_onInputChanged);
     _hiddenController.dispose();
-    _hiddenFocus.dispose();
     super.dispose();
   }
 
@@ -59,20 +53,17 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
     try {
       final result = await auth.validateMpin(mobile: widget.mobile, mpin: mpin);
       if (result['success'] == true) {
-        // success: pop true
         if (mounted) Navigator.of(context).pop(true);
         return;
       }
 
-      // failed
       _attemptsLeft -= 1;
       if (_attemptsLeft <= 0) {
-        // lock out: logout and navigate to login screen
         await auth.logout();
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
+                (route) => false,
           );
         }
         return;
@@ -82,7 +73,14 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
         _hiddenController.clear();
         _errorMessage = (result['message'] ?? 'Invalid MPIN');
       });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid MPIN. Attempts left: $_attemptsLeft')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid MPIN. Attempts left: $_attemptsLeft'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     } catch (e) {
       setState(() {
         _errorMessage = 'An error occurred';
@@ -91,104 +89,231 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
       setState(() {
         _isSubmitting = false;
       });
-      // refocus
-      _hiddenFocus.requestFocus();
     }
   }
 
-  Widget _buildPinBoxes() {
-    final text = _hiddenController.text;
-    final boxes = List<Widget>.generate(6, (i) {
-      final display = i < text.length ? '•' : '';
-      return Container(
-        width: 42,
-        height: 56,
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Theme.of(context).colorScheme.outline, width: 1.2),
-          color: Theme.of(context).colorScheme.surface,
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          display,
-          style: const TextStyle(fontSize: 28, letterSpacing: 6),
-        ),
-      );
-    });
+  void _appendDigit(String d) {
+    if (_hiddenController.text.length >= 6 || _isSubmitting) return;
+    HapticFeedback.lightImpact();
+    _hiddenController.text = '${_hiddenController.text}$d';
+  }
 
-    return Row(mainAxisAlignment: MainAxisAlignment.center, children: boxes);
+  void _backspace() {
+    final t = _hiddenController.text;
+    if (t.isEmpty || _isSubmitting) return;
+    HapticFeedback.lightImpact();
+    _hiddenController.text = t.substring(0, t.length - 1);
+  }
+
+  // --- UI WIDGETS ---
+
+  Widget _buildPinDisplay(ThemeData theme) {
+    final text = _hiddenController.text;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(6, (i) {
+        final filled = i < text.length;
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          width: 16,
+          height: 16,
+          margin: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: filled
+                ? theme.colorScheme.primary
+                : theme.colorScheme.surfaceContainerHighest,
+            border: filled
+                ? null
+                : Border.all(color: theme.colorScheme.outline.withOpacity(0.5), width: 1.5),
+            boxShadow: filled
+                ? [BoxShadow(color: theme.colorScheme.primary.withOpacity(0.3), blurRadius: 6, spreadRadius: 1)]
+                : null,
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildKey(BuildContext ctx, String label, {VoidCallback? onTap}) {
+    final theme = Theme.of(ctx);
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.all(6.0),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(40),
+          child: Container(
+            height: 64, // Slightly shorter for compactness
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(shape: BoxShape.circle),
+            child: Text(
+              label,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w400,
+                color: theme.colorScheme.onSurface,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKeyboard(BuildContext ctx) {
+    final theme = Theme.of(ctx);
+    final canSubmit = _hiddenController.text.length == 6 && !_isSubmitting;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(children: [
+          _buildKey(ctx, '1', onTap: () => _appendDigit('1')),
+          _buildKey(ctx, '2', onTap: () => _appendDigit('2')),
+          _buildKey(ctx, '3', onTap: () => _appendDigit('3')),
+        ]),
+        Row(children: [
+          _buildKey(ctx, '4', onTap: () => _appendDigit('4')),
+          _buildKey(ctx, '5', onTap: () => _appendDigit('5')),
+          _buildKey(ctx, '6', onTap: () => _appendDigit('6')),
+        ]),
+        Row(children: [
+          _buildKey(ctx, '7', onTap: () => _appendDigit('7')),
+          _buildKey(ctx, '8', onTap: () => _appendDigit('8')),
+          _buildKey(ctx, '9', onTap: () => _appendDigit('9')),
+        ]),
+        Row(children: [
+          // Backspace Button
+          Expanded(
+            child: InkWell(
+              onTap: _backspace,
+              borderRadius: BorderRadius.circular(40),
+              child: SizedBox(
+                height: 64,
+                child: Icon(Icons.backspace_outlined, size: 24, color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+          ),
+
+          // Zero Button
+          _buildKey(ctx, '0', onTap: () => _appendDigit('0')),
+
+          // Submit Button
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(10.0),
+              child: _isSubmitting
+                  ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5)))
+                  : IconButton.filled(
+                onPressed: canSubmit ? _submit : null,
+                style: IconButton.styleFrom(
+                  backgroundColor: canSubmit ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest,
+                  foregroundColor: canSubmit ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+                ),
+                icon: const Icon(Icons.check_rounded),
+              ),
+            ),
+          ),
+        ]),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // controller listener is attached in initState
+    final theme = Theme.of(context);
 
     return Scaffold(
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Enter MPIN'),
-        centerTitle: true,
-        automaticallyImplyLeading: widget.allowCancel,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: widget.allowCancel ? IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.of(context).pop(false),
+        ) : null,
       ),
-      body: GestureDetector(
-        onTap: () => _hiddenFocus.requestFocus(),
-        child: SafeArea(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  'Please enter your 6-digit MPIN to continue',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-              const SizedBox(height: 24),
-              _buildPinBoxes(),
-              const SizedBox(height: 16),
-              if (_errorMessage != null) ...[
-                Text(_errorMessage!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                const SizedBox(height: 8),
-              ],
-              Text('Attempts left: $_attemptsLeft', style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 24),
+      body: SafeArea(
+        child: Column(
+          children: [
+            const Spacer(flex: 1),
 
-              // Hidden TextField
-              SizedBox(
-                height: 0,
-                width: 0,
-                child: TextField(
-                  controller: _hiddenController,
-                  focusNode: _hiddenFocus,
-                  keyboardType: TextInputType.number,
-                  obscureText: true,
-                  maxLength: 6,
-                  decoration: const InputDecoration(border: InputBorder.none, counterText: ''),
-                ),
-              ),
+            // --- HEADER ---
+            Icon(Icons.lock_open_rounded, size: 42, color: theme.colorScheme.primary),
+            const SizedBox(height: 16),
+            Text(
+              'Enter MPIN',
+              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please enter your 6-digit code',
+              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
 
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (widget.allowCancel)
-                      OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        child: const Text('Cancel'),
-                      ),
-                    ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submit,
-                      child: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Submit'),
+            const Spacer(flex: 1),
+
+            // --- PIN DOTS ---
+            _buildPinDisplay(theme),
+
+            // --- INFO & ERROR ---
+            Padding(
+              padding: const EdgeInsets.only(top: 24.0, bottom: 8),
+              child: Column(
+                children: [
+                  if (_errorMessage != null)
+                    Text(
+                      _errorMessage!,
+                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error, fontWeight: FontWeight.w600),
                     ),
-                  ],
-                ),
+                  if (_attemptsLeft < 3 && _errorMessage == null)
+                    Text(
+                      'Attempts left: $_attemptsLeft',
+                      style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.error),
+                    ),
+                ],
               ),
-            ],
-          ),
+            ),
+
+            // --- CLEAR CODE BUTTON (MOVED HERE) ---
+            if (_hiddenController.text.isNotEmpty)
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _hiddenController.clear();
+                    _errorMessage = null;
+                  });
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.secondary,
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Clear Code'),
+              )
+            else
+              const SizedBox(height: 36), // Maintain height so layout doesn't jump
+
+            const Spacer(flex: 2),
+
+            // --- KEYBOARD ---
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _buildKeyboard(context),
+            ),
+
+            const SizedBox(height: 16),
+
+            // --- HIDDEN INPUT ---
+            SizedBox.shrink(
+              child: TextField(
+                controller: _hiddenController,
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+              ),
+            ),
+          ],
         ),
       ),
     );

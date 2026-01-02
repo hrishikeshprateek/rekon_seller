@@ -169,6 +169,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           itemCount: bill.item,
           area: bill.area == "NA" ? "" : bill.area,
           latitude: null, longitude: null, paymentType: PaymentType.cash,
+          mobile: bill.mobile == "NA" ? null : bill.mobile,
         ),
       ),
     ));

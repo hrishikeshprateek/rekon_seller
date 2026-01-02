@@ -47,10 +47,32 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   }
 
   Future<void> _makePhoneCall() async {
-    // Use party's phone from task or mock number
-    final phoneUrl = Uri.parse('tel:+919876543210');
-    if (await canLaunchUrl(phoneUrl)) {
-      await launchUrl(phoneUrl);
+    try {
+      String? raw = widget.task.mobile;
+      if (raw == null || raw.trim().isEmpty || raw.trim().toLowerCase() == 'na') {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No phone number available')));
+        return;
+      }
+
+      // Extract digits
+      String digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+      if (digits.length == 10) {
+        digits = '91$digits';
+      }
+      if (digits.length < 10) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid phone number')));
+        return;
+      }
+
+      final phoneUrl = Uri.parse('tel:+$digits');
+      if (await canLaunchUrl(phoneUrl)) {
+        await launchUrl(phoneUrl);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not place call')));
+      }
+    } catch (e) {
+      debugPrint('Call failed: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Call failed: $e')));
     }
   }
 
