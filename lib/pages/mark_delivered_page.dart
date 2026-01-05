@@ -3,9 +3,13 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
 import 'dart:io';
+import 'dart:convert';
 import '../models/delivery_task_model.dart';
 import '../receipt_entry.dart';
+import '../auth_service.dart';
 
 class MarkDeliveredPage extends StatefulWidget {
   final DeliveryTask task;
@@ -24,6 +28,9 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
   bool _isDelivered = true; // true = Delivered, false = Return
   bool _otpVerified = false;
+  bool _otpSent = false; // Track if OTP has been sent
+  bool _isRequestingOTP = false; // Loading state for OTP request
+  bool _isVerifyingOTP = false; // Loading state for OTP verification
   // Store picked image files. Accepts File, XFile or String paths for robustness.
   List<dynamic> _uploadedPhotos = [];
   String _paymentMode = 'Credit'; // Cash or Credit
@@ -77,30 +84,192 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   }
 
   Future<void> _requestOTP() async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('OTP sent to registered mobile number'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    if (_isRequestingOTP) return;
+
+    setState(() => _isRequestingOTP = true);
+
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = Dio(BaseOptions(
+        baseUrl: AuthService.baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+      ));
+
+      // Get customer mobile number from task
+      String? customerMobile = widget.task.mobile;
+      if (customerMobile == null || customerMobile.trim().isEmpty || customerMobile.toLowerCase() == 'na') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Customer mobile number not available'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Normalize mobile (extract digits only, get last 10)
+      String mobile = customerMobile.replaceAll(RegExp(r'[^0-9]'), '');
+      if (mobile.length > 10) {
+        mobile = mobile.substring(mobile.length - 10);
+      }
+
+      debugPrint('[MarkDeliveredPage] Sending OTP to: $mobile');
+
+      final response = await dio.post(
+        '/GenerateOTPForMobile',
+        options: Options(headers: {
+          'package_name': 'com.reckon.reckonbiz',
+          'MobileNo': mobile,
+          'CountryCode': '91',
+          'lApkName': 'com.reckon.reckon_biz_report',
+          'GenerateOtp': '1',
+        }),
+      );
+
+      debugPrint('[MarkDeliveredPage] OTP Response: ${response.data}');
+
+      final data = response.data is String ? jsonDecode(response.data) : response.data;
+
+      if (data['Status'] == true) {
+        if (mounted) {
+          setState(() {
+            _otpSent = true;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['Message'] ?? 'OTP sent to customer mobile number'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['Message'] ?? 'Failed to send OTP'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[MarkDeliveredPage] OTP request error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to send OTP: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isRequestingOTP = false);
+      }
+    }
   }
 
-  void _verifyOTP() {
-    if (_otpController.text.length == 6) {
-      setState(() => _otpVerified = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('OTP verified successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
+  Future<void> _verifyOTP() async {
+    if (_isVerifyingOTP) return;
+
+    final otp = _otpController.text.trim();
+    if (otp.length != 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please enter valid 6-digit OTP'),
           backgroundColor: Colors.red,
         ),
       );
+      return;
+    }
+
+    setState(() => _isVerifyingOTP = true);
+
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = Dio(BaseOptions(
+        baseUrl: AuthService.baseUrl,
+        connectTimeout: const Duration(seconds: 15),
+      ));
+
+      // Get customer mobile number from task
+      String? customerMobile = widget.task.mobile;
+      if (customerMobile == null || customerMobile.trim().isEmpty || customerMobile.toLowerCase() == 'na') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Customer mobile number not available'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      // Normalize mobile (extract digits only, get last 10)
+      String mobile = customerMobile.replaceAll(RegExp(r'[^0-9]'), '');
+      if (mobile.length > 10) {
+        mobile = mobile.substring(mobile.length - 10);
+      }
+
+      debugPrint('[MarkDeliveredPage] Verifying OTP for mobile: $mobile');
+
+      final payload = jsonEncode({
+        'MobileNo': mobile,
+        'OTP': otp,
+        'CountryCode': '91',
+      });
+
+      final response = await dio.post(
+        '/ValidateMobileOTP',
+        data: payload,
+        options: Options(headers: {
+          'Content-Type': 'application/json',
+          'Authorization': auth.getAuthHeader() ?? '',
+          'package_name': 'com.reckon.reckonbiz',
+        }),
+      );
+
+      debugPrint('[MarkDeliveredPage] OTP Verification Response: ${response.data}');
+
+      final data = response.data is String ? jsonDecode(response.data) : response.data;
+
+      if (data['Status'] == true) {
+        if (mounted) {
+          setState(() => _otpVerified = true);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['Message'] ?? 'OTP verified successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['Message'] ?? 'Invalid OTP'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[MarkDeliveredPage] OTP verification error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to verify OTP: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isVerifyingOTP = false);
+      }
     }
   }
 
@@ -313,24 +482,85 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
     }
   }
 
-  void _completeDelivery() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Delivery marked as completed for ${widget.task.partyName}'),
-        backgroundColor: Colors.green,
-      ),
-    );
-    Navigator.pop(context, true); // Return true to indicate success
+  Future<void> _completeDelivery() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30)));
+
+    String mobile = widget.task.mobile?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
+    if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
+
+    final payload = {
+      'billNo': widget.task.billNo ?? '',
+      'partyId': widget.task.partyId ?? '',
+      'partyName': widget.task.partyName ?? '',
+      'deliveryStatus': _deliveryStatus,
+      'paymentMode': _paymentMode,
+      'otpVerified': _otpVerified,
+      'customerMobile': mobile,
+      'customerOTP': _otpController.text.trim(),
+      'handoverPersonName': _personNameController.text.trim(),
+      'remark': _remarkController.text.trim(),
+      'deliveryDateTime': DateTime.now().toIso8601String(),
+    };
+
+    try {
+      final response = await dio.post('/markDeliveryComplete', data: jsonEncode(payload),
+          options: Options(headers: {
+            'Content-Type': 'application/json',
+            'Authorization': auth.getAuthHeader() ?? '',
+            'package_name': 'com.reckon.reckonbiz',
+          }));
+
+      final data = response.data is String ? jsonDecode(response.data) : response.data;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['Message'] ?? 'Delivery completed'), backgroundColor: Colors.green),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
-  void _completeReturn() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Delivery marked as returned for ${widget.task.partyName}'),
-        backgroundColor: Colors.orange,
-      ),
-    );
-    Navigator.pop(context, true);
+  Future<void> _completeReturn() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30)));
+
+    final payload = {
+      'billNo': widget.task.billNo ?? '',
+      'partyId': widget.task.partyId ?? '',
+      'deliveryStatus': 'Not delivered',
+      'returnReason': _remarkController.text.trim(),
+      'deliveryDateTime': DateTime.now().toIso8601String(),
+    };
+
+    try {
+      final response = await dio.post('/markDeliveryComplete', data: jsonEncode(payload),
+          options: Options(headers: {
+            'Content-Type': 'application/json',
+            'Authorization': auth.getAuthHeader() ?? '',
+            'package_name': 'com.reckon.reckonbiz',
+          }));
+
+      final data = response.data is String ? jsonDecode(response.data) : response.data;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['Message'] ?? 'Return recorded'), backgroundColor: Colors.orange),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: ${e.toString()}'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
@@ -369,7 +599,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                     ),
                   ],
                 ),
-                _buildInfoRow('Mobile', '+91 98765 43210'),
+                _buildInfoRow('Mobile', widget.task.mobile ?? 'N/A'),
               ],
             ),
 
@@ -514,44 +744,67 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                             hintText: 'Enter OTP',
                             counterText: '',
                             suffixIcon: _otpVerified
-                                ? Icon(Icons.check_circle, color: Colors.green)
+                                ? const Icon(Icons.check_circle, color: Colors.green)
                                 : null,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
-                          enabled: !_otpVerified,
+                          enabled: _otpSent && !_otpVerified,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _otpVerified ? null : _requestOTP,
-                          child: const Text('Request'),
+                          onPressed: (_otpVerified || _isRequestingOTP) ? null : _requestOTP,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _otpSent ? Colors.grey : colorScheme.primary,
+                          ),
+                          child: _isRequestingOTP
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : Text(_otpSent ? 'Sent' : 'Send OTP'),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (!_otpVerified)
+                  if (_otpSent && !_otpVerified)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _verifyOTP,
+                        onPressed: _isVerifyingOTP ? null : _verifyOTP,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
                         ),
-                        child: const Text('Verify OTP'),
+                        child: _isVerifyingOTP
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('Verify OTP'),
                       ),
                     ),
                   const SizedBox(height: 8),
                   Text(
-                    'OTP sent to registered mobile number',
+                    _otpVerified
+                        ? 'OTP verified successfully ✓'
+                        : _otpSent
+                            ? 'OTP sent to customer mobile number. Please enter the OTP.'
+                            : 'Click "Send OTP" to send verification code to customer mobile number',
                     style: TextStyle(
                       fontSize: 11,
-                      color: colorScheme.onSurfaceVariant,
-                      fontStyle: FontStyle.italic,
+                      color: _otpVerified
+                          ? Colors.green
+                          : _otpSent
+                              ? colorScheme.onSurfaceVariant
+                              : colorScheme.onSurfaceVariant.withOpacity(0.7),
+                      fontWeight: _otpVerified ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ],

@@ -52,18 +52,21 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
 
     try {
       final result = await auth.validateMpin(mobile: widget.mobile, mpin: mpin);
+
       if (result['success'] == true) {
-        if (mounted) Navigator.of(context).pop(true);
+        // Return both success and the validated MPIN so caller can use it to generate fresh tokens if needed
+        if (mounted) Navigator.of(context).pop({'success': true, 'mpin': mpin});
         return;
       }
 
+      // failed
       _attemptsLeft -= 1;
       if (_attemptsLeft <= 0) {
         await auth.logout();
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (route) => false,
+            (route) => false,
           );
         }
         return;
@@ -73,14 +76,7 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
         _hiddenController.clear();
         _errorMessage = (result['message'] ?? 'Invalid MPIN');
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Invalid MPIN. Attempts left: $_attemptsLeft'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid MPIN. Attempts left: $_attemptsLeft')));
     } catch (e) {
       setState(() {
         _errorMessage = 'An error occurred';

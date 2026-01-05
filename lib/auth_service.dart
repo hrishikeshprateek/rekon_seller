@@ -678,7 +678,7 @@ class AuthService with ChangeNotifier {
         'raw': response.data,
       };
     } on DioException catch (e) {
-      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null, 'raw': e.response?.data};
+      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null, 'raw': e.response?.data, 'statusCode': e.response?.statusCode};
     } catch (e) {
       return {'success': false, 'message': 'Unexpected: ${e.toString()}', 'data': null, 'raw': null};
     }
@@ -742,15 +742,100 @@ class AuthService with ChangeNotifier {
     var mob = mobile.replaceAll(RegExp(r'[^0-9]'), '');
     if (mob.length > 10) mob = mob.substring(mob.length - 10);
 
-    final result = await navigator.push<bool>(MaterialPageRoute(builder: (_) => MpinEntryPage(mobile: mob, allowCancel: false)));
-    if (result != true) return false;
+    final result = await navigator.push<dynamic>(MaterialPageRoute(builder: (_) => MpinEntryPage(mobile: mob, allowCancel: false)));
+
+    // Handle both old boolean return and new map return
+    bool mpinValid = false;
+    String? validatedMpin;
+
+    if (result is Map && result['success'] == true) {
+      mpinValid = true;
+      validatedMpin = result['mpin'] as String?;
+    } else if (result == true) {
+      mpinValid = true;
+    }
+
+    if (!mpinValid) return false;
 
     if (refreshOnSuccess) {
-      final r = await refreshAccessToken();
-      return r['success'] == true;
+      // When token is expired and we need fresh tokens, use MPIN to login
+      if (validatedMpin != null && validatedMpin.isNotEmpty) {
+        final licNo = _currentUser?.licenseNumber;
+        if (licNo != null) {
+          // Do a fresh MPIN login to get new tokens
+          final loginResult = await loginWithMpinOnly(
+            mobile: mob,
+            licenseNumber: licNo,
+            mpin: validatedMpin,
+            countryCode: countryCode,
+          );
+          return loginResult['success'] == true;
+        }
+      }
+
+      // Fallback: try refresh token if available
+      if (_refreshToken != null && _refreshToken!.isNotEmpty) {
+        final r = await refreshAccessToken();
+        return r['success'] == true;
+      }
+
+      return false;
     }
 
     return true;
+  }
+
+  /// Login with MPIN only (used when token expires and user validates MPIN)
+  Future<Map<String, dynamic>> loginWithMpinOnly({
+    required String mobile,
+    required String licenseNumber,
+    required String mpin,
+    String countryCode = '91',
+  }) async {
+    try {
+      final payload = {
+        'mobileNo': mobile,
+        'countryCode': countryCode,
+        'licNo': licenseNumber,
+        'mpin': mpin,
+      };
+
+      final response = await _dio.post('/loginWithMpin', data: payload, options: Options(headers: {
+        'Content-Type': 'application/json',
+        'package_name': packageNameHeader,
+      }));
+
+      final data = _normalizeResponse(response.data);
+
+      if (data['Status'] == true || data['status']?.toString() == 'true' || data['success'] == true) {
+        // Extract tokens
+        _accessToken = data['access_token'] ?? data['accessToken'];
+        _jwtToken = data['jwt_token'] ?? data['jwtToken'] ?? data['access_token'];
+        _refreshToken = data['refresh_token'] ?? data['refreshToken'];
+
+        // Save tokens
+        if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
+        if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
+        if (_refreshToken != null) await _storage.write(key: 'refresh_token', value: _refreshToken);
+
+        // Update user data if available
+        if (_currentUser != null) {
+          await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+        }
+
+        notifyListeners();
+        return {'success': true, 'message': 'Login successful', 'data': data};
+      }
+
+      return {
+        'success': false,
+        'message': data['Message'] ?? data['message'] ?? 'Login failed',
+        'data': null,
+      };
+    } catch (e) {
+      debugPrint('loginWithMpinOnly error: $e');
+      return {'success': false, 'message': 'Login failed: ${e.toString()}'};
+    }
   }
 
   /// Try auto login from stored tokens
