@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'dart:io';
 import 'dart:convert';
 import '../models/delivery_task_model.dart';
-import '../receipt_entry.dart';
 import '../auth_service.dart';
 
 class MarkDeliveredPage extends StatefulWidget {
@@ -25,6 +24,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   final TextEditingController _otpController = TextEditingController();
   final TextEditingController _remarkController = TextEditingController();
   final TextEditingController _personNameController = TextEditingController();
+  final FocusNode _otpFocusNode = FocusNode();
 
   bool _isDelivered = true; // true = Delivered, false = Return
   bool _otpVerified = false;
@@ -50,6 +50,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
     _otpController.dispose();
     _remarkController.dispose();
     _personNameController.dispose();
+    _otpFocusNode.dispose();
     super.dispose();
   }
 
@@ -90,10 +91,8 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
-      final dio = Dio(BaseOptions(
-        baseUrl: AuthService.baseUrl,
-        connectTimeout: const Duration(seconds: 15),
-      ));
+      // Use auth.getDioClient() for automatic 401 handling
+      final dio = auth.getDioClient();
 
       // Get customer mobile number from task
       String? customerMobile = widget.task.mobile;
@@ -116,19 +115,40 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
       }
 
       debugPrint('[MarkDeliveredPage] Sending OTP to: $mobile');
+      debugPrint('[MarkDeliveredPage] BaseURL: ${AuthService.baseUrl}');
+      debugPrint('[MarkDeliveredPage] Full URL will be: ${AuthService.baseUrl}/GenerateOTPForMobile');
 
       final response = await dio.post(
         '/GenerateOTPForMobile',
-        options: Options(headers: {
-          'package_name': 'com.reckon.reckonbiz',
-          'MobileNo': mobile,
-          'CountryCode': '91',
-          'lApkName': 'com.reckon.reckon_biz_report',
-          'GenerateOtp': '1',
-        }),
+        options: Options(
+          validateStatus: (status) => true, // Accept all status codes to see error response
+          headers: {
+            'package_name': 'com.reckon.reckonbiz',
+            'MobileNo': mobile,
+            'CountryCode': '91',
+            'lApkName': 'com.reckon.reckonbiz',
+            'GenerateOtp': '0',
+          },
+        ),
       );
 
+      debugPrint('[MarkDeliveredPage] OTP Response status: ${response.statusCode}');
       debugPrint('[MarkDeliveredPage] OTP Response: ${response.data}');
+
+      if (response.statusCode != 200) {
+        // Non-200 response, show error
+        final errorMsg = response.data is String ? response.data : (response.data.toString());
+        debugPrint('[MarkDeliveredPage] Server returned error: $errorMsg');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Server error (${response.statusCode}): $errorMsg'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
       final data = response.data is String ? jsonDecode(response.data) : response.data;
 
@@ -156,6 +176,14 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
       }
     } catch (e) {
       debugPrint('[MarkDeliveredPage] OTP request error: $e');
+
+      // Try to extract error response body
+      if (e is DioException && e.response != null) {
+        debugPrint('[MarkDeliveredPage] Error response status: ${e.response?.statusCode}');
+        debugPrint('[MarkDeliveredPage] Error response data: ${e.response?.data}');
+        debugPrint('[MarkDeliveredPage] Error response headers: ${e.response?.headers}');
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -189,10 +217,8 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
-      final dio = Dio(BaseOptions(
-        baseUrl: AuthService.baseUrl,
-        connectTimeout: const Duration(seconds: 15),
-      ));
+      // Use auth.getDioClient() for automatic 401 handling
+      final dio = auth.getDioClient();
 
       // Get customer mobile number from task
       String? customerMobile = widget.task.mobile;
@@ -232,6 +258,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
         }),
       );
 
+      debugPrint('[MarkDeliveredPage] OTP Verification Response status: ${response.statusCode}');
       debugPrint('[MarkDeliveredPage] OTP Verification Response: ${response.data}');
 
       final data = response.data is String ? jsonDecode(response.data) : response.data;
@@ -451,21 +478,8 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           return;
         }
 
-        // Check if COD (Cash on Delivery)
-        if (_paymentMode == 'Cash') {
-          // Open Receipt Entry
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const CreateReceiptScreen(),
-            ),
-          ).then((_) {
-            // After receipt entry, mark as delivered
-            _completeDelivery();
-          });
-        } else {
-          _completeDelivery();
-        }
+        // Complete delivery for both Cash and Credit
+        _completeDelivery();
       } else {
         // Return flow (explicit Return selected)
         if (_remarkController.text.isEmpty) {
@@ -484,41 +498,79 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
   Future<void> _completeDelivery() async {
     final auth = Provider.of<AuthService>(context, listen: false);
-    final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30)));
+    // Use auth.getDioClient() for automatic 401 handling with longer timeout
+    final dio = auth.getDioClient();
+    dio.options.connectTimeout = const Duration(seconds: 60);
 
-    String mobile = widget.task.mobile?.replaceAll(RegExp(r'[^0-9]'), '') ?? '';
-    if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
-
-    final payload = {
-      'billNo': widget.task.billNo ?? '',
-      'partyId': widget.task.partyId ?? '',
-      'partyName': widget.task.partyName ?? '',
-      'deliveryStatus': _deliveryStatus,
-      'paymentMode': _paymentMode,
-      'otpVerified': _otpVerified,
-      'customerMobile': mobile,
-      'customerOTP': _otpController.text.trim(),
-      'handoverPersonName': _personNameController.text.trim(),
-      'remark': _remarkController.text.trim(),
-      'deliveryDateTime': DateTime.now().toIso8601String(),
-    };
+    // Delivery status code: "1"=Delivered, "2"=Part delivered, "3"=Not delivered
+    String statusCode = "1";
+    if (_deliveryStatus == 'Part delivered') statusCode = "2";
+    else if (_deliveryStatus == 'Not delivered') statusCode = "3";
 
     try {
-      final response = await dio.post('/markDeliveryComplete', data: jsonEncode(payload),
+      // Build the request JSON object
+      final requestJson = {
+        'keyno': widget.task.id ?? '', // Use task.id as keyno (bill key)
+        'deliveryStatus': statusCode,
+        'remark': _remarkController.text.trim().isEmpty ? 'Delivered successfully' : _remarkController.text.trim(),
+        'deliveryDateTime': DateTime.now().toUtc().toIso8601String(),
+        'paymentMode': _paymentMode,
+        'handoverDetail': _personNameController.text.trim(),
+        'otp': _otpController.text.trim(),
+      };
+
+      debugPrint('[MarkDeliveredPage] Request JSON: ${jsonEncode(requestJson)}');
+
+      // Create FormData with request as JSON string
+      final formData = FormData.fromMap({
+        'request': jsonEncode(requestJson),
+      });
+
+      // Add photos as multipart files
+      for (int i = 0; i < _uploadedPhotos.length; i++) {
+        final photo = _uploadedPhotos[i];
+        File? file;
+        if (photo is File) file = photo;
+        else if (photo is XFile) file = File(photo.path);
+        else if (photo is String) file = File(photo);
+
+        if (file != null && file.existsSync()) {
+          formData.files.add(MapEntry(
+            'photo${i + 1}',
+            await MultipartFile.fromFile(
+              file.path,
+              filename: 'delivery_${i + 1}_${DateTime.now().millisecondsSinceEpoch}.jpg'
+            ),
+          ));
+        }
+      }
+
+      debugPrint('[MarkDeliveredPage] Submitting delivery with ${_uploadedPhotos.length} photos to /markDelivery');
+
+      final response = await dio.post('/markDelivery', data: formData,
           options: Options(headers: {
-            'Content-Type': 'application/json',
             'Authorization': auth.getAuthHeader() ?? '',
             'package_name': 'com.reckon.reckonbiz',
           }));
 
+      debugPrint('[MarkDeliveredPage] Response: ${response.data}');
+
       final data = response.data is String ? jsonDecode(response.data) : response.data;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['Message'] ?? 'Delivery completed'), backgroundColor: Colors.green),
-        );
-        Navigator.pop(context, true);
+        if (data['Status'] == true) {
+          // Show success dialog with all details
+          _showSuccessDialog(data);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['Message'] ?? 'Failed to mark delivery'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
+      debugPrint('[MarkDeliveredPage] Submit error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed: ${e.toString()}'), backgroundColor: Colors.red),
@@ -529,38 +581,253 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
   Future<void> _completeReturn() async {
     final auth = Provider.of<AuthService>(context, listen: false);
-    final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30)));
-
-    final payload = {
-      'billNo': widget.task.billNo ?? '',
-      'partyId': widget.task.partyId ?? '',
-      'deliveryStatus': 'Not delivered',
-      'returnReason': _remarkController.text.trim(),
-      'deliveryDateTime': DateTime.now().toIso8601String(),
-    };
+    // Use auth.getDioClient() for automatic 401 handling
+    final dio = auth.getDioClient();
+    dio.options.connectTimeout = const Duration(seconds: 30);
 
     try {
-      final response = await dio.post('/markDeliveryComplete', data: jsonEncode(payload),
+      // Build the request JSON object for return/not delivered
+      final requestJson = {
+        'keyno': widget.task.id ?? '', // Use task.id as keyno (bill key)
+        'deliveryStatus': "3", // 3 = Return/Not delivered
+        'remark': _remarkController.text.trim(),
+        'deliveryDateTime': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      debugPrint('[MarkDeliveredPage] Return Request JSON: ${jsonEncode(requestJson)}');
+
+      final formData = FormData.fromMap({
+        'request': jsonEncode(requestJson),
+      });
+
+      final response = await dio.post('/markDelivery', data: formData,
           options: Options(headers: {
-            'Content-Type': 'application/json',
             'Authorization': auth.getAuthHeader() ?? '',
             'package_name': 'com.reckon.reckonbiz',
           }));
 
+      debugPrint('[MarkDeliveredPage] Return Response: ${response.data}');
+
       final data = response.data is String ? jsonDecode(response.data) : response.data;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['Message'] ?? 'Return recorded'), backgroundColor: Colors.orange),
-        );
-        Navigator.pop(context, true);
+        if (data['Status'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['Message'] ?? 'Return recorded successfully'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          Navigator.pop(context, true);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['Message'] ?? 'Failed to record return'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
+      debugPrint('[MarkDeliveredPage] Return error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed: ${e.toString()}'), backgroundColor: Colors.red),
         );
       }
     }
+  }
+
+  void _showSuccessDialog(Map<String, dynamic> responseData) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Success Header
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: const Column(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: Colors.white, size: 64),
+                    SizedBox(height: 12),
+                    Text(
+                      'Success!',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Delivery marked successfully',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Scrollable Content
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildInfoRow('Party Name', widget.task.partyName, colorScheme),
+                      const SizedBox(height: 12),
+                      _buildInfoRow('Bill Number', widget.task.billNo ?? 'N/A', colorScheme),
+                      const SizedBox(height: 12),
+                      _buildInfoRow('Amount', '₹${widget.task.billAmount?.toStringAsFixed(2) ?? '0.00'}', colorScheme, isBold: true),
+                      const SizedBox(height: 12),
+                      _buildInfoRow('Status', _deliveryStatus, colorScheme),
+                      const SizedBox(height: 12),
+                      _buildInfoRow('Payment', _paymentMode, colorScheme),
+
+                      if (_personNameController.text.trim().isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _buildInfoRow('Handed To', _personNameController.text.trim(), colorScheme),
+                      ],
+
+                      if (_remarkController.text.trim().isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Remarks',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            _remarkController.text.trim(),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      if (responseData['photo1Url'] != null || responseData['photo2Url'] != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${(responseData['photo1Url'] != null ? 1 : 0) + (responseData['photo2Url'] != null ? 1 : 0)} photo(s) uploaded',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // Bottom Action
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      Navigator.of(context).pop(true);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, ColorScheme colorScheme, {bool isBold = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+            color: colorScheme.onSurface,
+          ),
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
   }
 
   @override
@@ -583,14 +850,14 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
               Icons.people_rounded,
               colorScheme,
               [
-                _buildInfoRow('Party Name', widget.task.partyName, isBold: true),
+                _buildDetailRow('Party Name', widget.task.partyName, isBold: true),
                 const SizedBox(height: 8),
-                _buildInfoRow('Address', '${widget.task.station}, ${widget.task.area}'),
+                _buildDetailRow('Address', '${widget.task.station}, ${widget.task.area}'),
                 const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
-                      child: _buildInfoRow('Contact Person', 'Shop Manager'),
+                      child: _buildDetailRow('Contact Person', 'Shop Manager'),
                     ),
                     IconButton(
                       icon: Icon(Icons.call, color: colorScheme.primary),
@@ -599,7 +866,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                     ),
                   ],
                 ),
-                _buildInfoRow('Mobile', widget.task.mobile ?? 'N/A'),
+                _buildDetailRow('Mobile', widget.task.mobile ?? 'N/A'),
               ],
             ),
 
@@ -613,9 +880,9 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
               [
                 Row(
                   children: [
-                    Expanded(child: _buildInfoRow('Bill No', widget.task.billNo ?? 'N/A')),
+                    Expanded(child: _buildDetailRow('Bill No', widget.task.billNo ?? 'N/A')),
                     Expanded(
-                      child: _buildInfoRow(
+                      child: _buildDetailRow(
                         'Bill Date & Time',
                         widget.task.billDate != null
                             ? DateFormat('dd MMM yy, hh:mm a').format(widget.task.billDate!)
@@ -628,7 +895,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: _buildInfoRow(
+                      child: _buildDetailRow(
                         'Bill Amount',
                         '₹${widget.task.billAmount?.toStringAsFixed(2) ?? '0.00'}',
                         valueColor: colorScheme.primary,
@@ -641,10 +908,10 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                 Row(
                   children: [
                     Expanded(
-                      child: _buildInfoRow('No of Items', '${widget.task.itemCount ?? 0}'),
+                      child: _buildDetailRow('No of Items', '${widget.task.itemCount ?? 0}'),
                     ),
                     Expanded(
-                      child: _buildInfoRow('Total Quantity', '90'), // Mock quantity
+                      child: _buildDetailRow('Total Quantity', '90'), // Mock quantity
                     ),
                   ],
                 ),
@@ -726,87 +993,189 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
               const SizedBox(height: 16),
 
-              // OTP Section
+              // OTP Section - Modern PIN Style
               _buildSectionCard(
                 'OTP Verification',
                 Icons.security,
                 colorScheme,
                 [
-                  Row(
-                    children: [
-                      Expanded(
-                        flex: 2,
-                        child: TextFormField(
-                          controller: _otpController,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          decoration: InputDecoration(
-                            hintText: 'Enter OTP',
-                            counterText: '',
-                            suffixIcon: _otpVerified
-                                ? const Icon(Icons.check_circle, color: Colors.green)
-                                : null,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
+                  // OTP Status Header
+                  if (_otpVerified)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green, width: 1),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'OTP Verified Successfully',
+                              style: TextStyle(
+                                color: Colors.green.shade700,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
                             ),
                           ),
-                          enabled: _otpSent && !_otpVerified,
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: (_otpVerified || _isRequestingOTP) ? null : _requestOTP,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _otpSent ? Colors.grey : colorScheme.primary,
-                          ),
-                          child: _isRequestingOTP
-                              ? const SizedBox(
-                                  height: 16,
-                                  width: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : Text(_otpSent ? 'Sent' : 'Send OTP'),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (_otpSent && !_otpVerified)
+                    )
+                  else ...[
+                    // Send OTP Button
                     SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isVerifyingOTP ? null : _verifyOTP,
+                      child: ElevatedButton.icon(
+                        onPressed: (_otpSent || _isRequestingOTP) ? null : _requestOTP,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          foregroundColor: colorScheme.onPrimary,
+                          backgroundColor: _otpSent ? Colors.green : colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        child: _isVerifyingOTP
+                        icon: _isRequestingOTP
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                               )
-                            : const Text('Verify OTP'),
+                            : Icon(_otpSent ? Icons.check : Icons.send),
+                        label: Text(_isRequestingOTP ? 'Sending...' : _otpSent ? 'OTP Sent' : 'Send OTP to Customer'),
                       ),
                     ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _otpVerified
-                        ? 'OTP verified successfully ✓'
-                        : _otpSent
-                            ? 'OTP sent to customer mobile number. Please enter the OTP.'
-                            : 'Click "Send OTP" to send verification code to customer mobile number',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _otpVerified
-                          ? Colors.green
-                          : _otpSent
-                              ? colorScheme.onSurfaceVariant
-                              : colorScheme.onSurfaceVariant.withOpacity(0.7),
-                      fontWeight: _otpVerified ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                  ),
+
+                    if (_otpSent) ...[
+                      const SizedBox(height: 16),
+                      // Info text
+                      Text(
+                        'Enter 6-digit OTP received by customer',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+
+                      // PIN Style OTP Input
+                      GestureDetector(
+                        onTap: () {
+                          // Focus the hidden text field when user taps on PIN boxes
+                          FocusScope.of(context).requestFocus(FocusNode());
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            if (mounted) {
+                              FocusScope.of(context).requestFocus(_otpFocusNode);
+                            }
+                          });
+                        },
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: List.generate(6, (index) {
+                            final currentLength = _otpController.text.length;
+                            final isFilled = index < currentLength;
+                            final isCurrent = index == currentLength;
+
+                            return Container(
+                              width: 45,
+                              height: 55,
+                              decoration: BoxDecoration(
+                                color: isFilled
+                                    ? colorScheme.primaryContainer.withOpacity(0.3)
+                                    : colorScheme.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isCurrent
+                                      ? colorScheme.primary
+                                      : isFilled
+                                          ? colorScheme.primary.withOpacity(0.5)
+                                          : colorScheme.outlineVariant,
+                                  width: isCurrent ? 2 : 1,
+                                ),
+                                boxShadow: isCurrent ? [
+                                  BoxShadow(
+                                    color: colorScheme.primary.withOpacity(0.2),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ] : null,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  isFilled ? _otpController.text[index] : '',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: colorScheme.onSurface,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ),
+                      ),
+
+                      // Hidden text field for OTP input
+                      SizedBox(
+                        height: 0,
+                        width: 0,
+                        child: TextField(
+                          controller: _otpController,
+                          focusNode: _otpFocusNode,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          autofocus: true,
+                          onChanged: (value) {
+                            setState(() {});
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Verify Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isVerifyingOTP ? null : _verifyOTP,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          child: _isVerifyingOTP
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                )
+                              : const Text('Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Resend OTP option
+                      Center(
+                        child: TextButton(
+                          onPressed: _isRequestingOTP ? null : _requestOTP,
+                          child: Text(
+                            'Resend OTP',
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
               ),
 
@@ -1045,12 +1414,8 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
     );
   }
 
-  Widget _buildInfoRow(
-    String label,
-    String value, {
-    bool isBold = false,
-    Color? valueColor,
-  }) {
+  Widget _buildDetailRow(String label, String value, {bool isBold = false, Color? valueColor}) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1058,7 +1423,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           label,
           style: TextStyle(
             fontSize: 11,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            color: colorScheme.onSurfaceVariant,
           ),
         ),
         const SizedBox(height: 2),
@@ -1067,7 +1432,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           style: TextStyle(
             fontSize: 13,
             fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
-            color: valueColor ?? Theme.of(context).colorScheme.onSurface,
+            color: valueColor ?? colorScheme.onSurface,
           ),
         ),
       ],

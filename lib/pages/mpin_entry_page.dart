@@ -51,7 +51,34 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
     });
 
     try {
-      final result = await auth.validateMpin(mobile: widget.mobile, mpin: mpin);
+      var result = await auth.validateMpin(mobile: widget.mobile, mpin: mpin);
+
+      // If we get 401 (token expired), try to refresh token and retry once
+      if (result['statusCode'] == 401) {
+        debugPrint('[MpinEntryPage] Got 401, attempting token refresh');
+
+        final refreshResult = await auth.refreshAccessToken();
+
+        if (refreshResult['success'] == true) {
+          debugPrint('[MpinEntryPage] Token refreshed successfully, retrying MPIN validation');
+          // Retry MPIN validation with new token
+          result = await auth.validateMpin(mobile: widget.mobile, mpin: mpin);
+        } else {
+          // Refresh failed, logout
+          debugPrint('[MpinEntryPage] Token refresh failed: ${refreshResult['message']}');
+          await auth.logout();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Session expired: ${refreshResult['message']}')),
+            );
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false,
+            );
+          }
+          return;
+        }
+      }
 
       if (result['success'] == true) {
         // Return both success and the validated MPIN so caller can use it to generate fresh tokens if needed
@@ -59,7 +86,7 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
         return;
       }
 
-      // failed
+      // MPIN validation failed (wrong MPIN)
       _attemptsLeft -= 1;
       if (_attemptsLeft <= 0) {
         await auth.logout();
@@ -78,6 +105,7 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
       });
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Invalid MPIN. Attempts left: $_attemptsLeft')));
     } catch (e) {
+      debugPrint('[MpinEntryPage] Error during MPIN validation: $e');
       setState(() {
         _errorMessage = 'An error occurred';
       });

@@ -493,7 +493,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: TextField(
               controller: _searchController,
-              onChanged: _performSearch,
+              onChanged: (value) {
+                setState(() {}); // Rebuild to show/hide clear button
+                _performSearch(value);
+              },
               style: TextStyle(
                 fontSize: 16,
                 color: colorScheme.onSurface,
@@ -513,7 +516,9 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     ? IconButton(
                   icon: Icon(Icons.clear_rounded, color: colorScheme.onSurfaceVariant),
                   onPressed: () {
-                    _searchController.clear();
+                    setState(() {
+                      _searchController.clear();
+                    });
                     _performSearch('');
                   },
                 )

@@ -48,7 +48,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
     }
   }
 
-  // --- LOGIC REMAINS EXACTLY THE SAME ---
+  // --- LOAD BILLS WITH WORKING PAGINATION ---
   Future<void> _loadBills({bool reset = false}) async {
     if (reset) {
       if (mounted) setState(() { _isLoading = true; _bills.clear(); _pageNo = 1; _hasMore = true; });
@@ -56,53 +56,25 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
 
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
-      final dio = Dio(BaseOptions(
-        baseUrl: AuthService.baseUrl,
-        responseType: ResponseType.plain,
-        connectTimeout: const Duration(seconds: 15),
-      ));
-
-      String mobile = (auth.currentUser?.mobileNumber ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-      if (mobile.length >= 10) {
-        final last10 = mobile.substring(mobile.length - 10);
-        mobile = '91$last10';
-      } else if (mobile.length == 0) {
-        mobile = '';
-      } else {
-        mobile = '91$mobile';
-      }
+      // Use auth.getDioClient() to get Dio with 401 interceptor
+      final dio = auth.getDioClient();
 
       final payload = jsonEncode({
-        'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'lPageNo': _pageNo.toString(),
         'lSize': _pageSize.toString(),
-        'luserid': mobile,
         'laid': 0,
         'lrtid': 0,
       });
 
-      Map<String, String> headers = {
+      debugPrint('[DeliveryBook] Loading page $_pageNo with size $_pageSize');
+
+      final headers = {
         'Content-Type': 'application/json',
         'Authorization': auth.getAuthHeader() ?? '',
         'package_name': 'com.reckon.reckonbiz',
       };
 
-      Response response;
-      try {
-        response = await dio.post('/getdeleveredbillList', data: payload, options: Options(headers: headers));
-      } on DioException catch (e) {
-        if (e.response?.statusCode == 401) {
-          final refreshResult = await auth.refreshAccessToken();
-          if (refreshResult['success'] == true) {
-            headers['Authorization'] = auth.getAuthHeader() ?? '';
-            response = await dio.post('/getdeleveredbillList', data: payload, options: Options(headers: headers));
-          } else {
-            throw Exception('Session expired. Please login again.');
-          }
-        } else {
-          rethrow;
-        }
-      }
+      final response = await dio.post('/getdeleveredbillList', data: payload, options: Options(headers: headers));
 
       String cleanJson = response.data.toString().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
       final data = jsonDecode(cleanJson);
@@ -111,32 +83,21 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         throw Exception(data['Message'] ?? 'Server failure');
       }
 
+      // Extract total count if available
       if (data is Map && data['RCount'] != null) {
         _totalCount = int.tryParse(data['RCount'].toString());
       }
 
+      // Extract the bills list - try multiple keys
       List rawList = [];
-      try {
-        if (data is Map) {
-          if (data['DeliverBills'] is List) {
-            rawList = data['DeliverBills'] as List;
-          } else if (data['DBILL'] is List) {
-            rawList = data['DBILL'] as List;
-          } else if (data['data'] is Map && data['data']['DeliverBills'] is List) {
-            rawList = data['data']['DeliverBills'] as List;
-          } else if (data['data'] is Map && data['data']['DBILL'] is List) {
-            rawList = data['data']['DBILL'] as List;
-          }
-          else if (data['DeliverBills'] is String) {
-            rawList = jsonDecode(data['DeliverBills']) as List;
-          } else if (data['DBILL'] is String) {
-            rawList = jsonDecode(data['DBILL']) as List;
-          }
-        } else if (data is List) {
-          rawList = data;
+      if (data is Map) {
+        if (data['data'] is List) {
+          rawList = data['data'];
+        } else if (data['DBILL'] is List) {
+          rawList = data['DBILL'];
+        } else if (data['DeliverBills'] is List) {
+          rawList = data['DeliverBills'];
         }
-      } catch (e) {
-        rawList = [];
       }
 
       final newBills = rawList.map((e) {
@@ -149,18 +110,19 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         }
       }).toList();
 
+      debugPrint('[DeliveryBook] Loaded ${newBills.length} bills for page $_pageNo');
+
       if (mounted) {
         setState(() {
           _bills.addAll(newBills);
           _hasMore = newBills.length >= _pageSize;
-          if (_totalCount != null) {
-            _hasMore = _bills.length < _totalCount!;
-          }
           if (_hasMore) _pageNo++;
           _isLoading = false;
         });
+        debugPrint('[DeliveryBook] Total bills: ${_bills.length}, hasMore: $_hasMore, nextPage: $_pageNo');
       }
     } catch (e) {
+      debugPrint('[DeliveryBook] Error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         if (_bills.isEmpty) {
@@ -180,12 +142,14 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
       body: CustomScrollView(
         controller: _scrollController,
         slivers: [
-          // Modern App Bar
+          // Modern App Bar - Fixed/Pinned
           SliverAppBar(
-            floating: true,
-            snap: true,
+            floating: false,
+            pinned: true,
+            snap: false,
             backgroundColor: scheme.surface,
             surfaceTintColor: Colors.transparent,
+            elevation: 0,
             title: Text(
               'Delivery Book',
               style: TextStyle(
@@ -222,7 +186,13 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           ),
 
           // Loading / Empty States
-          if (_bills.isEmpty && !_isLoading)
+          if (_bills.isEmpty && _isLoading)
+            const SliverFillRemaining(
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (_bills.isEmpty && !_isLoading)
             SliverFillRemaining(
               child: Center(
                 child: Column(
@@ -243,12 +213,15 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
               delegate: SliverChildBuilderDelegate(
                     (context, index) {
                   if (index == _bills.length) {
-                    return const Center(
-                        child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: CircularProgressIndicator(strokeWidth: 2)
-                        )
-                    );
+                    // Show loading indicator only when loading more (not initial load)
+                    return _bills.isNotEmpty && _isLoading && _hasMore
+                        ? const Center(
+                            child: Padding(
+                                padding: EdgeInsets.all(24),
+                                child: CircularProgressIndicator(strokeWidth: 2)
+                            )
+                          )
+                        : const SizedBox.shrink();
                   }
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -258,7 +231,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                     ),
                   );
                 },
-                childCount: _bills.length + (_hasMore ? 1 : 0),
+                childCount: _bills.length + (_hasMore && _bills.isNotEmpty ? 1 : 0),
               ),
             ),
           ),
@@ -291,7 +264,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (context) => MarkDeliveredPage(
         task: DeliveryTask(
-          id: bill.billno,
+          id: bill.keyno, // Use full keyno instead of just billno
           type: TaskType.delivery,
           status: TaskStatus.pending,
           partyName: bill.acname,
@@ -619,6 +592,7 @@ class _StatBadge extends StatelessWidget {
 class DeliveryBill {
   final String acname, billno, billdate, acno, mobile, station;
   final String address, remark, area, route, statusName, status;
+  final String keyno; // Full bill key like "20250401/SALE  /AMPL  /O000001"
   final double billamt;
   final int item, qty;
 
@@ -628,6 +602,7 @@ class DeliveryBill {
     required this.item, required this.qty, required this.station,
     required this.acno, required this.remark, required this.area,
     required this.route, required this.statusName, required this.status,
+    required this.keyno,
   });
 
   factory DeliveryBill.fromJson(Map<String, dynamic> json) {
@@ -679,6 +654,7 @@ class DeliveryBill {
       route: str('route'),
       statusName: str('stausname'),
       status: str('status'),
+      keyno: str('keyno'),
     );
   }
 }

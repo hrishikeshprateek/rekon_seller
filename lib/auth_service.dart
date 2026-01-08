@@ -12,7 +12,7 @@ class AuthService with ChangeNotifier {
   // API configuration
   // Updated base URL (new API host + path)
   static const String baseUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder';
-  static const String tenantId = 'com.reckon.reckon_biz_report';
+  static const String tenantId = 'com.reckon.reckonbiz';
   // Updated API header package name
   static const String packageName = 'com.reckon.reckonbiz';
 
@@ -51,6 +51,69 @@ class AuthService with ChangeNotifier {
     _dio.options.baseUrl = baseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
+
+    // Add interceptor to handle 401 errors globally
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onError: (DioException error, ErrorInterceptorHandler handler) async {
+          if (error.response?.statusCode == 401) {
+            debugPrint('[AuthService] 401 detected, attempting MPIN validation and token refresh');
+
+            // Try to refresh token via MPIN
+            final success = await _handleUnauthorized();
+
+            if (success && error.requestOptions.extra['retry'] != true) {
+              // Mark this request as retried to avoid infinite loops
+              error.requestOptions.extra['retry'] = true;
+
+              // Retry the original request with new token
+              try {
+                final response = await _dio.fetch(error.requestOptions);
+                return handler.resolve(response);
+              } catch (e) {
+                return handler.next(error);
+              }
+            }
+          }
+          return handler.next(error);
+        },
+      ),
+    );
+  }
+
+  /// Handle 401 unauthorized by showing MPIN entry and refreshing token
+  Future<bool> _handleUnauthorized() async {
+    final navigator = appNavigatorKey.currentState;
+    if (navigator == null || _currentUser == null) return false;
+
+    try {
+      // Show MPIN entry page
+      final result = await navigator.push<dynamic>(
+        MaterialPageRoute(
+          builder: (_) => MpinEntryPage(
+            mobile: _currentUser!.mobileNumber,
+            allowCancel: false,
+          ),
+        ),
+      );
+
+      // Check if MPIN was validated
+      if (result is Map && result['success'] == true) {
+        // Now refresh the token
+        final refreshResult = await refreshAccessToken();
+
+        if (refreshResult['success'] == true) {
+          debugPrint('[AuthService] Token refreshed successfully after MPIN validation');
+          return true;
+        } else {
+          debugPrint('[AuthService] Token refresh failed: ${refreshResult['message']}');
+        }
+      }
+    } catch (e) {
+      debugPrint('[AuthService] Error handling 401: $e');
+    }
+
+    return false;
   }
 
   // Helper to ensure response data is a Map<String, dynamic>
@@ -939,5 +1002,51 @@ class AuthService with ChangeNotifier {
         'data': null,
       };
     }
+  }
+
+  /// Get a Dio client configured with the 401 interceptor
+  /// Use this in all API calls to automatically handle token expiration
+  Dio getDioClient({String? customBaseUrl}) {
+    final dio = Dio(BaseOptions(
+      baseUrl: customBaseUrl ?? baseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      responseType: ResponseType.plain,
+    ));
+
+    // Add the same 401 interceptor
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onError: (DioException error, ErrorInterceptorHandler handler) async {
+          if (error.response?.statusCode == 401) {
+            debugPrint('[DioClient] 401 detected, attempting MPIN validation and token refresh');
+
+            // Try to refresh token via MPIN
+            final success = await _handleUnauthorized();
+
+            if (success && error.requestOptions.extra['retry'] != true) {
+              // Mark this request as retried to avoid infinite loops
+              error.requestOptions.extra['retry'] = true;
+
+              // Update the authorization header with new token
+              if (getAuthHeader() != null) {
+                error.requestOptions.headers['Authorization'] = getAuthHeader();
+              }
+
+              // Retry the original request with new token
+              try {
+                final response = await dio.fetch(error.requestOptions);
+                return handler.resolve(response);
+              } catch (e) {
+                return handler.next(error);
+              }
+            }
+          }
+          return handler.next(error);
+        },
+      ),
+    );
+
+    return dio;
   }
 }
