@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
 import '../auth_service.dart';
+import '../receipt_entry.dart';
 
 class OutstandingDetailsPage extends StatefulWidget {
   final String accountNo;
@@ -29,6 +30,55 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
   final int _pageSize = 30;
   int _currentPage = 1;
   bool _hasMore = true;
+
+  final Set<int> _selectedIndexes = <int>{};
+  bool _selectionMode = false;
+
+  double get _selectedTotal {
+    final data = _outstandingData;
+    if (data == null) return 0;
+
+    double sum = 0;
+    for (final idx in _selectedIndexes) {
+      if (idx >= 0 && idx < data.items.length) {
+        sum += data.items[idx].amount;
+      }
+    }
+    return sum;
+  }
+
+  void _toggleSelection(int listIndex) {
+    setState(() {
+      _selectionMode = true;
+      if (_selectedIndexes.contains(listIndex)) {
+        _selectedIndexes.remove(listIndex);
+      } else {
+        _selectedIndexes.add(listIndex);
+      }
+
+      if (_selectedIndexes.isEmpty) {
+        _selectionMode = false;
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedIndexes.clear();
+      _selectionMode = false;
+    });
+  }
+
+  void _goToReceiptEntry() {
+    if (_selectedIndexes.isEmpty) return;
+
+    // Current CreateReceiptScreen is a generic receipt form.
+    // We open it and (for now) user can enter amount manually.
+    // Next step: wire selected bills + amount into the receipt screen.
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CreateReceiptScreen()),
+    );
+  }
 
   @override
   void initState() {
@@ -56,17 +106,19 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
     if (_isLoading) return;
 
     if (reset) {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _isLoading = true;
           _errorMessage = null;
           _currentPage = 1;
           _hasMore = true;
           _outstandingData = null;
+          _selectedIndexes.clear();
+          _selectionMode = false;
         });
       }
     } else {
-      if(mounted) setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
     }
 
     try {
@@ -114,14 +166,14 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
       _hasMore = newData.items.length >= _pageSize;
       if (_hasMore) _currentPage++;
 
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _isLoading = false;
           _errorMessage = null;
         });
       }
     } catch (e) {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _isLoading = false;
           _errorMessage = e.toString();
@@ -138,6 +190,9 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
     final primaryColor = Colors.blueGrey.shade800;
     final scaffoldBg = Colors.grey.shade100;
 
+    final selectedTotal = _selectedTotal;
+    final currencyFormat = NumberFormat.simpleCurrency(locale: 'en_IN', decimalDigits: 2);
+
     return Scaffold(
       backgroundColor: scaffoldBg,
       appBar: AppBar(
@@ -145,23 +200,96 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
         elevation: 0,
         centerTitle: false,
         title: const Text(
-            "Ledger Book",
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5
-            )
+          "Ledger Book",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          if (_outstandingData != null)
+            IconButton(
+              tooltip: _selectionMode ? 'Clear selection' : 'Select bills',
+              onPressed: _selectionMode ? _clearSelection : () => setState(() => _selectionMode = true),
+              icon: Icon(_selectionMode ? Icons.close_rounded : Icons.checklist_rounded),
+            ),
           IconButton(
-              onPressed: () => _loadOutstandingDetails(reset: true),
-              icon: const Icon(Icons.refresh_rounded)
-          )
+            onPressed: () => _loadOutstandingDetails(reset: true),
+            icon: const Icon(Icons.refresh_rounded),
+          ),
         ],
       ),
-      body: _buildBody(),
+      body: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: _selectedIndexes.isEmpty ? 0 : 72),
+            child: _buildBody(),
+          ),
+
+          if (_selectedIndexes.isNotEmpty)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                top: false,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, -4),
+                      )
+                    ],
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${_selectedIndexes.length} selected',
+                              style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w600),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Total: ${currencyFormat.format(selectedTotal.abs())} ${selectedTotal < 0 ? 'Cr' : 'Dr'}',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        height: 42,
+                        child: FilledButton.icon(
+                          onPressed: _goToReceiptEntry,
+                          icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                          label: const Text('Receipt Entry'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: primaryColor,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -181,7 +309,6 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
       padding: const EdgeInsets.only(bottom: 24),
       itemCount: _outstandingData!.items.length + 2,
       itemBuilder: (context, index) {
-
         // 1. LEDGER HEADER
         if (index == 0) {
           return _LedgerHeader(data: _outstandingData!);
@@ -192,13 +319,23 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
           return _hasMore
               ? const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(strokeWidth: 2)))
               : const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Center(child: Text("--- END OF REPORT ---", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1))),
-          );
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: Text("--- END OF REPORT ---", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 1))),
+                );
         }
 
         // 3. BILL ITEMS
-        return _LedgerItem(item: _outstandingData!.items[index - 1]);
+        final itemIndex = index - 1;
+        final item = _outstandingData!.items[itemIndex];
+        final isSelected = _selectedIndexes.contains(itemIndex);
+
+        return _LedgerItem(
+          item: item,
+          isSelected: isSelected,
+          selectionMode: _selectionMode,
+          onToggleSelected: () => _toggleSelection(itemIndex),
+          onLongPress: () => _toggleSelection(itemIndex),
+        );
       },
     );
   }
@@ -300,7 +437,18 @@ class _LedgerHeader extends StatelessWidget {
 
 class _LedgerItem extends StatelessWidget {
   final OutstandingItem item;
-  const _LedgerItem({required this.item});
+  final bool selectionMode;
+  final bool isSelected;
+  final VoidCallback onToggleSelected;
+  final VoidCallback? onLongPress;
+
+  const _LedgerItem({
+    required this.item,
+    required this.selectionMode,
+    required this.isSelected,
+    required this.onToggleSelected,
+    this.onLongPress,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -309,136 +457,217 @@ class _LedgerItem extends StatelessWidget {
     final isOverdue = item.overDue.isNotEmpty && item.overDue != "0";
 
     // Compact layout constants
-    const labelStyle = TextStyle(fontSize: 11, color: Color(0xFF757575)); // Grey 600
-    const valueStyle = TextStyle(fontSize: 12, color: Color(0xFF212121), fontWeight: FontWeight.w500); // Grey 900
+    const labelStyle = TextStyle(fontSize: 11, color: Color(0xFF757575));
+    const valueStyle = TextStyle(fontSize: 12, color: Color(0xFF212121), fontWeight: FontWeight.w500);
 
     // Status Strip Color
     final Color stripColor = isNegative
         ? Colors.green.shade600
         : (isOverdue ? Colors.red.shade700 : Colors.blueGrey.shade300);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
+    return InkWell(
+      onTap: selectionMode ? onToggleSelected : null,
+      onLongPress: onLongPress,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(2), // Classic sharp look
+          borderRadius: BorderRadius.circular(2),
+          border: isSelected
+              ? Border.all(color: Theme.of(context).colorScheme.primary, width: 1.2)
+              : null,
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 2, offset: const Offset(0, 1))
-          ]
-      ),
-      child: IntrinsicHeight(
-        child: Row(
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 2,
+              offset: const Offset(0, 1),
+            )
+          ],
+        ),
+        child: Stack(
           children: [
-            // 1. Status Strip
-            Container(width: 4, color: stripColor),
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  // 1. Status Strip
+                  Container(width: 4, color: stripColor),
 
-            // 2. Content
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header Row: Date & Amount
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          item.date,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87),
-                        ),
-                        Text(
-                          currencyFormat.format(item.amount.abs()),
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: isNegative ? Colors.green.shade800 : Colors.black87
+                  // 2. Content (full width; wraps naturally)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header Row: Date & Amount
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  item.date,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                    color: Colors.black87,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Padding(
+                                padding: EdgeInsets.only(
+                                  right: selectionMode ? 34 : 0, // leave room for top-right checkbox
+                                ),
+                                child: Text(
+                                  currencyFormat.format(item.amount.abs()),
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: isNegative ? Colors.green.shade800 : Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 8),
-                    const Divider(height: 1, thickness: 0.5),
-                    const SizedBox(height: 8),
+                          const SizedBox(height: 8),
+                          const Divider(height: 1, thickness: 0.5),
+                          const SizedBox(height: 8),
 
-                    // Grid Data (Using Row + Expanded for 2 columns)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Left Column
-                        Expanded(
-                          flex: 4,
-                          child: Column(
+                          // Grid Data
+                          Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _RichInfo(label: "Bill No", value: item.entryNo, labelStyle: labelStyle, valueStyle: valueStyle),
-                              const SizedBox(height: 2),
-                              _RichInfo(label: "Type", value: item.trantype.isEmpty ? "-" : item.trantype, labelStyle: labelStyle, valueStyle: valueStyle),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Right Column (Align End)
-                        Expanded(
-                          flex: 5,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              // Key Entry No with Wrapping support
-                              _RichInfo(
-                                  label: "Key ID",
-                                  value: item.keyEntryNo.isEmpty ? "-" : item.keyEntryNo,
-                                  labelStyle: labelStyle,
-                                  valueStyle: valueStyle,
-                                  alignRight: true
+                              Expanded(
+                                flex: 4,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _RichInfo(
+                                      label: "Bill No",
+                                      value: item.entryNo,
+                                      labelStyle: labelStyle,
+                                      valueStyle: valueStyle,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    _RichInfo(
+                                      label: "Type",
+                                      value: item.trantype.isEmpty ? "-" : item.trantype,
+                                      labelStyle: labelStyle,
+                                      valueStyle: valueStyle,
+                                    ),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: 2),
-                              if(isNegative)
-                                const Text("CREDIT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.green))
-                              else
-                                const Text("DEBIT", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black45))
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 5,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    _RichInfo(
+                                      label: "Key ID",
+                                      value: item.keyEntryNo.isEmpty ? "-" : item.keyEntryNo,
+                                      labelStyle: labelStyle,
+                                      valueStyle: valueStyle,
+                                      alignRight: true,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    if (isNegative)
+                                      const Text(
+                                        "CREDIT",
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                        ),
+                                      )
+                                    else
+                                      const Text(
+                                        "DEBIT",
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black45,
+                                        ),
+                                      )
+                                  ],
+                                ),
+                              )
                             ],
                           ),
-                        )
-                      ],
-                    ),
 
-                    const SizedBox(height: 8),
+                          const SizedBox(height: 8),
 
-                    // Footer Row: Due Date & Overdue Badge
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
-                            const SizedBox(width: 4),
-                            Text(
-                              "Due: ${item.dueDate.isEmpty ? 'NA' : item.dueDate}",
-                              style: const TextStyle(fontSize: 11, color: Colors.black54),
-                            ),
-                          ],
-                        ),
-                        if(isOverdue)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                            decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(2),
-                                border: Border.all(color: Colors.red.shade100)
-                            ),
-                            child: Text(
-                              "${item.overDue} DAYS OVERDUE",
-                              style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.red.shade800),
-                            ),
+                          // Footer Row
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        "Due: ${item.dueDate.isEmpty ? 'NA' : item.dueDate}",
+                                        style: const TextStyle(fontSize: 11, color: Colors.black54),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (isOverdue)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(2),
+                                    border: Border.all(color: Colors.red.shade100),
+                                  ),
+                                  child: Text(
+                                    "${item.overDue} DAYS OVERDUE",
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.red.shade800,
+                                    ),
+                                  ),
+                                )
+                            ],
                           )
-                      ],
-                    )
-                  ],
-                ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+
+            // Top-right checkbox, overlayed.
+            // We don't reserve layout space for it, so the content can wrap "around" it.
+            // Only the checkbox itself should capture taps.
+            if (selectionMode)
+              Positioned(
+                top: 2,
+                right: 2,
+                child: IgnorePointer(
+                  ignoring: false,
+                  child: SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Checkbox(
+                      value: isSelected,
+                      onChanged: (_) => onToggleSelected(),
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
