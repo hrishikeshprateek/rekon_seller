@@ -457,7 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'receiptentry': const CreateReceiptScreen(),
       'receiptbook': const ReceiptBookPage(),
       'statement': const StatementPage(),
-      'receivables': const OutstandingPage(),
+      'receivables': const AccountOutstandingListPage(),
       'debtors': const OutstandingPage(),
       'creditors': const OutstandingPage(),
       'payables': const OutstandingPage(),
@@ -492,6 +492,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'notification': const NotificationPage(),
       'referandearn': const ReferAndEarnPage(),
       'contactsupport': const ContactSupportPage(),
+
       // Add new routes here, e.g.:
       // 'newpage': const NewPage(),
     };

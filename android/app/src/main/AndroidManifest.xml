@@ -1,23 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.reckon.reckonbiz">
-    <!-- package attribute updated to com.reckon.reckonbiz -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <!-- Permissions required for camera/gallery image picking -->
     <uses-permission android:name="android.permission.CAMERA"/>
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
-    <!-- Android 13+ media permission -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
 
     <application
         android:label="Reckon BIZ360"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        <!-- FileProvider needed for camera capture with image_picker on some devices -->
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true">
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
+            android:authorities="com.reckon.reckonbiz.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

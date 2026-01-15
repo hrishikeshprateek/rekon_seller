@@ -56,7 +56,13 @@ class AuthService with ChangeNotifier {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onError: (DioException error, ErrorInterceptorHandler handler) async {
-          if (error.response?.statusCode == 401) {
+          // Skip interceptor if this is a MPIN validation or refresh token request to avoid infinite loops
+          final path = error.requestOptions.path;
+          final skipInterceptor = path.contains('validateMpin') ||
+                                  path.contains('refresh') ||
+                                  error.requestOptions.extra['skipAuth'] == true;
+
+          if (error.response?.statusCode == 401 && !skipInterceptor) {
             debugPrint('[AuthService] 401 detected, attempting MPIN validation and token refresh');
 
             // Try to refresh token via MPIN
@@ -66,8 +72,13 @@ class AuthService with ChangeNotifier {
               // Mark this request as retried to avoid infinite loops
               error.requestOptions.extra['retry'] = true;
 
-              // Retry the original request with new token
+              // Update the authorization header with new token
+              if (getAuthHeader() != null) {
+                error.requestOptions.headers['Authorization'] = getAuthHeader();
+              }
+
               try {
+                // Retry the original request with new token
                 final response = await _dio.fetch(error.requestOptions);
                 return handler.resolve(response);
               } catch (e) {
@@ -727,23 +738,40 @@ class AuthService with ChangeNotifier {
         'countryCode': countryCode,
         'mpin': mpin,
       };
-      // Corrected endpoint name: /validateMpin
-      final response = await _dio.post('/validateMpin', data: payload, options: Options(headers: {
-        'Content-Type': 'application/json',
-        'package_name': packageNameHeader,
-        if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
-      }));
+
+      final response = await _dio.post('/validateMpin',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': packageNameHeader,
+            if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
+          },
+          extra: {'skipAuth': true}, // Skip 401 interceptor to avoid infinite loops
+        ),
+      );
+
       final data = _normalizeResponse(response.data);
+      final success = data['Status'] == true || (data['Status']?.toString().toLowerCase() == 'true');
+
       return {
-        'success': data['Status'] == true || data['status']?.toString() == 'true' || data['success'] == true,
-        'message': data['Message'] ?? data['message'] ?? '',
+        'success': success,
+        'message': data['Message'] ?? data['message'] ?? (success ? 'MPIN validated' : 'MPIN validation failed'),
         'data': data,
         'raw': response.data,
       };
     } on DioException catch (e) {
-      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null, 'raw': e.response?.data, 'statusCode': e.response?.statusCode};
+      return {
+        'success': false,
+        'message': e.response?.data?.toString() ?? e.message ?? 'Network error',
+        'data': null,
+      };
     } catch (e) {
-      return {'success': false, 'message': 'Unexpected: ${e.toString()}', 'data': null, 'raw': null};
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+      };
     }
   }
 
@@ -1018,7 +1046,13 @@ class AuthService with ChangeNotifier {
     dio.interceptors.add(
       InterceptorsWrapper(
         onError: (DioException error, ErrorInterceptorHandler handler) async {
-          if (error.response?.statusCode == 401) {
+          // Skip interceptor if this is a MPIN validation or refresh token request to avoid infinite loops
+          final path = error.requestOptions.path;
+          final skipInterceptor = path.contains('validateMpin') ||
+                                  path.contains('refresh') ||
+                                  error.requestOptions.extra['skipAuth'] == true;
+
+          if (error.response?.statusCode == 401 && !skipInterceptor) {
             debugPrint('[DioClient] 401 detected, attempting MPIN validation and token refresh');
 
             // Try to refresh token via MPIN
@@ -1033,8 +1067,8 @@ class AuthService with ChangeNotifier {
                 error.requestOptions.headers['Authorization'] = getAuthHeader();
               }
 
-              // Retry the original request with new token
               try {
+                // Retry the original request with new token
                 final response = await dio.fetch(error.requestOptions);
                 return handler.resolve(response);
               } catch (e) {

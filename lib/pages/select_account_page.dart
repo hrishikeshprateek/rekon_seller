@@ -7,14 +7,16 @@ import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'dart:async';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/account_model.dart';
 import '../auth_service.dart';
 
 class SelectAccountPage extends StatefulWidget {
   final String title;
-  final String? accountType; // Filter by type: 'Party', 'Bank', 'Cash', null = all
+  final String? accountType;
   final bool showBalance;
-  final Account? selectedAccount; // Pre-selected account (optional)
+  final Account? selectedAccount;
 
   const SelectAccountPage({
     super.key,
@@ -52,7 +54,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   List<Account> _allAccounts = [];
   List<Account> _filteredAccounts = [];
   bool _isLoading = true;
-  // Pagination state
   int _pageNo = 1;
   final int _pageSize = 20;
   bool _hasMore = true;
@@ -65,7 +66,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_onScroll);
-    _loadAccounts(reset: true);
+
+    // --- FIX: Schedule load after first frame to avoid setState error ---
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAccounts(reset: true);
+    });
   }
 
   @override
@@ -77,26 +82,29 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     super.dispose();
   }
 
-  // --- REAL API IMPLEMENTATION WITH PAGINATION ---
+  // --- LOGIC IMPLEMENTATION ---
 
   Future<void> _loadAccounts({bool reset = false}) async {
+    if (!mounted) return; // Guard against unmounted calls
+
     if (reset) {
       _pageNo = 1;
       _hasMore = true;
     }
+    if (!reset && !_hasMore) return;
 
-    // If loading more, set flag (used to show bottom loader)
-    if (!reset && !_hasMore) return; // nothing to load
-
-    if (reset) {
-      setState(() {
-        _isLoading = true;
-        _isLoadingMore = false;
-      });
-    } else {
-      setState(() {
-        _isLoadingMore = true;
-      });
+    // FIX: Check mounted before setState
+    if (mounted) {
+      if (reset) {
+        setState(() {
+          _isLoading = true;
+          _isLoadingMore = false;
+        });
+      } else {
+        setState(() {
+          _isLoadingMore = true;
+        });
+      }
     }
 
     try {
@@ -126,10 +134,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         'lApkName': 'com.reckon.reckonbiz',
         'lLicNo': auth.currentUser!.licenseNumber,
         'lUserId': mobile,
-        // pagination
         'lPageNo': _pageNo.toString(),
         'lSize': _pageSize.toString(),
-        // search
         'lSearchFieldValue': _searchQuery,
         'lExecuteTotalRows': '1',
         'lMr': '',
@@ -180,13 +186,14 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
           ? accountsData.map((json) => Account.fromApiJson(json as Map<String, dynamic>)).toList()
           : [];
 
+      if (!mounted) return;
+
       if (reset) {
         _allAccounts = fetched;
       } else {
         _allAccounts.addAll(fetched);
       }
 
-      // decide if there's more
       if (fetched.length < _pageSize) {
         _hasMore = false;
       } else {
@@ -195,7 +202,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
       _filteredAccounts = List<Account>.from(_allAccounts);
 
-      // increment page for next load (only if we fetched something)
       if (fetched.isNotEmpty) _pageNo += 1;
 
     } catch (e) {
@@ -219,7 +225,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   }
 
   void _performSearch(String query) {
-    // debounce search and perform server-side search with pagination
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 250), () {
       _searchQuery = query.trim();
@@ -229,11 +234,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
   void _onScroll() {
     if (!_scrollController.hasClients || _isLoading || _isLoadingMore || !_hasMore) return;
-    final threshold = 200; // pixels
+    final threshold = 200;
     final maxScroll = _scrollController.position.maxScrollExtent;
     final current = _scrollController.position.pixels;
     if (maxScroll - current <= threshold) {
-      // near bottom
       _loadAccounts(reset: false);
     }
   }
@@ -266,15 +270,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   }
 
   void _showMapDialog(Account account) {
-    if (account.latitude == null || account.longitude == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location not available for this account'),
-          backgroundColor: Colors.grey,
-        ),
-      );
-      return;
-    }
+    if (account.latitude == null || account.longitude == null) return;
 
     showDialog(
       context: context,
@@ -290,74 +286,42 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Map Header
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                  ),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
                 ),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Icon(Icons.location_on_rounded, color: Theme.of(context).colorScheme.primary),
-                    const SizedBox(width: 12),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            account.name,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (account.address != null)
-                            Text(
-                              account.address!,
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
+                      child: Text(
+                        account.name,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded),
+                      icon: const Icon(Icons.close),
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ],
                 ),
               ),
-              // OpenStreetMap
               ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(0),
-                  bottomRight: Radius.circular(0),
-                ),
                 child: SizedBox(
                   height: 350,
                   child: FlutterMap(
                     options: MapOptions(
                       initialCenter: LatLng(account.latitude!, account.longitude!),
                       initialZoom: 15.0,
-                      minZoom: 5.0,
-                      maxZoom: 18.0,
                     ),
                     children: [
                       TileLayer(
                         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.reckon.reckonbiz',
-                        tileProvider: NetworkTileProvider(),
                       ),
                       MarkerLayer(
                         markers: [
@@ -365,49 +329,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                             point: LatLng(account.latitude!, account.longitude!),
                             width: 80,
                             height: 80,
-                            child: Column(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(8),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.3),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Text(
-                                    account.name,
-                                    style: TextStyle(
-                                      color: Theme.of(context).colorScheme.onPrimary,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Icon(
-                                  Icons.location_on,
-                                  color: Theme.of(context).colorScheme.error,
-                                  size: 40,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      RichAttributionWidget(
-                        attributions: [
-                          TextSourceAttribution(
-                            'OpenStreetMap contributors',
-                            onTap: () => launchUrl(Uri.parse('https://openstreetmap.org/copyright')),
+                            child: Icon(Icons.location_on, color: Colors.red, size: 40),
                           ),
                         ],
                       ),
@@ -415,37 +337,536 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                   ),
                 ),
               ),
-              // Action Buttons
               Padding(
                 padding: const EdgeInsets.all(16),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _openMapsNavigation(account);
+                    },
+                    icon: const Icon(Icons.navigation),
+                    label: const Text('Start Navigation'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatAccountShareText(Account account) {
+    final lines = <String>[];
+
+    lines.add('Firm Name: ${account.name}');
+
+    final address = (account.address ?? '').trim();
+    if (address.isNotEmpty) {
+      lines.add('Address: $address');
+    }
+
+    // Try extracting a 6-digit pincode from the address if present.
+    final pinMatch = RegExp(r'\b\d{6}\b').firstMatch(address);
+    if (pinMatch != null) {
+      lines.add('PinCode: ${pinMatch.group(0)}');
+    }
+
+    final phone = (account.phone ?? '').trim();
+    if (phone.isNotEmpty) {
+      lines.add('Mobile: $phone');
+    }
+
+    final email = (account.email ?? '').trim();
+    if (email.isNotEmpty) {
+      lines.add('Email id: $email');
+    }
+
+    return lines.join('\n');
+  }
+
+  // --- UI IMPLEMENTATION ---
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F4F7),
+      appBar: AppBar(
+        title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 2,
+        shadowColor: Colors.black.withOpacity(0.1),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.black87),
+            onPressed: () => _loadAccounts(reset: true),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Search Bar
+          Container(
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  onChanged: (value) {
+                    setState(() {});
+                    _performSearch(value);
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search Account / ID...',
+                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                      icon: const Icon(Icons.clear, color: Colors.grey),
+                      onPressed: () {
+                        setState(() {
+                          _searchController.clear();
+                        });
+                        _performSearch('');
+                      },
+                    )
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFFF1F3F4),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                // Filter Chips
+                if (widget.accountType == null) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        _buildFilterChip('All', null),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Parties', 'Party'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Banks', 'Bank'),
+                        const SizedBox(width: 8),
+                        _buildFilterChip('Cash', 'Cash'),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Account List
+          Expanded(
+            child: _isLoading
+                ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
+                : _filteredAccounts.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  const Text('No accounts found', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            )
+                : RefreshIndicator(
+              onRefresh: () async => await _loadAccounts(reset: true),
+              child: ListView.separated(
+                controller: _scrollController,
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                separatorBuilder: (context, index) => const SizedBox(height: 8),
+                itemCount: _filteredAccounts.length + (_hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index >= _filteredAccounts.length) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Center(child: _isLoadingMore ? const CircularProgressIndicator(strokeWidth: 2) : const SizedBox.shrink()),
+                    );
+                  }
+                  return _buildProfessionalCard(context, _filteredAccounts[index]);
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String? type) {
+    final isSelected = widget.accountType == type;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) {},
+      showCheckmark: false,
+      labelStyle: TextStyle(
+        fontSize: 13,
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+        color: isSelected ? Colors.white : Colors.black87,
+      ),
+      backgroundColor: Colors.white,
+      selectedColor: Colors.black87,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+    );
+  }
+
+  Widget _buildProfessionalCard(BuildContext context, Account account) {
+    final isSelected = widget.selectedAccount?.id == account.id;
+    final hasLocation = (account.latitude != null && account.longitude != null && account.latitude != 0 && account.longitude != 0);
+
+    // Use closBal if available (mapped in model), fallback to balance, then 0.0
+    final displayBalance = account.closBal ?? account.balance ?? 0.0;
+    final isNegative = displayBalance < 0;
+
+    return Card(
+      elevation: 0,
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: isSelected ? Theme.of(context).primaryColor : const Color(0xFFE0E0E0), width: isSelected ? 2 : 1),
+      ),
+      child: InkWell(
+        onTap: () => _selectAccount(account),
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Header (Identity)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: _getTypeColor(account.type).withOpacity(0.1),
+                    child: Text(
+                      account.name.isNotEmpty ? account.name[0].toUpperCase() : '?',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: _getTypeColor(account.type)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          account.name,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF202124)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                account.type.toUpperCase(),
+                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text('ID: ${account.id}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFEEEEEE)),
+
+            // 2. Info Row (Phone Left | Balance Right)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Phone section
+                  Expanded(
+                    child: account.phone != null
+                        ? Row(
+                      children: [
+                        const Icon(Icons.phone_iphone, size: 18, color: Colors.black54),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            account.phone!,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF333333)),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    )
+                        : const Text("No Phone", style: TextStyle(fontSize: 14, color: Colors.grey)),
+                  ),
+
+                  // Balance section
+                  if (widget.showBalance)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          '₹${displayBalance.abs().toStringAsFixed(0)}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isNegative ? Colors.red[700] : Colors.green[700],
+                          ),
+                        ),
+                        Text(
+                          'ClosBal ${isNegative ? "Dr" : "Cr"}',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isNegative ? Colors.red[700] : Colors.green[700]),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+
+            // 3. Address Row
+            if (account.address != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 2),
+                      child: Icon(Icons.location_on_outlined, size: 16, color: Colors.grey),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(Icons.close_rounded),
-                        label: const Text('Close'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
+                      child: Text(
+                        account.address!,
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368)),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(ctx);
-                          _openMapsNavigation(account);
-                        },
-                        icon: const Icon(Icons.navigation_rounded),
-                        label: const Text('Navigate'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          backgroundColor: Theme.of(context).colorScheme.primary,
-                          foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                        ),
-                      ),
+                  ],
+                ),
+              ),
+
+            // 4. Map Strip (If available)
+            if (hasLocation)
+              InkWell(
+                onTap: () => _showMapDialog(account),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF1F8FF),
+                    border: Border(
+                      top: BorderSide(color: Color(0xFFE1E4E8)),
+                      bottom: BorderSide(color: Color(0xFFE1E4E8)),
                     ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.map_outlined, size: 16, color: Color(0xFF0366D6)),
+                      SizedBox(width: 8),
+                      Text("View location on map", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0366D6))),
+                    ],
+                  ),
+                ),
+              ),
+
+            // 5. Clean Action Grid
+            Row(
+              children: [
+                _buildGridAction(
+                  context,
+                  icon: Icons.call,
+                  label: "Call",
+                  isEnabled: account.phone != null,
+                  onTap: () async {
+                    final raw = account.phone!.replaceAll(RegExp(r'[^0-9+]'), '');
+                    String tel = raw;
+                    if (!tel.startsWith('+') && tel.length == 10) tel = '+91$tel';
+                    final uri = Uri.parse('tel:$tel');
+                    if (await canLaunchUrl(uri)) launchUrl(uri);
+                  },
+                ),
+                _buildVerticalDivider(),
+                _buildGridAction(
+                  context,
+                  icon: Icons.directions,
+                  label: "Navigate",
+                  isEnabled: hasLocation,
+                  onTap: () => _openMapsNavigation(account),
+                ),
+                _buildVerticalDivider(),
+                _buildGridAction(
+                  context,
+                  icon: Icons.info_outline,
+                  label: "Details",
+                  isEnabled: true,
+                  onTap: () => _showAccountDetailsSheet(context, account),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVerticalDivider() {
+    return Container(width: 1, height: 24, color: const Color(0xFFEEEEEE));
+  }
+
+  Widget _buildGridAction(BuildContext context, {required IconData icon, required String label, required bool isEnabled, required VoidCallback onTap}) {
+    return Expanded(
+      child: InkWell(
+        onTap: isEnabled ? onTap : null,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: isEnabled ? Colors.black54 : Colors.grey[300]),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isEnabled ? Colors.black87 : Colors.grey[300],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- Helpers ---
+
+  void _showAccountDetailsSheet(BuildContext context, Account account) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (_, controller) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 20),
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              ),
+              Expanded(
+                child: ListView(
+                  controller: controller,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  children: [
+                    Text(account.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                    const SizedBox(height: 8),
+                    Center(child: Chip(label: Text(account.type))),
+                    const SizedBox(height: 32),
+                    _detailRow("Account ID", account.id),
+                    if (account.phone != null) _detailRow("Phone Number", account.phone!),
+                    if (account.email != null) _detailRow("Email Address", account.email!),
+                    if (account.address != null) _detailRow("Address", account.address!),
+                    if (account.gstNumber != null) _detailRow("GSTIN", account.gstNumber!),
+                    if (account.balance != null) _detailRow("Current Balance", "₹${account.balance}"),
+                    const SizedBox(height: 40),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: OutlinedButton.icon(
+                              onPressed: () async {
+                                final text = _formatAccountShareText(account);
+                                try {
+                                  await Share.share(
+                                    text,
+                                    subject: account.name,
+                                  );
+                                } catch (_) {
+                                  await Clipboard.setData(ClipboardData(text: text));
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Could not open share sheet. Details copied to clipboard.')),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.share_outlined),
+                              label: const Text('Share Details'),
+                              style: OutlinedButton.styleFrom(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 50,
+                            child: FilledButton(
+                              onPressed: () {
+                                Navigator.pop(ctx);
+                                _selectAccount(account);
+                              },
+                              style: FilledButton.styleFrom(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                backgroundColor: const Color(0xFF1E1E1E),
+                              ),
+                              child: const Text('Select Account'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
                   ],
                 ),
               ),
@@ -456,554 +877,38 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // UI IMPLEMENTATION
-  // ---------------------------------------------------------------------------
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: Text(
-          widget.title,
-          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-        ),
-        centerTitle: true,
-        backgroundColor: colorScheme.surface,
-        scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: () => _loadAccounts(reset: true),
-            tooltip: 'Refresh',
-          ),
-        ],
-      ),
-      body: Column(
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) {
-                setState(() {}); // Rebuild to show/hide clear button
-                _performSearch(value);
-              },
-              style: TextStyle(
-                fontSize: 16,
-                color: colorScheme.onSurface,
-              ),
-              decoration: InputDecoration(
-                hintText: 'Search by name, ID, or phone...',
-                hintStyle: TextStyle(
-                  color: colorScheme.onSurfaceVariant.withOpacity(0.5),
-                  fontSize: 14,
-                ),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  color: colorScheme.primary,
-                  size: 24,
-                ),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                  icon: Icon(Icons.clear_rounded, color: colorScheme.onSurfaceVariant),
-                  onPressed: () {
-                    setState(() {
-                      _searchController.clear();
-                    });
-                    _performSearch('');
-                  },
-                )
-                    : null,
-                filled: true,
-                fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.5), width: 1.5),
-                ),
-              ),
-            ),
+          SizedBox(
+            width: 120,
+            child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w500)),
           ),
-
-          // Filter Chips
-          if (widget.accountType == null)
-            SizedBox(
-              height: 50,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                children: [
-                  _buildFilterChip(context, 'All', null),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(context, 'Parties', 'Party'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(context, 'Banks', 'Bank'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(context, 'Cash', 'Cash'),
-                ],
-              ),
-            ),
-
-          const Divider(height: 1),
-
-          // Results count
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Row(
-              children: [
-                Text(
-                  '${_filteredAccounts.length} account${_filteredAccounts.length == 1 ? '' : 's'}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Account List
           Expanded(
-            child: _isLoading
-                ? _buildLoadingState(context)
-                : _filteredAccounts.isEmpty
-                ? _buildEmptyState(context)
-                : RefreshIndicator(
-                onRefresh: () async {
-                  await _loadAccounts(reset: true);
-                },
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  itemCount: _filteredAccounts.length + (_hasMore ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index >= _filteredAccounts.length) {
-                      // loading indicator at bottom
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Center(
-                          child: _isLoadingMore ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator()) : const SizedBox.shrink(),
-                        ),
-                      );
-                    }
-                    final account = _filteredAccounts[index];
-                    final isSelected = widget.selectedAccount?.id == account.id;
-                    return _buildAccountCard(context, account, isSelected);
-                  },
-                ),
-              ),
+            child: Text(value, style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500)),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(BuildContext context, String label, String? type) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isSelected = widget.accountType == type;
-
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {},
-      labelStyle: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: isSelected ? colorScheme.onPrimaryContainer : colorScheme.onSurfaceVariant,
-      ),
-      backgroundColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-      selectedColor: colorScheme.primaryContainer,
-      side: BorderSide.none,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    );
-  }
-
-  Widget _buildAccountCard(BuildContext context, Account account, bool isSelected) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final hasNegativeBalance = (account.balance ?? 0) < 0;
-
-    // NOTE: If you are seeing "No Location" even if your DB has it,
-    // ensure your Account model correctly parses 'Latitude' and 'Longitude' from JSON.
-    final hasLocation = (account.latitude != null && account.longitude != null && account.latitude != 0 && account.longitude != 0);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: isSelected ? colorScheme.primaryContainer.withOpacity(0.3) : colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isSelected
-              ? colorScheme.primary
-              : colorScheme.outlineVariant.withOpacity(0.3),
-          width: isSelected ? 2 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: Column(
-          children: [
-            // Main card content
-            InkWell(
-              onTap: () => _selectAccount(account),
-              // If location exists, round only top corners, else all corners
-              borderRadius: BorderRadius.vertical(
-                top: const Radius.circular(16),
-                bottom: const Radius.circular(16), // Simplified radius to avoid visual glitches if map is forced
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    // Icon/Avatar
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: _getAccountTypeColor(account.type, colorScheme).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        _getAccountTypeIcon(account.type),
-                        color: _getAccountTypeColor(account.type, colorScheme),
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Account Details
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Name
-                          Text(
-                            account.name,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: colorScheme.onSurface,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-
-                          // Type & ID
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: _getAccountTypeColor(account.type, colorScheme).withOpacity(0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  account.type,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: _getAccountTypeColor(account.type, colorScheme),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'ID: ${account.id}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ],
-                          ),
-
-                          // Phone
-                          if (account.phone != null) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(Icons.phone_rounded, size: 12, color: colorScheme.onSurfaceVariant),
-                                const SizedBox(width: 4),
-                                Text(
-                                  account.phone!,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-
-                          // Address with location indicator
-                          if (account.address != null) ...[
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  hasLocation ? Icons.location_on_rounded : Icons.location_off_rounded,
-                                  size: 12,
-                                  color: hasLocation ? Colors.green : colorScheme.onSurfaceVariant,
-                                ),
-                                const SizedBox(width: 4),
-                                Expanded(
-                                  child: Text(
-                                    account.address!,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: colorScheme.onSurfaceVariant,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    // Balance
-                    if (widget.showBalance && account.balance != null) ...[
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            hasNegativeBalance ? 'You Owe' : 'Balance',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '₹${account.balance!.abs().toStringAsFixed(0)}',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: hasNegativeBalance ? colorScheme.error : Colors.green,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-
-                    // Selected indicator
-                    if (isSelected) ...[
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.check_circle_rounded,
-                        color: colorScheme.primary,
-                        size: 24,
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-
-            // Map preview section - FORCED VISIBLE FOR UI CONSISTENCY
-            const Divider(height: 1),
-            InkWell(
-              onTap: hasLocation ? () => _showMapDialog(account) : null,
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    // Small map thumbnail
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 80,
-                        height: 60,
-                        color: colorScheme.surfaceContainerHighest,
-                        child: Stack(
-                          children: [
-                            // Static map placeholder
-                            Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                  colors: [
-                                    colorScheme.primaryContainer.withOpacity(hasLocation ? 0.3 : 0.1),
-                                    colorScheme.tertiaryContainer.withOpacity(hasLocation ? 0.3 : 0.1),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            Center(
-                              child: Icon(
-                                hasLocation ? Icons.map_rounded : Icons.location_off_rounded,
-                                color: hasLocation ? colorScheme.primary : Colors.grey,
-                                size: 30,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Location info
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            hasLocation ? 'Location Available' : 'No Location Data',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: hasLocation ? colorScheme.onSurface : Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            hasLocation ? 'Tap to view on map' : 'Map unavailable',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    // Navigation button
-                    IconButton(
-                      onPressed: hasLocation ? () => _openMapsNavigation(account) : null,
-                      icon: const Icon(Icons.navigation_rounded),
-                      color: colorScheme.primary,
-                      tooltip: 'Navigate',
-                      style: IconButton.styleFrom(
-                        backgroundColor: colorScheme.primaryContainer.withOpacity(hasLocation ? 0.5 : 0.1),
-                        disabledBackgroundColor: Colors.grey.withOpacity(0.1),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
 
   Widget _buildLoadingState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CircularProgressIndicator(color: colorScheme.primary),
-          const SizedBox(height: 16),
-          Text(
-            'Loading accounts...',
-            style: TextStyle(
-              fontSize: 14,
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const Center(child: CircularProgressIndicator());
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.account_balance_wallet_outlined,
-              size: 80,
-              color: colorScheme.onSurfaceVariant.withOpacity(0.3),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No accounts found',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _searchController.text.isEmpty
-                  ? 'No accounts available'
-                  : 'Try a different search term',
-              style: TextStyle(
-                fontSize: 14,
-                color: colorScheme.onSurfaceVariant.withOpacity(0.7),
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
+    return const Center(child: Text("No accounts found"));
   }
 
-  IconData _getAccountTypeIcon(String type) {
+  Color _getTypeColor(String type) {
     switch (type) {
-      case 'Party':
-        return Icons.people_rounded;
-      case 'Bank':
-        return Icons.account_balance_rounded;
-      case 'Cash':
-        return Icons.payments_rounded;
-      default:
-        return Icons.account_circle_rounded;
-    }
-  }
-
-  Color _getAccountTypeColor(String type, ColorScheme colorScheme) {
-    switch (type) {
-      case 'Party':
-        return colorScheme.primary;
-      case 'Bank':
-        return Colors.blue;
-      case 'Cash':
-        return Colors.green;
-      default:
-        return colorScheme.secondary;
+      case 'Party': return Colors.blue;
+      case 'Bank': return Colors.purple;
+      case 'Cash': return Colors.green;
+      default: return Colors.grey;
     }
   }
 }

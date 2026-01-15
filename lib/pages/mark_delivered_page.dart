@@ -330,27 +330,33 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           return;
         }
       } else {
-        // Gallery: request photos (iOS) or storage (Android)
+        // Gallery: request photos permission
+        // For Android 13+ (API 33+), photos permission is used
+        // For Android 12 and below, storage permission is used
+        PermissionStatus status;
+
         if (Platform.isAndroid) {
-          var status = await Permission.storage.request();
-          if (status.isPermanentlyDenied) {
-            await _showPermissionDialog('Storage permission is permanently denied. Please enable it from app settings.');
-            return;
-          }
-          if (!status.isGranted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Storage permission is required to pick images')));
-            return;
+          // Try photos permission first (Android 13+)
+          status = await Permission.photos.request();
+
+          // If photos permission is not available (Android < 13), fall back to storage
+          if (status == PermissionStatus.denied || status == PermissionStatus.permanentlyDenied) {
+            status = await Permission.storage.request();
           }
         } else {
-          final status = await Permission.photos.request();
-          if (status.isPermanentlyDenied) {
-            await _showPermissionDialog('Photos permission is permanently denied. Please enable it from app settings.');
-            return;
-          }
-          if (!status.isGranted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Photos permission is required')));
-            return;
-          }
+          // iOS - use photos permission
+          status = await Permission.photos.request();
+        }
+
+        if (status.isPermanentlyDenied) {
+          await _showPermissionDialog('Gallery access permission is permanently denied. Please enable it from app settings.');
+          return;
+        }
+        if (!status.isGranted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gallery access permission is required to pick images'))
+          );
+          return;
         }
       }
     } catch (e) {
