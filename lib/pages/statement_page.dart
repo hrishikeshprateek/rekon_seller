@@ -5,6 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
+import 'package:cross_file/cross_file.dart';
 
 import '../auth_service.dart';
 import '../models/account_model.dart';
@@ -701,7 +705,7 @@ class _StatementPageState extends State<StatementPage> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      entry.vchNumber ?? entry.tranNumber ?? '-',
+                      'Bill No: ${(entry.entryNo)} ',
                       style: TextStyle(
                         fontSize: 11,
                         color: cs.onSurfaceVariant,
@@ -889,52 +893,106 @@ class _StatementPageState extends State<StatementPage> {
     );
   }
 
+  // Helper: download PDF from GetOutstandingDetails (lSharePdf=1) and open share sheet
+  Future<void> _downloadAndSharePdf({required Account acc, bool preferWhatsapp = false}) async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = auth.getDioClient();
+
+    String firmCode = '';
+    try {
+      final stores = auth.currentUser?.stores ?? [];
+      final primary = stores.firstWhere((s) => s.primary,
+          orElse: () => stores.isNotEmpty ? stores.first : (throw 'no_store'));
+      firmCode = primary.firmCode;
+    } catch (_) {
+      firmCode = '';
+    }
+
+    final payload = {
+      'lLicNo': auth.currentUser?.licenseNumber ?? '',
+      'lAcNo': acc.code ?? acc.id,
+      'lPageNo': 1,
+      'lSize': 50,
+      'lExecuteTotalRows': 1,
+      'lSharePdf': 1,
+      'firm_code': firmCode,
+      'lSearchFieldValue': '',
+      'lFromDate': '',
+      'lTillDate': ''
+    };
+
+    try {
+      final response = await dio.post(
+        '/GetAccountLedger',
+        data: payload,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      Uint8List? bytes;
+      if (response.data is Uint8List) {
+        bytes = response.data as Uint8List;
+      } else if (response.data is List<int>) {
+        bytes = Uint8List.fromList(List<int>.from(response.data));
+      } else {
+        // Try to parse common JSON wrappers or base64 strings
+        try {
+          final raw = response.data;
+          if (raw is String) {
+            try {
+              bytes = base64Decode(raw);
+            } catch (_) {}
+          } else if (raw is Map) {
+            if (raw['Pdf'] != null && raw['Pdf'] is String) {
+              try {
+                bytes = base64Decode(raw['Pdf']);
+              } catch (_) {}
+            } else if (raw['Message'] != null && raw['Message'] is String) {
+              try {
+                bytes = base64Decode(raw['Message']);
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (bytes == null || bytes.isEmpty) throw 'No PDF data received from server.';
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/statement_${acc.id}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(bytes, flush: true);
+
+      final xfile = XFile(file.path, mimeType: 'application/pdf');
+
+      // Show share sheet. User can pick WhatsApp from the UI if available.
+      await Share.shareXFiles([xfile], text: acc.name);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not fetch/share PDF: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _shareSelectedAccount() async {
     final acc = _selectedAccount;
     if (acc == null) return;
 
-    final text = _formatAccountShareText(acc);
-    try {
-      await Share.share(text, subject: acc.name);
-    } catch (_) {
-      await Clipboard.setData(ClipboardData(text: text));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open share sheet. Details copied to clipboard.')),
-        );
-      }
-    }
+    await _downloadAndSharePdf(acc: acc, preferWhatsapp: false);
   }
 
   Future<void> _shareSelectedAccountOnWhatsapp() async {
     final acc = _selectedAccount;
     if (acc == null) return;
 
-    final text = _formatAccountShareText(acc);
-    final encoded = Uri.encodeComponent(text);
-
-    // Prefer WhatsApp direct scheme; fall back to wa.me web.
-    final uri = Uri.parse('whatsapp://send?text=$encoded');
-    final fallback = Uri.parse('https://wa.me/?text=$encoded');
-
-    try {
-      // We don't add url_launcher dependency here; try going through Share if WhatsApp isn't available.
-      // If you already have url_launcher in the repo, we can wire it in cleanly.
-      await Share.share(text, subject: acc.name);
-    } catch (_) {
-      // Clipboard fallback.
-      await Clipboard.setData(ClipboardData(text: text));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('WhatsApp share unavailable. Details copied to clipboard.')),
-        );
-      }
-    }
-
-    // NOTE: To actually open WhatsApp via deep link, we should use url_launcher.
-    // Leaving uri variables here to make it easy to switch to launchUrl(...) in a follow-up.
-    // ignore: unused_local_variable
-    final _ = [uri, fallback];
+    await _downloadAndSharePdf(acc: acc, preferWhatsapp: true);
   }
 
   Widget _buildExpandableFab(ColorScheme cs) {

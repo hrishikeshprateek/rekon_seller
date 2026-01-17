@@ -8,7 +8,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:share_plus/share_plus.dart'; // Ensure share_plus is in pubspec.yaml
 import '../models/account_model.dart';
 import '../auth_service.dart';
 
@@ -66,8 +66,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_onScroll);
-
-    // --- FIX: Schedule load after first frame to avoid setState error ---
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAccounts(reset: true);
     });
@@ -82,10 +80,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     super.dispose();
   }
 
-  // --- LOGIC IMPLEMENTATION ---
-
   Future<void> _loadAccounts({bool reset = false}) async {
-    if (!mounted) return; // Guard against unmounted calls
+    if (!mounted) return;
 
     if (reset) {
       _pageNo = 1;
@@ -93,7 +89,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     }
     if (!reset && !_hasMore) return;
 
-    // FIX: Check mounted before setState
     if (mounted) {
       if (reset) {
         setState(() {
@@ -194,14 +189,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         _allAccounts.addAll(fetched);
       }
 
-      if (fetched.length < _pageSize) {
-        _hasMore = false;
-      } else {
-        _hasMore = true;
-      }
-
+      _hasMore = fetched.length >= _pageSize;
       _filteredAccounts = List<Account>.from(_allAccounts);
-
       if (fetched.isNotEmpty) _pageNo += 1;
 
     } catch (e) {
@@ -234,10 +223,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
   void _onScroll() {
     if (!_scrollController.hasClients || _isLoading || _isLoadingMore || !_hasMore) return;
-    final threshold = 200;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    final current = _scrollController.position.pixels;
-    if (maxScroll - current <= threshold) {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
       _loadAccounts(reset: false);
     }
   }
@@ -359,30 +345,22 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     );
   }
 
+  // Helper to format share text
   String _formatAccountShareText(Account account) {
     final lines = <String>[];
-
     lines.add('Firm Name: ${account.name}');
 
     final address = (account.address ?? '').trim();
-    if (address.isNotEmpty) {
-      lines.add('Address: $address');
-    }
-
-    // Try extracting a 6-digit pincode from the address if present.
-    final pinMatch = RegExp(r'\b\d{6}\b').firstMatch(address);
-    if (pinMatch != null) {
-      lines.add('PinCode: ${pinMatch.group(0)}');
-    }
+    if (address.isNotEmpty) lines.add('Address: $address');
 
     final phone = (account.phone ?? '').trim();
-    if (phone.isNotEmpty) {
-      lines.add('Mobile: $phone');
-    }
+    if (phone.isNotEmpty) lines.add('Mobile: $phone');
 
     final email = (account.email ?? '').trim();
-    if (email.isNotEmpty) {
-      lines.add('Email id: $email');
+    if (email.isNotEmpty) lines.add('Email id: $email');
+
+    if (account.latitude != null && account.longitude != null) {
+      lines.add('Map Location: https://www.google.com/maps/search/?api=1&query=${account.latitude},${account.longitude}');
     }
 
     return lines.join('\n');
@@ -392,8 +370,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
@@ -402,9 +379,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         centerTitle: true,
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
           onPressed: () => Navigator.pop(context),
@@ -418,7 +392,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       ),
       body: Column(
         children: [
-          // Search Bar
           Container(
             color: Colors.white,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -437,9 +410,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                         ? IconButton(
                       icon: const Icon(Icons.clear, color: Colors.grey),
                       onPressed: () {
-                        setState(() {
-                          _searchController.clear();
-                        });
+                        setState(() { _searchController.clear(); });
                         _performSearch('');
                       },
                     )
@@ -447,13 +418,9 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     filled: true,
                     fillColor: const Color(0xFFF1F3F4),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
                 ),
-                // Filter Chips
                 if (widget.accountType == null) ...[
                   const SizedBox(height: 12),
                   SizedBox(
@@ -475,8 +442,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
               ],
             ),
           ),
-
-          // Account List
           Expanded(
             child: _isLoading
                 ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
@@ -496,8 +461,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
               child: ListView.separated(
                 controller: _scrollController,
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                separatorBuilder: (context, index) => const SizedBox(height: 8),
-                itemCount: _filteredAccounts.length + (_hasMore ? 1 : 0),
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemCount: _filteredAccounts.length + (_isLoadingMore ? 1 : 0),
                 itemBuilder: (context, index) {
                   if (index >= _filteredAccounts.length) {
                     return Padding(
@@ -540,8 +505,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   Widget _buildProfessionalCard(BuildContext context, Account account) {
     final isSelected = widget.selectedAccount?.id == account.id;
     final hasLocation = (account.latitude != null && account.longitude != null && account.latitude != 0 && account.longitude != 0);
-
-    // Use closBal if available (mapped in model), fallback to balance, then 0.0
     final displayBalance = account.closBal ?? account.balance ?? 0.0;
     final isNegative = displayBalance < 0;
 
@@ -558,7 +521,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Header (Identity)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
               child: Row(
@@ -588,14 +550,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[100],
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                account.type.toUpperCase(),
-                                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey),
-                              ),
+                              decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(4)),
+                              child: Text(account.type.toUpperCase(), style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
                             ),
                             const SizedBox(width: 8),
                             Text('ID: ${account.id}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
@@ -607,16 +563,13 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                 ],
               ),
             ),
-
             const Divider(height: 1, indent: 16, endIndent: 16, color: Color(0xFFEEEEEE)),
-
-            // 2. Info Row (Phone Left | Balance Right)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Phone section
                   Expanded(
                     child: account.phone != null
                         ? Row(
@@ -634,19 +587,13 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     )
                         : const Text("No Phone", style: TextStyle(fontSize: 14, color: Colors.grey)),
                   ),
-
-                  // Balance section
                   if (widget.showBalance)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
                           '₹${displayBalance.abs().toStringAsFixed(0)}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: isNegative ? Colors.red[700] : Colors.green[700],
-                          ),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isNegative ? Colors.red[700] : Colors.green[700]),
                         ),
                         Text(
                           'ClosBal ${isNegative ? "Dr" : "Cr"}',
@@ -657,32 +604,18 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                 ],
               ),
             ),
-
-            // 3. Address Row
             if (account.address != null)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 2),
-                      child: Icon(Icons.location_on_outlined, size: 16, color: Colors.grey),
-                    ),
+                    const Padding(padding: EdgeInsets.only(top: 2), child: Icon(Icons.location_on_outlined, size: 16, color: Colors.grey)),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        account.address!,
-                        style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+                    Expanded(child: Text(account.address!, style: const TextStyle(fontSize: 13, color: Color(0xFF5F6368)), maxLines: 1, overflow: TextOverflow.ellipsis)),
                   ],
                 ),
               ),
-
-            // 4. Map Strip (If available)
             if (hasLocation)
               InkWell(
                 onTap: () => _showMapDialog(account),
@@ -691,10 +624,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: const BoxDecoration(
                     color: Color(0xFFF1F8FF),
-                    border: Border(
-                      top: BorderSide(color: Color(0xFFE1E4E8)),
-                      bottom: BorderSide(color: Color(0xFFE1E4E8)),
-                    ),
+                    border: Border(top: BorderSide(color: Color(0xFFE1E4E8)), bottom: BorderSide(color: Color(0xFFE1E4E8))),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -706,39 +636,19 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                   ),
                 ),
               ),
-
-            // 5. Clean Action Grid
             Row(
               children: [
-                _buildGridAction(
-                  context,
-                  icon: Icons.call,
-                  label: "Call",
-                  isEnabled: account.phone != null,
-                  onTap: () async {
-                    final raw = account.phone!.replaceAll(RegExp(r'[^0-9+]'), '');
-                    String tel = raw;
-                    if (!tel.startsWith('+') && tel.length == 10) tel = '+91$tel';
-                    final uri = Uri.parse('tel:$tel');
-                    if (await canLaunchUrl(uri)) launchUrl(uri);
-                  },
-                ),
+                _buildGridAction(context, icon: Icons.call, label: "Call", isEnabled: account.phone != null, onTap: () async {
+                  final raw = account.phone!.replaceAll(RegExp(r'[^0-9+]'), '');
+                  String tel = raw;
+                  if (!tel.startsWith('+') && tel.length == 10) tel = '+91$tel';
+                  final uri = Uri.parse('tel:$tel');
+                  if (await canLaunchUrl(uri)) launchUrl(uri);
+                }),
                 _buildVerticalDivider(),
-                _buildGridAction(
-                  context,
-                  icon: Icons.directions,
-                  label: "Navigate",
-                  isEnabled: hasLocation,
-                  onTap: () => _openMapsNavigation(account),
-                ),
+                _buildGridAction(context, icon: Icons.directions, label: "Navigate", isEnabled: hasLocation, onTap: () => _openMapsNavigation(account)),
                 _buildVerticalDivider(),
-                _buildGridAction(
-                  context,
-                  icon: Icons.info_outline,
-                  label: "Details",
-                  isEnabled: true,
-                  onTap: () => _showAccountDetailsSheet(context, account),
-                ),
+                _buildGridAction(context, icon: Icons.info_outline, label: "Details", isEnabled: true, onTap: () => _showAccountDetailsSheet(context, account)),
               ],
             ),
           ],
@@ -747,9 +657,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     );
   }
 
-  Widget _buildVerticalDivider() {
-    return Container(width: 1, height: 24, color: const Color(0xFFEEEEEE));
-  }
+  Widget _buildVerticalDivider() => Container(width: 1, height: 24, color: const Color(0xFFEEEEEE));
 
   Widget _buildGridAction(BuildContext context, {required IconData icon, required String label, required bool isEnabled, required VoidCallback onTap}) {
     return Expanded(
@@ -763,22 +671,13 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
             children: [
               Icon(icon, size: 18, color: isEnabled ? Colors.black54 : Colors.grey[300]),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: isEnabled ? Colors.black87 : Colors.grey[300],
-                ),
-              ),
+              Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isEnabled ? Colors.black87 : Colors.grey[300])),
             ],
           ),
         ),
       ),
     );
   }
-
-  // --- Helpers ---
 
   void _showAccountDetailsSheet(BuildContext context, Account account) {
     showModalBottomSheet(
@@ -790,17 +689,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         minChildSize: 0.4,
         maxChildSize: 0.9,
         builder: (_, controller) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
+          decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
           child: Column(
             children: [
-              Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 20),
-                width: 40, height: 4,
-                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
-              ),
+              Container(margin: const EdgeInsets.only(top: 12, bottom: 20), width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
               Expanded(
                 child: ListView(
                   controller: controller,
@@ -825,25 +717,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                             child: OutlinedButton.icon(
                               onPressed: () async {
                                 final text = _formatAccountShareText(account);
-                                try {
-                                  await Share.share(
-                                    text,
-                                    subject: account.name,
-                                  );
-                                } catch (_) {
-                                  await Clipboard.setData(ClipboardData(text: text));
-                                  if (mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Could not open share sheet. Details copied to clipboard.')),
-                                    );
-                                  }
-                                }
+                                try { await Share.share(text, subject: account.name); } catch (_) { await Clipboard.setData(ClipboardData(text: text)); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied!'))); }
                               },
                               icon: const Icon(Icons.share_outlined),
                               label: const Text('Share Details'),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
+                              style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                             ),
                           ),
                         ),
@@ -852,15 +730,9 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                           child: SizedBox(
                             height: 50,
                             child: FilledButton(
-                              onPressed: () {
-                                Navigator.pop(ctx);
-                                _selectAccount(account);
-                              },
-                              style: FilledButton.styleFrom(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                backgroundColor: const Color(0xFF1E1E1E),
-                              ),
-                              child: const Text('Select Account'),
+                              onPressed: () { Navigator.pop(ctx); _selectAccount(account); },
+                              style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), backgroundColor: const Color(0xFF1E1E1E)),
+                              child: const Text("Select Account"),
                             ),
                           ),
                         ),
@@ -883,25 +755,15 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 120,
-            child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w500)),
-          ),
-          Expanded(
-            child: Text(value, style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500)),
-          ),
+          SizedBox(width: 120, child: Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w500))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500))),
         ],
       ),
     );
   }
 
-  Widget _buildLoadingState(BuildContext context) {
-    return const Center(child: CircularProgressIndicator());
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    return const Center(child: Text("No accounts found"));
-  }
+  Widget _buildLoadingState(BuildContext context) => const Center(child: CircularProgressIndicator());
+  Widget _buildEmptyState(BuildContext context) => const Center(child: Text("No accounts found"));
 
   Color _getTypeColor(String type) {
     switch (type) {

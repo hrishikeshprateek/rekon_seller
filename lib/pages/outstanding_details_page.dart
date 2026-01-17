@@ -5,6 +5,12 @@ import 'package:dio/dio.dart';
 import 'dart:convert';
 import '../auth_service.dart';
 import '../receipt_entry.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
+import 'package:cross_file/cross_file.dart';
+import 'package:flutter/services.dart';
 
 class OutstandingDetailsPage extends StatefulWidget {
   final String accountNo;
@@ -22,6 +28,8 @@ class OutstandingDetailsPage extends StatefulWidget {
 
 class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
   final ScrollController _scrollController = ScrollController();
+  // FAB expanded state for expandable actions (Share / WhatsApp)
+  bool _fabExpanded = false;
 
   OutstandingData? _outstandingData;
   bool _isLoading = false;
@@ -182,6 +190,100 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
     }
   }
 
+  // Helper: download PDF from GetOutstandingDetails (lSharePdf=1) and open share sheet
+  Future<void> _downloadAndSharePdf({bool preferWhatsapp = false}) async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = auth.getDioClient();
+
+    String firmCode = '';
+    try {
+      final stores = auth.currentUser?.stores ?? [];
+      final primary = stores.firstWhere((s) => s.primary,
+          orElse: () => stores.isNotEmpty ? stores.first : (throw 'no_store'));
+      firmCode = primary.firmCode;
+    } catch (_) {
+      firmCode = '';
+    }
+
+    final payload = {
+      'lLicNo': auth.currentUser?.licenseNumber ?? '',
+      'lAcNo': widget.accountNo,
+      'lPageNo': 1,
+      'lSize': 30,
+      'lExecuteTotalRows': 1,
+      'lSharePdf': 1,
+      'firm_code': firmCode,
+      'lSearchFieldValue': '',
+      'lFromDate': '',
+      'lTillDate': ''
+    };
+
+    try {
+      final response = await dio.post(
+        '/GetOutstandingDetails',
+        data: payload,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      Uint8List? bytes;
+      if (response.data is Uint8List) {
+        bytes = response.data as Uint8List;
+      } else if (response.data is List<int>) {
+        bytes = Uint8List.fromList(List<int>.from(response.data));
+      } else {
+        try {
+          final raw = response.data;
+          if (raw is String) {
+            try {
+              bytes = base64Decode(raw);
+            } catch (_) {}
+          } else if (raw is Map) {
+            if (raw['Pdf'] != null && raw['Pdf'] is String) {
+              try {
+                bytes = base64Decode(raw['Pdf']);
+              } catch (_) {}
+            } else if (raw['Message'] != null && raw['Message'] is String) {
+              try {
+                bytes = base64Decode(raw['Message']);
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (bytes == null || bytes.isEmpty) throw 'No PDF data received from server.';
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/outstanding_${widget.accountNo}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(bytes, flush: true);
+
+      final xfile = XFile(file.path, mimeType: 'application/pdf');
+
+      await Share.shareXFiles([xfile], text: widget.accountName);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not fetch/share PDF: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareOutstanding() async {
+    await _downloadAndSharePdf(preferWhatsapp: false);
+  }
+
+  Future<void> _shareOutstandingOnWhatsapp() async {
+    await _downloadAndSharePdf(preferWhatsapp: true);
+  }
+
   // --- UI IMPLEMENTATION ---
 
   @override
@@ -222,12 +324,25 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
           ),
         ],
       ),
+      floatingActionButton: _buildExpandableFab(primaryColor),
       body: Stack(
         children: [
           Padding(
             padding: EdgeInsets.only(bottom: _selectedIndexes.isEmpty ? 0 : 72),
             child: _buildBody(),
           ),
+
+          // Full-page dim overlay when FAB is expanded
+          if (_fabExpanded)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => setState(() => _fabExpanded = false),
+                child: const ModalBarrier(
+                  dismissible: false,
+                  color: Color(0x73000000), // ~45% black
+                ),
+              ),
+            ),
 
           if (_selectedIndexes.isNotEmpty)
             Positioned(
@@ -337,6 +452,108 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
           onLongPress: () => _toggleSelection(itemIndex),
         );
       },
+    );
+  }
+
+  Widget _buildExpandableFab(Color primaryColor) {
+    final canShare = _outstandingData != null;
+
+    return Stack(
+      alignment: Alignment.bottomRight,
+      children: [
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              child: !_fabExpanded
+                  ? const SizedBox.shrink()
+                  : Column(
+                      key: const ValueKey('expanded-actions'),
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _fabAction(
+                          label: 'WhatsApp',
+                          icon: Icons.chat,
+                          onTap: canShare
+                              ? () async {
+                                  setState(() => _fabExpanded = false);
+                                  await _shareOutstandingOnWhatsapp();
+                                }
+                              : null,
+                        ),
+                        const SizedBox(height: 10),
+                        _fabAction(
+                          label: 'Share',
+                          icon: Icons.share_outlined,
+                          onTap: canShare
+                              ? () async {
+                                  setState(() => _fabExpanded = false);
+                                  await _shareOutstanding();
+                                }
+                              : null,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+            ),
+            FloatingActionButton(
+              heroTag: 'outstanding-fab',
+              onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              child: AnimatedRotation(
+                duration: const Duration(milliseconds: 160),
+                turns: _fabExpanded ? 0.125 : 0,
+                child: Icon(_fabExpanded ? Icons.close : Icons.share),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _fabAction({required String label, required IconData icon, required VoidCallback? onTap}) {
+    final enabled = onTap != null;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: enabled ? Colors.black : Colors.grey),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Material(
+          color: enabled ? Colors.white : Colors.grey.shade200,
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Icon(icon, size: 20, color: enabled ? Colors.black87 : Colors.grey),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -758,3 +975,4 @@ class OutstandingItem {
     );
   }
 }
+
