@@ -42,6 +42,18 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
   final Set<int> _selectedIndexes = <int>{};
   bool _selectionMode = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadOutstandingDetails(reset: true);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
   double get _selectedTotal {
     final data = _outstandingData;
     if (data == null) return 0;
@@ -80,39 +92,44 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
   void _goToReceiptEntry() {
     if (_selectedIndexes.isEmpty) return;
 
-    // Current CreateReceiptScreen is a generic receipt form.
-    // We open it and (for now) user can enter amount manually.
-    // Next step: wire selected bills + amount into the receipt screen.
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CreateReceiptScreen()),
+    // Build a serializable list of selected bills to pass to receipt screen
+    final data = _outstandingData;
+    if (data == null) return;
+
+    final selectedBills = _selectedIndexes
+        .where((i) => i >= 0 && i < data.items.length)
+        .map((i) {
+      final it = data.items[i];
+      return {
+        'entryNo': it.entryNo,
+        'date': it.date,
+        'amount': it.amount,
+        'keyEntryNo': it.keyEntryNo,
+        'dueDate': it.dueDate,
+        'trantype': it.trantype,
+      };
+    }).toList();
+
+    // Debug: Log outgoing data
+    print('[OutstandingDetails] Navigating to ReceiptEntry with:');
+    print('[OutstandingDetails]   accountNo: ${widget.accountNo}');
+    print('[OutstandingDetails]   accountName: ${widget.accountName}');
+    print('[OutstandingDetails]   selectedBills: ${selectedBills.length} items');
+    selectedBills.forEach((b) => print('[OutstandingDetails]     - ${b['entryNo']}: ₹${b['amount']}'));
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateReceiptScreen(
+          accountNo: widget.accountNo,
+          accountName: widget.accountName,
+          selectedBills: selectedBills,
+        ),
+      ),
     );
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-    _loadOutstandingDetails(reset: true);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
-        !_isLoading && _hasMore) {
-      _loadOutstandingDetails();
-    }
-  }
-
-  // --- LOGIC (UNCHANGED) ---
   Future<void> _loadOutstandingDetails({bool reset = false}) async {
-    if (_isLoading) return;
-
     if (reset) {
       if (mounted) {
         setState(() {

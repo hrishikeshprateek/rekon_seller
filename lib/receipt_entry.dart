@@ -1,11 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'auth_service.dart';
+import 'dart:convert';
+import 'package:dio/dio.dart';
 
 class CreateReceiptScreen extends StatefulWidget {
-  const CreateReceiptScreen({super.key});
+  final String? accountNo;
+  final String? accountName;
+  final List<Map<String, dynamic>>? selectedBills;
+
+  const CreateReceiptScreen({
+    super.key,
+    this.accountNo,
+    this.accountName,
+    this.selectedBills,
+  });
 
   @override
   State<CreateReceiptScreen> createState() => _CreateReceiptScreenState();
+}
+
+class _BillLine {
+  bool included;
+  String entryNo;
+  String date;
+  double outstanding;
+  double payment;
+  String keyEntryNo;
+  String dueDate;
+  String trantype;
+
+  _BillLine({
+    required this.included,
+    required this.entryNo,
+    required this.date,
+    required this.outstanding,
+    required this.payment,
+    required this.keyEntryNo,
+    required this.dueDate,
+    required this.trantype,
+  });
 }
 
 class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
@@ -23,9 +58,56 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   DateTime? _docDate;
   final DateTime _entryDate = DateTime.now();
 
-  // Mock Data
-  final List<String> _accounts = ['Cash Account', 'HDFC Bank', 'SBI Bank', 'Customer A'];
+  // Account options come from the selected account passed into this screen
   final List<String> _paymentModes = ['Cash', 'Cheque', 'UPI', 'NEFT/RTGS'];
+
+  // Bill lines from selection
+  List<_BillLine> _lines = [];
+
+  @override
+  void initState() {
+    super.initState();
+    // Debug: Log received data
+    print('[ReceiptEntry] Received accountNo: ${widget.accountNo}');
+    print('[ReceiptEntry] Received accountName: ${widget.accountName}');
+    print('[ReceiptEntry] Received selectedBills count: ${widget.selectedBills?.length ?? 0}');
+
+    // If bills were passed, initialize lines
+    if (widget.selectedBills != null && widget.selectedBills!.isNotEmpty) {
+      _lines = widget.selectedBills!.map((b) {
+        final amt = (b['amount'] is num) ? (b['amount'] as num).toDouble() : double.tryParse(b['amount']?.toString() ?? '0') ?? 0.0;
+        return _BillLine(
+          included: true,
+          entryNo: b['entryNo']?.toString() ?? '',
+          date: b['date']?.toString() ?? '',
+          outstanding: amt,
+          payment: amt,
+          keyEntryNo: b['keyEntryNo']?.toString() ?? '',
+          dueDate: b['dueDate']?.toString() ?? '',
+          trantype: b['trantype']?.toString() ?? '',
+        );
+      }).toList();
+
+      // Prefill amount controller with sum of payments
+      final total = _lines.fold<double>(0, (s, l) => s + (l.included ? l.payment : 0));
+      _amountController.text = total.toStringAsFixed(2);
+      print('[ReceiptEntry] Bills loaded: ${_lines.length}, Total: $total');
+    }
+
+    // Prefill selected account name/number if provided
+    final hasName = widget.accountName != null && widget.accountName!.isNotEmpty;
+    final hasNo = widget.accountNo != null && widget.accountNo!.isNotEmpty;
+
+    if (hasName) {
+      _selectedAccount = widget.accountName;
+      print('[ReceiptEntry] Account set to: $_selectedAccount (from name)');
+    } else if (hasNo) {
+      _selectedAccount = widget.accountNo;
+      print('[ReceiptEntry] Account set to: $_selectedAccount (from number)');
+    } else {
+      print('[ReceiptEntry] WARNING: No account info received!');
+    }
+  }
 
   @override
   void dispose() {
@@ -59,11 +141,147 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     }
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Receipt Created'), backgroundColor: Colors.green),
+  double get _linesTotal => _lines.fold<double>(0, (s, l) => s + (l.included ? l.payment : 0));
+
+  void _onLinePaymentChanged(int idx, String v) {
+    final parsed = double.tryParse(v.replaceAll(',', '')) ?? 0.0;
+    setState(() {
+      _lines[idx].payment = parsed;
+      _amountController.text = _linesTotal.toStringAsFixed(2);
+    });
+  }
+
+  void _toggleLineIncluded(int idx, bool? val) {
+    setState(() {
+      _lines[idx].included = val ?? false;
+      if (!_lines[idx].included) _lines[idx].payment = 0.0;
+      // Update total
+      _amountController.text = _linesTotal.toStringAsFixed(2);
+    });
+  }
+
+  Future<void> _submit() async {
+    if (_formKey.currentState == null) return;
+    if (!_formKey.currentState!.validate()) return;
+
+    // Build payload expected by SubmitReceipt API
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = auth.getDioClient();
+
+    final adjustmentDetails = _lines.where((l) => l.included && l.payment > 0).map((l) => {
+      'id': l.entryNo,
+      'amount': l.payment,
+      'bill_number': l.entryNo,
+    }).toList();
+
+    final payload = {
+      'lLicNo': auth.currentUser?.licenseNumber ?? '',
+      'lFirmCode': (auth.currentUser?.stores.isNotEmpty == true) ? auth.currentUser!.stores.first.firmCode : '',
+      'lUserId': auth.currentUser?.userId ?? '',
+      'lAcNo': widget.accountNo ?? '',
+      'entry_date': DateFormat('dd/MMM/yyyy').format(_entryDate),
+      'receipt_date': _docDate != null ? DateFormat('dd/MMM/yyyy').format(_docDate!) : DateFormat('dd/MMM/yyyy').format(_entryDate),
+      'amount': double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0,
+      'mode': _selectedPaymentMode ?? 'Cash',
+      'doc_number': _docNoController.text.trim(),
+      'narration': _narrationController.text.trim(),
+      'disc_amount': double.tryParse(_discAmtController.text.replaceAll(',', '')) ?? 0.0,
+      'adjustment_details': adjustmentDetails,
+    };
+
+    // Debug: Print complete request
+    print('═══════════════════════════════════════════════════');
+    print('📤 SUBMIT RECEIPT API REQUEST');
+    print('═══════════════════════════════════════════════════');
+    print('Endpoint: /SubmitReceipt');
+    print('Headers:');
+    print('  - Content-Type: application/json');
+    print('  - package_name: ${auth.packageNameHeader}');
+    print('  - Authorization: ${auth.getAuthHeader()?.substring(0, 20)}...');
+    print('Payload:');
+    print(jsonEncode(payload));
+    print('═══════════════════════════════════════════════════\n');
+
+    try {
+      final response = await dio.post(
+        '/SubmitReceipt',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+          },
+        ),
       );
+
+      // Debug: Print complete response
+      print('═══════════════════════════════════════════════════');
+      print('📥 SUBMIT RECEIPT API RESPONSE');
+      print('═══════════════════════════════════════════════════');
+      print('Status Code: ${response.statusCode}');
+      print('Response Type: ${response.data.runtimeType}');
+      print('Raw Response:');
+      print(response.data);
+      print('═══════════════════════════════════════════════════\n');
+
+      // Normalize response
+      dynamic raw = response.data;
+      Map<String, dynamic> normalized;
+      if (raw is Map<String, dynamic>) {
+        normalized = raw;
+      } else if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          normalized = decoded is Map<String, dynamic> ? decoded : {'Message': raw};
+        } catch (_) {
+          normalized = {'Message': raw};
+        }
+      } else {
+        try {
+          normalized = Map<String, dynamic>.from(raw);
+        } catch (_) {
+          normalized = {'Message': response.toString()};
+        }
+      }
+
+      // Debug: Print normalized response
+      print('📋 Normalized Response:');
+      print(jsonEncode(normalized));
+      print('Success Check: success=${normalized['success']}, Status=${normalized['Status']}');
+      print('═══════════════════════════════════════════════════\n');
+
+      if (normalized['success'] == true || normalized['Status'] == true) {
+        print('✅ Receipt submitted successfully!');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Receipt submitted successfully'), backgroundColor: Colors.green),
+          );
+          Navigator.of(context).pop(true);
+        }
+      } else {
+        final errorMsg = normalized['Message'] ?? normalized['message'] ?? 'Unknown';
+        print('❌ Receipt submission failed: $errorMsg');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to submit receipt: $errorMsg')),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      print('═══════════════════════════════════════════════════');
+      print('❌ SUBMIT RECEIPT API ERROR');
+      print('═══════════════════════════════════════════════════');
+      print('Error: $e');
+      print('Stack Trace:');
+      print(stackTrace);
+      print('═══════════════════════════════════════════════════\n');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Network error: $e')),
+        );
+      }
     }
   }
 
@@ -125,16 +343,111 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // --- 2. Account ---
-                    _buildLabel(context, "Select Account"),
-                    DropdownButtonFormField<String>(
-                      value: _selectedAccount,
-                      items: _accounts.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                      onChanged: (v) => setState(() => _selectedAccount = v),
-                      decoration: _homeThemeDecoration(context, "Choose Party / Bank", Icons.person_rounded),
-                      validator: (v) => v == null ? 'Required' : null,
-                    ),
+                    // --- 1.5 Party Summary ---
+                    if (widget.accountName != null && widget.accountName!.isNotEmpty ||
+                        widget.accountNo != null && widget.accountNo!.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.accountName != null && widget.accountName!.isNotEmpty)
+                              Text(widget.accountName!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                            if (widget.accountNo != null && widget.accountNo!.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text('Account No: ${widget.accountNo}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                    // --- 2. Select Account (dropdown removed, showing only party details above) ---
+                    // Keeping the section commented for reference
                     const SizedBox(height: 20),
+
+                    // --- 2.5 Selected Bills (if any) ---
+                    if (_lines.isNotEmpty) ...[
+                      _buildLabel(context, 'Selected Bills'),
+                      const SizedBox(height: 8),
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _lines.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, idx) {
+                          final l = _lines[idx];
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
+                            leading: Checkbox(
+                              value: l.included,
+                              onChanged: (v) => _toggleLineIncluded(idx, v),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            title: Text('${l.entryNo}  •  ${l.date}'),
+                            subtitle: Text('Outstanding: ₹${l.outstanding.toStringAsFixed(2)}'),
+                            trailing: SizedBox(
+                              width: 120,
+                              child: TextFormField(
+                                initialValue: l.payment.toStringAsFixed(2),
+                                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                                onChanged: (v) => _onLinePaymentChanged(idx, v),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Lines total', style: TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.w600)),
+                          Text('₹${_linesTotal.toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    // --- 2.8 Share Receipt Button ---
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 20),
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          // TODO: Implement share receipt functionality
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Share functionality coming soon')),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          backgroundColor: colorScheme.surface,
+                        ),
+                        icon: Icon(Icons.share_rounded, size: 20, color: colorScheme.primary),
+                        label: Text(
+                          'Share Receipt',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ),
 
                     // --- 3. Amount & Discount ---
                     Row(
@@ -178,7 +491,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                     // --- 4. Payment Mode ---
                     _buildLabel(context, "Payment Mode"),
                     DropdownButtonFormField<String>(
-                      value: _selectedPaymentMode,
+                      initialValue: _selectedPaymentMode,
                       items: _paymentModes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                       onChanged: (v) => setState(() => _selectedPaymentMode = v),
                       decoration: _homeThemeDecoration(context, "Select Mode", Icons.payment_rounded),
@@ -265,7 +578,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
               color: colorScheme.surface,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, -4),
                 ),
@@ -304,7 +617,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8),
         ),
       ),
     );
@@ -315,7 +628,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.4), fontSize: 14),
+      hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4), fontSize: 14),
 
       // Icon inside a tonal box (Matches Home Screen Icon Tiles)
       prefixIcon: Padding(
@@ -348,11 +661,11 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: colorScheme.primary.withOpacity(0.5), width: 1.5),
+        borderSide: BorderSide(color: colorScheme.primary.withValues(alpha: 0.5), width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: colorScheme.error.withOpacity(0.5)),
+        borderSide: BorderSide(color: colorScheme.error.withValues(alpha: 0.5)),
       ),
     );
   }
