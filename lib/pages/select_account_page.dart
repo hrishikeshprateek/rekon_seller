@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart'; // Ensure share_plus is in pubspec.yaml
 import '../models/account_model.dart';
 import '../auth_service.dart';
+import 'location_picker_sheet.dart';
 
 class SelectAccountPage extends StatefulWidget {
   final String title;
@@ -230,6 +231,26 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
   void _selectAccount(Account account) {
     Navigator.of(context).pop(account);
+  }
+
+  void _showLocationPicker(BuildContext context, Account account) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => LocationPickerSheet(
+        account: account,
+        onLocationAdded: (updatedAccount) {
+          // Update the account in the list
+          final index = _allAccounts.indexWhere((a) => a.id == updatedAccount.id);
+          if (index != -1) {
+            _allAccounts[index] = updatedAccount;
+            _filteredAccounts = List<Account>.from(_allAccounts);
+            setState(() {});
+          }
+        },
+      ),
+    );
   }
 
   Future<void> _openMapsNavigation(Account account) async {
@@ -646,7 +667,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                   if (await canLaunchUrl(uri)) launchUrl(uri);
                 }),
                 _buildVerticalDivider(),
-                _buildGridAction(context, icon: Icons.directions, label: "Navigate", isEnabled: hasLocation, onTap: () => _openMapsNavigation(account)),
+                if (hasLocation)
+                  _buildGridAction(context, icon: Icons.directions, label: "Navigate", isEnabled: true, onTap: () => _openMapsNavigation(account))
+                else
+                  _buildGridAction(context, icon: Icons.add_location, label: "Add Location", isEnabled: true, onTap: () => _showLocationPicker(context, account)),
                 _buildVerticalDivider(),
                 _buildGridAction(context, icon: Icons.info_outline, label: "Details", isEnabled: true, onTap: () => _showAccountDetailsSheet(context, account)),
               ],
