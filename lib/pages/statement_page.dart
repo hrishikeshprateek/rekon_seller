@@ -1,12 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:cross_file/cross_file.dart';
 
@@ -30,10 +30,18 @@ class _StatementPageState extends State<StatementPage> {
   DateTime? _fromDate;
   DateTime? _toDate;
 
+  // Default filter is 'All'
+  String _selectedFilter = 'All';
+
   // Data
   double _openingBalance = 0;
   double _closingBalance = 0;
   final List<LedgerEntry> _entries = [];
+
+  // Search State
+  bool _isSearching = false;
+  final TextEditingController _txnSearchController = TextEditingController();
+  String _txnSearchText = '';
 
   // Paging
   static const int _pageSize = 50;
@@ -45,14 +53,18 @@ class _StatementPageState extends State<StatementPage> {
   bool _isLoadingMore = false;
   String? _error;
 
-  // FAB state
+  // FAB State
   bool _fabExpanded = false;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    // Automatically open select account page when statement page is opened directly
+
+    // Default dates null for 'All'
+    _fromDate = null;
+    _toDate = null;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _pickAccount();
     });
@@ -61,6 +73,7 @@ class _StatementPageState extends State<StatementPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _txnSearchController.dispose();
     super.dispose();
   }
 
@@ -68,7 +81,8 @@ class _StatementPageState extends State<StatementPage> {
     if (!_scrollController.hasClients ||
         _isLoading ||
         _isLoadingMore ||
-        !_hasMore) return;
+        !_hasMore ||
+        _txnSearchText.isNotEmpty) return;
     final threshold = 200.0;
     final max = _scrollController.position.maxScrollExtent;
     final cur = _scrollController.position.pixels;
@@ -77,12 +91,73 @@ class _StatementPageState extends State<StatementPage> {
     }
   }
 
+  // --- LOGIC ---
+
+  void _applyQuickFilter(String? type) {
+    if (type == null) return;
+
+    if (type == 'All') {
+      setState(() {
+        _selectedFilter = 'All';
+        _fromDate = null;
+        _toDate = null;
+      });
+      _fetchLedger(reset: true);
+      return;
+    }
+
+    if (type == 'Custom') {
+      setState(() {
+        _selectedFilter = type;
+        if (_fromDate == null) _fromDate = DateTime.now().subtract(const Duration(days: 30));
+        if (_toDate == null) _toDate = DateTime.now();
+      });
+      return; // Wait for user to pick dates manually
+    }
+
+    final now = DateTime.now();
+    DateTime? start;
+    DateTime? end = now;
+
+    switch (type) {
+      case 'Today':
+        start = now;
+        end = now;
+        break;
+      case 'This Week':
+        start = now.subtract(Duration(days: now.weekday - 1));
+        end = now;
+        break;
+      case 'This Month':
+        start = DateTime(now.year, now.month, 1);
+        end = now;
+        break;
+      case 'This Year':
+        start = DateTime(now.year, 1, 1);
+        end = now;
+        break;
+      default:
+        start = null;
+        end = null;
+    }
+
+    setState(() {
+      _selectedFilter = type;
+      _fromDate = start;
+      _toDate = end;
+    });
+    _fetchLedger(reset: true);
+  }
+
   Future<void> _pickAccount() async {
     final account = await SelectAccountPage.show(context,
         title: 'Select Party', showBalance: true);
     if (account != null && mounted) {
       setState(() {
         _selectedAccount = account;
+        _txnSearchController.clear();
+        _txnSearchText = '';
+        _isSearching = false;
       });
       await _fetchLedger(reset: true);
     }
@@ -90,7 +165,7 @@ class _StatementPageState extends State<StatementPage> {
 
   Future<void> _pickFromDate() async {
     final now = DateTime.now();
-    final initial = _fromDate ?? now.subtract(const Duration(days: 30));
+    final initial = _fromDate ?? now;
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -98,7 +173,10 @@ class _StatementPageState extends State<StatementPage> {
       lastDate: DateTime(now.year + 1),
     );
     if (picked != null && mounted) {
-      setState(() => _fromDate = picked);
+      setState(() {
+        _fromDate = picked;
+        _selectedFilter = 'Custom'; // Switch to custom if picking manually
+      });
       await _fetchLedger(reset: true);
     }
   }
@@ -113,24 +191,16 @@ class _StatementPageState extends State<StatementPage> {
       lastDate: DateTime(now.year + 1),
     );
     if (picked != null && mounted) {
-      setState(() => _toDate = picked);
+      setState(() {
+        _toDate = picked;
+        _selectedFilter = 'Custom'; // Switch to custom if picking manually
+      });
       await _fetchLedger(reset: true);
     }
   }
 
   Future<void> _fetchLedger({bool reset = false}) async {
-    if (_selectedAccount == null) {
-      if (mounted) {
-        setState(() {
-          _openingBalance = 0;
-          _closingBalance = 0;
-          _entries.clear();
-          _error = null;
-          _hasMore = false;
-        });
-      }
-      return;
-    }
+    if (_selectedAccount == null) return;
 
     if (reset) {
       if (mounted) {
@@ -157,14 +227,14 @@ class _StatementPageState extends State<StatementPage> {
       try {
         final stores = auth.currentUser?.stores ?? [];
         final primary = stores.firstWhere((s) => s.primary,
-            orElse: () =>
-            stores.isNotEmpty ? stores.first : (throw 'no_store'));
+            orElse: () => stores.isNotEmpty ? stores.first : (throw 'no_store'));
         firmCode = primary.firmCode;
       } catch (_) {
         firmCode = '';
       }
 
       final df = DateFormat('yyyy-MM-dd');
+      // If dates are null (All selected), send empty strings
       final from = _fromDate != null ? df.format(_fromDate!) : '';
       final till = _toDate != null ? df.format(_toDate!) : '';
 
@@ -181,8 +251,6 @@ class _StatementPageState extends State<StatementPage> {
         'lExecuteTotalRows': 1,
         'lSharePdf': 0,
       };
-
-      debugPrint('[Statement] Payload: ${jsonEncode(payload)}');
 
       final response = await dio.post(
         '/GetAccountLedger',
@@ -230,7 +298,6 @@ class _StatementPageState extends State<StatementPage> {
         _isLoadingMore = false;
       });
     } catch (e) {
-      debugPrint('[Statement] Error: $e');
       if (mounted) {
         setState(() {
           _error = e.toString();
@@ -256,653 +323,15 @@ class _StatementPageState extends State<StatementPage> {
     return double.tryParse(v.toString()) ?? 0;
   }
 
-  // --- ACCOUNT DETAILS (BOTTOM SHEET + SHARE) ---
+  // --- HELPERS ---
 
-  String _formatAccountShareText(Account account) {
-    final lines = <String>[];
-
-    void add(String label, String? value) {
-      final v = (value ?? '').trim();
-      if (v.isEmpty) return;
-      lines.add('$label: $v');
-    }
-
-    // Name first
-    final name = account.name.trim();
-    if (name.isNotEmpty) lines.add(name);
-
-    add('Account ID', account.id);
-    add('Account Code', account.code);
-    add('Type', account.type);
-    add('Mobile', account.phone);
-    add('Email', account.email);
-    add('Address', account.address);
-    add('GSTIN', account.gstNumber);
-
-    if (account.closBal != null) {
-      final bal = account.closBal!;
-      lines.add('Balance: ₹${bal.abs().toStringAsFixed(2)} ${bal < 0 ? 'Dr' : 'Cr'}');
-    } else if (account.balance != null) {
-      add('Balance', '₹${account.balance}');
-    }
-
-    return lines.join('\n');
-  }
-
-  void _showSelectedAccountDetailsSheet(Account account) {
-    final cs = Theme.of(context).colorScheme;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        builder: (_, controller) => Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 12, bottom: 14),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: cs.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    controller: controller,
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    children: [
-                      Text(
-                        account.name,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                        textAlign: TextAlign.center,
-                      ),
-                      if (account.type.trim().isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Center(child: Chip(label: Text(account.type))),
-                      ],
-                      const SizedBox(height: 16),
-
-                      _accountDetailRow('Account ID', account.id, cs),
-                      _accountDetailRow('Account Code', account.code, cs),
-                      _accountDetailRow('Mobile', account.phone, cs),
-                      _accountDetailRow('Email', account.email, cs),
-                      _accountDetailRow('Address', account.address, cs, multiline: true),
-                      _accountDetailRow('GSTIN', account.gstNumber, cs),
-                      if (account.closBal != null)
-                        _accountDetailRow(
-                          'Balance',
-                          '₹${account.closBal!.abs().toStringAsFixed(2)} ${account.closBal! < 0 ? 'Dr' : 'Cr'}',
-                          cs,
-                        )
-                      else
-                        _accountDetailRow('Balance', account.balance?.toString(), cs),
-
-                      const SizedBox(height: 20),
-
-                      Row(
-                        children: [
-                          Expanded(
-                            child: SizedBox(
-                              height: 46,
-                              child: OutlinedButton.icon(
-                                onPressed: () async {
-                                  final text = _formatAccountShareText(account);
-                                  try {
-                                    await Share.share(text, subject: account.name);
-                                  } catch (_) {
-                                    await Clipboard.setData(ClipboardData(text: text));
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text('Could not open share sheet. Details copied to clipboard.')),
-                                      );
-                                    }
-                                  }
-                                },
-                                icon: const Icon(Icons.share_outlined, size: 18),
-                                label: const Text('Share'),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: SizedBox(
-                              height: 46,
-                              child: FilledButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                child: const Text('Close'),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _accountDetailRow(String label, String? value, ColorScheme cs, {bool multiline = false}) {
-    final v = (value ?? '').trim();
-    if (v.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: multiline ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 110,
-            child: Text(
-              label,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              v,
-              style: TextStyle(fontSize: 12, color: cs.onSurface),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // --- COMPACT UI WIDGETS ---
-
-  Widget _buildFilterBar(ColorScheme colorScheme) {
-    Color balanceColor = colorScheme.onSurfaceVariant;
-
-    if (_selectedAccount != null) {
-      final bal = _selectedAccount!.closBal ?? 0;
-      balanceColor = bal >= 0 ? const Color(0xFF1B5E20) : const Color(0xFFB71C1C);
-    }
-
-    final balanceText = _selectedAccount != null ? 'Bal: ₹${_selectedAccount!.closBal?.abs().toStringAsFixed(2) ?? '0.00'} ${_selectedAccount!.closBal != null && _selectedAccount!.closBal! < 0 ? 'Dr' : 'Cr'}' : '';
-
-    return Container(
-      color: colorScheme.surface,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Column(
-        children: [
-          // Account Selector + Info button OUTSIDE
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: _pickAccount,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: colorScheme.outlineVariant),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.person, size: 24, color: colorScheme.primary),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                _selectedAccount?.name ?? 'Select Account',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: _selectedAccount == null
-                                      ? colorScheme.onSurfaceVariant
-                                      : colorScheme.onSurface,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (_selectedAccount != null) ...[
-                                const SizedBox(height: 2),
-                                RichText(
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  text: TextSpan(
-                                    style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-                                    children: [
-                                      WidgetSpan(
-                                        child: Icon(Icons.phone_android, size: 12, color: Colors.grey),
-                                        alignment: PlaceholderAlignment.baseline,
-                                        baseline: TextBaseline.alphabetic,
-                                      ),
-                                      TextSpan(text: ' ${_selectedAccount?.phone ?? "-"}   '),
-                                      TextSpan(
-                                        text: balanceText,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: balanceColor,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.arrow_drop_down, size: 18, color: colorScheme.onSurfaceVariant),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                onPressed: _selectedAccount == null
-                    ? null
-                    : () {
-                        final acc = _selectedAccount;
-                        if (acc == null) return;
-                        _showSelectedAccountDetailsSheet(acc);
-                      },
-                icon: Icon(Icons.info_outline, size: 22, color: _selectedAccount == null ? colorScheme.outline : colorScheme.primary),
-                tooltip: 'Account details',
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 8),
-          // Date Pickers
-          Row(
-            children: [
-              Expanded(
-                child: _buildCompactDateBtn(
-                  label: 'Start',
-                  date: _fromDate,
-                  onTap: _pickFromDate,
-                  colorScheme: colorScheme,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildCompactDateBtn(
-                  label: 'End',
-                  date: _toDate,
-                  onTap: _pickToDate,
-                  colorScheme: colorScheme,
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 36,
-                child: OutlinedButton.icon(
-                  onPressed: _selectedAccount == null ? null : _openOutstanding,
-                  icon: const Icon(Icons.receipt_long_outlined, size: 16),
-                  label: const Text('Outstanding'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompactDateBtn({
-    required String label,
-    required DateTime? date,
-    required VoidCallback onTap,
-    required ColorScheme colorScheme,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          children: [
-            Text('$label: ', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-            Expanded(
-              child: Text(
-                date != null ? DateFormat('dd/MM/yy').format(date) : '-',
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Icon(Icons.calendar_today, size: 12, color: colorScheme.primary),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard(ColorScheme colorScheme) {
-    if (_selectedAccount == null) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.secondaryContainer.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.6)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _buildBalanceItem('Open', _openingBalance, colorScheme),
-          Container(width: 1, height: 24, color: colorScheme.outlineVariant),
-          _buildBalanceItem('Close', _closingBalance, colorScheme, isBold: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBalanceItem(String title, double amount, ColorScheme cs, {bool isBold = false}) {
-    final color = amount >= 0 ? const Color(0xFF1B5E20) : const Color(0xFFB71C1C);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          '$title: ',
-          style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-        ),
-        Text(
-          '₹${amount.abs().toStringAsFixed(2)} ${amount < 0 ? 'Dr' : 'Cr'}',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTransactionRow(LedgerEntry entry, ColorScheme cs) {
-    final df = DateFormat('dd/MM/yyyy');
-    final dateStr = entry.date != null ? df.format(entry.date!) : (entry.tranId ?? '');
-
-    final dr = _toDouble(entry.drAmt);
-    final cr = _toDouble(entry.crAmt);
-    final isCredit = cr > 0;
-    final amount = isCredit ? cr : dr;
-    final runningAmount = _toDouble(entry.runningAmt);
-
-    final amtColor = isCredit ? const Color(0xFF1B5E20) : const Color(0xFFB71C1C);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          leading: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: amtColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Center(
-              child: Icon(
-                isCredit ? Icons.arrow_downward : Icons.arrow_upward,
-                color: amtColor,
-                size: 20,
-              ),
-            ),
-          ),
-          title: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entry.tranType ?? 'TRANSACTION',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: cs.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Bill No: ${(entry.entryNo)} ',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '₹${amount.toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: amtColor,
-                    ),
-                  ),
-                  Text(
-                    isCredit ? 'Credit' : 'Debit',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: amtColor.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              dateStr,
-              style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant),
-            ),
-          ),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Column(
-                children: [
-                  _buildDetailRow('Entry No', entry.entryNo ?? '-', cs),
-                  _buildDetailRow('Voucher Number', entry.vchNumber ?? '-', cs),
-                  _buildDetailRow('Transaction Number', entry.tranNumber ?? '-', cs),
-                  _buildDetailRow('Key Entry No', entry.keyEntryNo ?? '-', cs),
-                  _buildDetailRow('Transaction ID', entry.tranId ?? '-', cs),
-                  _buildDetailRow('Transaction Firm', entry.tranFirm ?? '-', cs),
-                  _buildDetailRow('Date', dateStr, cs),
-
-                  const Divider(height: 16),
-
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildAmountCard('Debit', dr, const Color(0xFFB71C1C), cs),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildAmountCard('Credit', cr, const Color(0xFF1B5E20), cs),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer.withValues(alpha: 0.3),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'Running Balance',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₹${runningAmount.abs().toStringAsFixed(2)} ${runningAmount < 0 ? 'Dr' : 'Cr'}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: runningAmount >= 0 ? const Color(0xFF1B5E20) : const Color(0xFFB71C1C),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  if (entry.rCount != null) ...[
-                    const SizedBox(height: 8),
-                    _buildDetailRow('Record Count', entry.rCount.toString(), cs),
-                  ],
-
-                  if (entry.keyEntrySrNo != null)
-                    _buildDetailRow('Key Entry Sr No', entry.keyEntrySrNo.toString(), cs),
-
-                  if (entry.isEntryRecord != null)
-                    _buildDetailRow('Is Entry Record', entry.isEntryRecord.toString(), cs),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value, ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: cs.onSurfaceVariant,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 11,
-                color: cs.onSurface,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAmountCard(String label, double amount, Color color, ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: cs.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '₹${amount.toStringAsFixed(2)}',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Helper: download PDF from GetOutstandingDetails (lSharePdf=1) and open share sheet
   Future<void> _downloadAndSharePdf({required Account acc, bool preferWhatsapp = false}) async {
     final auth = Provider.of<AuthService>(context, listen: false);
     final dio = auth.getDioClient();
-
     String firmCode = '';
     try {
       final stores = auth.currentUser?.stores ?? [];
-      final primary = stores.firstWhere((s) => s.primary,
-          orElse: () => stores.isNotEmpty ? stores.first : (throw 'no_store'));
+      final primary = stores.firstWhere((s) => s.primary, orElse: () => stores.isNotEmpty ? stores.first : (throw 'no_store'));
       firmCode = primary.firmCode;
     } catch (_) {
       firmCode = '';
@@ -940,300 +369,721 @@ class _StatementPageState extends State<StatementPage> {
         bytes = response.data as Uint8List;
       } else if (response.data is List<int>) {
         bytes = Uint8List.fromList(List<int>.from(response.data));
-      } else {
-        // Try to parse common JSON wrappers or base64 strings
-        try {
-          final raw = response.data;
-          if (raw is String) {
-            try {
-              bytes = base64Decode(raw);
-            } catch (_) {}
-          } else if (raw is Map) {
-            if (raw['Pdf'] != null && raw['Pdf'] is String) {
-              try {
-                bytes = base64Decode(raw['Pdf']);
-              } catch (_) {}
-            } else if (raw['Message'] != null && raw['Message'] is String) {
-              try {
-                bytes = base64Decode(raw['Message']);
-              } catch (_) {}
-            }
-          }
-        } catch (_) {}
       }
 
-      if (bytes == null || bytes.isEmpty) throw 'No PDF data received from server.';
+      if (bytes == null || bytes.isEmpty) throw 'No PDF data received.';
 
       final dir = await getTemporaryDirectory();
       final file = File('${dir.path}/statement_${acc.id}_${DateTime.now().millisecondsSinceEpoch}.pdf');
       await file.writeAsBytes(bytes, flush: true);
-
       final xfile = XFile(file.path, mimeType: 'application/pdf');
-
-      // Show share sheet. User can pick WhatsApp from the UI if available.
       await Share.shareXFiles([xfile], text: acc.name);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not fetch/share PDF: $e')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
-  Future<void> _shareSelectedAccount() async {
-    final acc = _selectedAccount;
-    if (acc == null) return;
-
-    await _downloadAndSharePdf(acc: acc, preferWhatsapp: false);
-  }
-
-  Future<void> _shareSelectedAccountOnWhatsapp() async {
-    final acc = _selectedAccount;
-    if (acc == null) return;
-
-    await _downloadAndSharePdf(acc: acc, preferWhatsapp: true);
-  }
-
-  Widget _buildExpandableFab(ColorScheme cs) {
-    final canShare = _selectedAccount != null;
-
-    return Stack(
-      alignment: Alignment.bottomRight,
-      children: [
-        // NOTE: Dimming is handled by the full-page ModalBarrier in the Scaffold body.
-        // Keeping this stack overlay-free avoids double-dimming behind the FAB.
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 160),
-              child: !_fabExpanded
-                  ? const SizedBox.shrink()
-                  : Column(
-                      key: const ValueKey('expanded-actions'),
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        _fabAction(
-                          label: 'WhatsApp',
-                          icon: Icons.chat,
-                          onTap: canShare
-                              ? () async {
-                                  setState(() => _fabExpanded = false);
-                                  await _shareSelectedAccountOnWhatsapp();
-                                }
-                              : null,
-                          cs: cs,
-                        ),
-                        const SizedBox(height: 10),
-                        _fabAction(
-                          label: 'Share',
-                          icon: Icons.share_outlined,
-                          onTap: canShare
-                              ? () async {
-                                  setState(() => _fabExpanded = false);
-                                  await _shareSelectedAccount();
-                                }
-                              : null,
-                          cs: cs,
-                        ),
-                        const SizedBox(height: 10),
-                      ],
-                    ),
-            ),
-            FloatingActionButton(
-              heroTag: 'statement-fab',
-              onPressed: () => setState(() => _fabExpanded = !_fabExpanded),
-              backgroundColor: cs.primary,
-              foregroundColor: cs.onPrimary,
-              child: AnimatedRotation(
-                duration: const Duration(milliseconds: 160),
-                turns: _fabExpanded ? 0.125 : 0,
-                child: Icon(_fabExpanded ? Icons.close : Icons.share),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _fabAction({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onTap,
-    required ColorScheme cs,
-  }) {
-    final enabled = onTap != null;
-    final iconToUse = icon;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.8)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: enabled ? cs.onSurface : cs.onSurfaceVariant,
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Material(
-          color: enabled ? cs.secondaryContainer : cs.surfaceContainerHighest,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Icon(
-                iconToUse,
-                size: 20,
-                color: enabled ? cs.onSecondaryContainer : cs.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   void _openOutstanding() {
-    final acc = _selectedAccount;
-    if (acc == null) return;
-
-    // OutstandingDetailsPage expects an account number.
-    // In other parts of the app we pass `account.id`, so keep it consistent.
+    if (_selectedAccount == null) return;
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => OutstandingDetailsPage(
-          accountNo: acc.id,
-          accountName: acc.name,
+          accountNo: _selectedAccount!.id,
+          accountName: _selectedAccount!.name,
         ),
+      ),
+    );
+  }
+
+  // --- UI COMPONENTS ---
+
+  Widget _buildPassbookHeader(ColorScheme cs) {
+    return Container(
+      color: const Color(0xFFE8EAF6),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 75,
+            child: Text('DATE', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: cs.primary)),
+          ),
+          Container(width: 1, height: 16, color: Colors.grey[400]),
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Text('PARTICULARS', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: cs.primary)),
+            ),
+          ),
+          Container(width: 1, height: 16, color: Colors.grey[400]),
+          Expanded(
+            flex: 2,
+            child: Text('AMOUNT', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: cs.primary)),
+          ),
+          const SizedBox(width: 4),
+          Container(width: 1, height: 16, color: Colors.grey[400]),
+          Expanded(
+            flex: 2,
+            child: Text('BALANCE', textAlign: TextAlign.right, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: cs.primary)),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPassbookRow(LedgerEntry entry, ColorScheme cs, int index) {
+    final df = DateFormat('dd-MMM\nyy');
+    final dateStr = entry.date != null ? df.format(entry.date!) : (entry.tranId ?? '');
+    final dr = _toDouble(entry.drAmt);
+    final cr = _toDouble(entry.crAmt);
+    final runningAmount = _toDouble(entry.runningAmt);
+
+    // --- BACKGROUND COLOR LOGIC ---
+    Color bgColor;
+    if (cr > 0) {
+      bgColor = const Color(0xFFF1F8E9); // Light Green Tint
+    } else if (dr > 0) {
+      bgColor = const Color(0xFFFEF2F2); // Light Red Tint
+    } else {
+      bgColor = index % 2 == 0 ? Colors.white : const Color(0xFFF9FAFB);
+    }
+
+    final debitColor = Colors.red[700];
+    final creditColor = Colors.green[800];
+    final balanceColor = runningAmount >= 0 ? creditColor : debitColor;
+
+    return InkWell(
+      onTap: () => _loadAndShowTranDetail(entry, cs),
+      child: Container(
+        color: bgColor,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 75,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      dateStr,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87, height: 1.2),
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 40, color: Colors.grey[300]),
+                Expanded(
+                  flex: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          entry.tranType ?? 'TRANSACTION',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: cs.primary.withValues(alpha: 0.9)),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                        ),
+                        if (entry.entryNo != null && entry.entryNo!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Text(
+                              'Entry No: ${entry.entryNo}',
+                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: Colors.black87),
+                            ),
+                          ),
+                        if (entry.narration != null && entry.narration!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 3),
+                            child: Text(
+                              entry.narration!,
+                              style: TextStyle(fontSize: 11, color: Colors.grey[700], fontStyle: FontStyle.italic),
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 40, color: Colors.grey[300]),
+                // AMOUNT column: show debit or credit amount
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    (dr > 0 ? dr : cr).toStringAsFixed(2),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: dr > 0 ? debitColor : creditColor),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Container(width: 1, height: 40, color: Colors.grey[300]),
+                // BALANCE column: show running balance without Cr/Dr
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    runningAmount.abs().toStringAsFixed(2),
+                    textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: balanceColor),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Divider(height: 1, thickness: 0.5, color: Colors.grey[300]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- FILTER BAR (with ALL button) ---
+
+  Widget _buildFilterBar(ColorScheme cs) {
+    final bool isAllSelected = _selectedFilter == 'All';
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: Account Selector
+          InkWell(
+            onTap: _pickAccount,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.person, size: 18, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _selectedAccount?.name ?? 'Select Account',
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (_selectedAccount != null) ...[
+                    const SizedBox(width: 8),
+                    Text('${_selectedAccount!.phone ?? ""}', style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                  ],
+                  const SizedBox(width: 8),
+                  Icon(Icons.keyboard_arrow_down, size: 18, color: Colors.grey[600]),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 8),
+
+          // Row 2: All Button | Date Dropdown | Bills Button
+          Row(
+            children: [
+              // 'All' Button
+              SizedBox(
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: () => _applyQuickFilter('All'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    backgroundColor: isAllSelected ? cs.primary : Colors.white,
+                    side: BorderSide(color: isAllSelected ? cs.primary : Colors.grey[300]!),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  ),
+                  child: Text(
+                      'All',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isAllSelected ? Colors.white : Colors.grey[800]
+                      )
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Date Dropdown
+              Expanded(
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      // If 'All' is selected, we can show 'Custom' or a hint in dropdown to avoid confusion,
+                      // or keep it simple. Here we show current selection if it's not All, else 'This Month' as placeholder
+                      value: _selectedFilter == 'All' ? 'This Month' : _selectedFilter,
+                      icon: const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                      isDense: true,
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[800]),
+                      items: ['Today', 'This Week', 'This Month', 'This Year', 'Custom']
+                          .map((String value) {
+                        return DropdownMenuItem<String>(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList(),
+                      onChanged: _applyQuickFilter,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Bills Button
+              SizedBox(
+                height: 36,
+                child: OutlinedButton(
+                  onPressed: _selectedAccount != null ? _openOutstanding : null,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    side: BorderSide(color: cs.primary.withValues(alpha: 0.5)),
+                  ),
+                  child: const Text('Outstanding', style: TextStyle(fontSize: 11)),
+                ),
+              ),
+            ],
+          ),
+
+          // Row 3: Custom Date Range (Only visible if 'Custom' is selected)
+          if (_selectedFilter == 'Custom') ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _buildDateBox(_fromDate, _pickFromDate)),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4),
+                  child: Text("-", style: TextStyle(color: Colors.grey)),
+                ),
+                Expanded(child: _buildDateBox(_toDate, _pickToDate)),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateBox(DateTime? date, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.calendar_month, size: 14, color: Colors.grey),
+            const SizedBox(width: 4),
+            Text(
+              date != null ? DateFormat('dd/MM/yy').format(date) : 'Date',
+              style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPassbookSummary() {
+    if (_selectedAccount == null || _isSearching) return const SizedBox.shrink();
+    return Container(
+      color: const Color(0xFFFAFAFA),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('OPENING', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
+              const SizedBox(height: 2),
+              Text(
+                '₹${_openingBalance.abs().toStringAsFixed(2)} ${_openingBalance < 0 ? 'Dr' : 'Cr'}',
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.black87),
+              ),
+            ],
+          ),
+          Container(width: 1, height: 20, color: Colors.grey[300]),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text('CLOSING', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
+              const SizedBox(height: 2),
+              Text(
+                '₹${_closingBalance.abs().toStringAsFixed(2)} ${_closingBalance < 0 ? 'Dr' : 'Cr'}',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: _closingBalance < 0 ? const Color(0xFFD32F2F) : const Color(0xFF388E3C)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Fetch transaction detail from API
+  Future<Map<String, dynamic>?> _fetchTranDetailFromApi(LedgerEntry entry) async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      final keyEntryNo = entry.keyEntryNo ?? entry.entryNo ?? entry.tranId ?? entry.vchNumber ?? '';
+
+      final payload = {
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lKeyEntryNo': keyEntryNo,
+        'lIsEntryRecord': (entry.isEntryRecord != null) ? entry.isEntryRecord.toString() : '1',
+        'lKeyEntrySrNo': entry.keyEntrySrNo,
+      };
+
+      try {
+        debugPrint('GetTranDetail payload: ${jsonEncode(payload)}');
+      } catch (_) {
+        debugPrint('GetTranDetail payload: $payload');
+      }
+
+      // Use full URL as provided in the curl. If your Dio base is set to different host, this will still work.
+      final url = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder/GetTranDetail';
+
+      final response = await dio.post(
+        url,
+        data: payload,
+        options: Options(headers: {
+          'Content-Type': 'application/json',
+          'package_name': auth.packageNameHeader,
+          if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+        }),
+      );
+
+      debugPrint('GetTranDetail raw response type: ${response.data.runtimeType}');
+
+      dynamic raw = response.data;
+      Map<String, dynamic> parsed = {};
+
+      if (raw is Map<String, dynamic>) parsed = raw;
+      else if (raw is String) {
+        final clean = raw.trim();
+        try {
+          final dec = jsonDecode(clean);
+          if (dec is Map<String, dynamic>) parsed = dec;
+          else parsed = {'data': dec};
+        } catch (_) {
+          parsed = {'data': clean};
+        }
+      } else {
+        try {
+          final s = utf8.decode(raw as List<int>);
+          final dec = jsonDecode(s);
+          if (dec is Map<String, dynamic>) parsed = dec;
+          else parsed = {'data': dec};
+        } catch (_) {
+          parsed = {'data': raw.toString()};
+        }
+      }
+
+      debugPrint('GetTranDetail parsed keys: ${parsed.keys.toList()}');
+
+      return parsed;
+    } catch (e, st) {
+      debugPrint('GetTranDetail error: $e');
+      debugPrint(st.toString());
+      return {'error': e.toString()};
+    }
+  }
+
+  // Show bottom sheet: first show loading, then populate with API response
+  void _loadAndShowTranDetail(LedgerEntry entry, ColorScheme cs) {
+    showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return FutureBuilder<Map<String, dynamic>?>(
+          future: _fetchTranDetailFromApi(entry),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return SizedBox(
+                height: 220,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 12),
+                    Text('Loading transaction details...'),
+                  ],
+                ),
+              );
+            }
+
+            if (snapshot.hasError || snapshot.data == null) {
+              final err = snapshot.error ?? 'Unable to fetch transaction details';
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Error fetching details: $err', style: const TextStyle(color: Colors.red)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final result = snapshot.data!;
+            if (result.containsKey('error')) {
+              return Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Error fetching details: ${result['error']}', style: const TextStyle(color: Colors.red)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final data = result['data'] ?? result;
+            final d = data is Map<String, dynamic> ? data : <String, dynamic>{};
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
+                    const SizedBox(height: 12),
+                    Center(child: Text('Transaction Detail', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: cs.primary))),
+                    const SizedBox(height: 12),
+                    _detailRow('Date', d['Date']?.toString()),
+                    _detailRow('Number', d['Number']?.toString()),
+                    _detailRow('Code', d['CODE']?.toString()),
+                    _detailRow('Name', d['NAME']?.toString()),
+                    _detailRow('Address', d['Address1']?.toString()),
+                    _detailRow('TranType', d['TranType']?.toString()),
+                    _detailRow('Bill Amount', d['BillAmt']?.toString()),
+                    _detailRow('Item Amount', d['ITEMAMT']?.toString()),
+                    _detailRow('Tax Amount', d['TAXAMT']?.toString()),
+                    const SizedBox(height: 12),
+                    SizedBox(width: double.infinity, height: 44, child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _detailRow(String label, String? value, {bool isAmount = false, Color? amountColor}) {
+    if (value == null || value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(value, textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isAmount ? amountColor : Colors.black87)),
+          ),
+        ],
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final cs = Theme.of(context).colorScheme;
 
-    // Keep some space so the last ledger entry isn't hidden behind the FAB.
-    // (Accounts for main FAB + the expanded actions stack.)
-    const double _listBottomPadding = 140;
+    final List<LedgerEntry> displayEntries;
+    if (_txnSearchText.isEmpty) {
+      displayEntries = _entries;
+    } else {
+      final q = _txnSearchText.toLowerCase();
+      displayEntries = _entries.where((e) {
+        return (e.vchNumber?.toLowerCase().contains(q) ?? false) ||
+            (e.entryNo?.toLowerCase().contains(q) ?? false) ||
+            (e.narration?.toLowerCase().contains(q) ?? false) ||
+            (e.drAmt?.toString().contains(q) ?? false) ||
+            (e.crAmt?.toString().contains(q) ?? false);
+      }).toList();
+    }
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Account Statement', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-        centerTitle: true,
-        backgroundColor: colorScheme.surface,
+        title: _isSearching
+            ? Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: TextField(
+            controller: _txnSearchController,
+            autofocus: true,
+            textAlignVertical: TextAlignVertical.center,
+            decoration: InputDecoration(
+                hintText: 'Search Amount, Entry No...',
+                hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                suffixIcon: IconButton(
+                    icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+                    onPressed: () {
+                      setState(() {
+                        _txnSearchController.clear();
+                        _txnSearchText = '';
+                      });
+                    }
+                )
+            ),
+            style: const TextStyle(fontSize: 14, color: Colors.black87),
+            onChanged: (val) => setState(() => _txnSearchText = val),
+          ),
+        )
+            : const Text('Passbook Statement', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
         scrolledUnderElevation: 2,
-        toolbarHeight: 48,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, size: 22),
-            onPressed: () => _fetchLedger(reset: true),
+            icon: Icon(_isSearching ? Icons.close : Icons.search),
+            onPressed: () {
+              setState(() {
+                if (_isSearching) {
+                  _isSearching = false;
+                  _txnSearchText = '';
+                  _txnSearchController.clear();
+                } else {
+                  _isSearching = true;
+                }
+              });
+            },
           ),
+          if (!_isSearching)
+            IconButton(icon: const Icon(Icons.refresh), onPressed: () => _fetchLedger(reset: true)),
         ],
       ),
-      floatingActionButton: _buildExpandableFab(colorScheme),
-      body: Stack(
+      floatingActionButton: _fabExpanded ? Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Column(
-            children: [
-              _buildFilterBar(colorScheme),
-
-              if (_error != null)
-                Container(
-                  width: double.infinity,
-                  color: colorScheme.errorContainer,
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    _error!,
-                    style: TextStyle(color: colorScheme.onErrorContainer, fontSize: 11),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-
-              if (_selectedAccount != null) ...[
-                _buildSummaryCard(colorScheme),
-              ],
-
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)))
-                    : _selectedAccount == null
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.receipt_long_outlined, size: 48, color: colorScheme.outline.withValues(alpha: 0.5)),
-                                const SizedBox(height: 12),
-                                Text(
-                                  'Select a party',
-                                  style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
-                                ),
-                              ],
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: () => _fetchLedger(reset: true),
-                            child: ListView.builder(
-                              controller: _scrollController,
-                              padding: const EdgeInsets.only(bottom: _listBottomPadding),
-                              itemCount: _entries.length + (_isLoadingMore ? 1 : 0) + 1,
-                              itemBuilder: (context, index) {
-                                // Extra spacer at the end.
-                                if (index == _entries.length + (_isLoadingMore ? 1 : 0)) {
-                                  return const SizedBox(height: _listBottomPadding);
-                                }
-
-                                if (_isLoadingMore && index == _entries.length) {
-                                  return const Padding(
-                                    padding: EdgeInsets.all(12.0),
-                                    child: Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
-                                  );
-                                }
-
-                                return _buildTransactionRow(_entries[index], colorScheme);
-                              },
-                            ),
-                          ),
-              ),
-            ],
+          FloatingActionButton.small(
+            heroTag: "wa",
+            onPressed: () async {
+              await _downloadAndSharePdf(acc: _selectedAccount!, preferWhatsapp: true);
+            },
+            backgroundColor: const Color(0xFF25D366),
+            child: const Icon(Icons.chat, color: Colors.white),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.small(
+            heroTag: "sh",
+            onPressed: () async {
+              await _downloadAndSharePdf(acc: _selectedAccount!, preferWhatsapp: false);
+            },
+            backgroundColor: Colors.blue,
+            child: const Icon(Icons.share, color: Colors.white),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton(
+            heroTag: "main",
+            onPressed: () => setState(() => _fabExpanded = false),
+            backgroundColor: Colors.grey[800],
+            child: const Icon(Icons.close, color: Colors.white),
+          ),
+        ],
+      ) : FloatingActionButton(
+        heroTag: "main",
+        onPressed: _selectedAccount != null ? () => setState(() => _fabExpanded = true) : null,
+        backgroundColor: cs.primary,
+        child: const Icon(Icons.share),
+      ),
+      body: Column(
+        children: [
+          AnimatedCrossFade(
+            firstChild: _buildFilterBar(cs),
+            secondChild: const SizedBox.shrink(),
+            crossFadeState: _isSearching ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 200),
           ),
 
-          // Full-page dim overlay when expanded (covers filter + list). FAB stays above as it's outside body.
-          if (_fabExpanded)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () => setState(() => _fabExpanded = false),
-                child: const ModalBarrier(
-                  dismissible: false,
-                  color: Color(0x73000000), // ~45% black
-                ),
+          if (_error != null)
+            Container(color: Colors.red[50], padding: const EdgeInsets.all(8), width: double.infinity, child: Text(_error!, style: const TextStyle(color: Colors.red))),
+
+          if (!_isSearching) ...[
+            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+            _buildPassbookSummary(),
+          ],
+
+          const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+          if (displayEntries.isNotEmpty || _entries.isNotEmpty) _buildPassbookHeader(cs),
+
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _selectedAccount == null
+                ? const Center(child: Text("Select an account to view statement", style: TextStyle(color: Colors.grey)))
+                : displayEntries.isEmpty
+                ? const Center(child: Text("No transactions found", style: TextStyle(color: Colors.grey)))
+                : RefreshIndicator(
+              onRefresh: () => _fetchLedger(reset: true),
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.only(bottom: 100),
+                itemCount: displayEntries.length + (_isLoadingMore && !_isSearching ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index >= displayEntries.length) {
+                    return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
+                  }
+                  return _buildPassbookRow(displayEntries[index], cs, index);
+                },
               ),
             ),
+          ),
         ],
       ),
     );
   }
 }
+
