@@ -15,6 +15,7 @@ import '../models/account_model.dart';
 import '../models/ledger_entry_model.dart';
 import 'select_account_page.dart';
 import 'outstanding_details_page.dart';
+import 'transaction_detail_page.dart';
 
 class StatementPage extends StatefulWidget {
   const StatementPage({Key? key}) : super(key: key);
@@ -93,7 +94,16 @@ class _StatementPageState extends State<StatementPage> {
 
   // --- LOGIC ---
 
+  void _clearSearch() {
+    if (_isSearching || _txnSearchText.isNotEmpty) {
+      _txnSearchController.clear();
+      _txnSearchText = '';
+      _isSearching = false;
+    }
+  }
+
   void _applyQuickFilter(String? type) {
+    _clearSearch();
     if (type == null) return;
 
     if (type == 'All') {
@@ -112,34 +122,35 @@ class _StatementPageState extends State<StatementPage> {
         if (_fromDate == null) _fromDate = DateTime.now().subtract(const Duration(days: 30));
         if (_toDate == null) _toDate = DateTime.now();
       });
-      return; // Wait for user to pick dates manually
+      return;
     }
 
     final now = DateTime.now();
-    DateTime? start;
-    DateTime? end = now;
+    final today = DateTime(now.year, now.month, now.day);
 
+    // Rolling windows: Today = last 1 day, This Week = last 7 days, This Month = last 30 days, This Year = last 365 days
+    Duration range;
     switch (type) {
       case 'Today':
-        start = now;
-        end = now;
+        range = const Duration(days: 1);
         break;
       case 'This Week':
-        start = now.subtract(Duration(days: now.weekday - 1));
-        end = now;
+        range = const Duration(days: 7);
         break;
       case 'This Month':
-        start = DateTime(now.year, now.month, 1);
-        end = now;
+        range = const Duration(days: 30);
         break;
       case 'This Year':
-        start = DateTime(now.year, 1, 1);
-        end = now;
+        range = const Duration(days: 365);
         break;
       default:
-        start = null;
-        end = null;
+        range = const Duration(days: 0);
     }
+
+    final start = today.subtract(range - const Duration(days: 1));
+    final end = today;
+
+    debugPrint('Filter: $type, From: $start, To: $end');
 
     setState(() {
       _selectedFilter = type;
@@ -173,6 +184,7 @@ class _StatementPageState extends State<StatementPage> {
       lastDate: DateTime(now.year + 1),
     );
     if (picked != null && mounted) {
+      _clearSearch();
       setState(() {
         _fromDate = picked;
         _selectedFilter = 'Custom'; // Switch to custom if picking manually
@@ -191,6 +203,7 @@ class _StatementPageState extends State<StatementPage> {
       lastDate: DateTime(now.year + 1),
     );
     if (picked != null && mounted) {
+      _clearSearch();
       setState(() {
         _toDate = picked;
         _selectedFilter = 'Custom'; // Switch to custom if picking manually
@@ -234,23 +247,26 @@ class _StatementPageState extends State<StatementPage> {
       }
 
       final df = DateFormat('yyyy-MM-dd');
-      // If dates are null (All selected), send empty strings
-      final from = _fromDate != null ? df.format(_fromDate!) : '';
-      final till = _toDate != null ? df.format(_toDate!) : '';
+      // Send selected dates as-is (no +1 day) to match backend custom/date picker behavior
+      final apiFrom = _fromDate != null ? df.format(_fromDate!) : '';
+      final apiTill = _toDate != null ? df.format(_toDate!) : '';
 
       final accountCode = _selectedAccount!.code ?? _selectedAccount!.id;
 
       final payload = {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'lAcNo': accountCode,
-        'lFromDate': from,
-        'lTillDate': till,
+        'lFromDate': apiFrom,
+        'lTillDate': apiTill,
         'lFirmCode': firmCode,
         'lPageNo': _pageNo,
         'lSize': _pageSize,
         'lExecuteTotalRows': 1,
         'lSharePdf': 0,
       };
+
+      debugPrint('GetAccountLedger human dates: from=${_fromDate}, to=${_toDate}');
+      debugPrint('GetAccountLedger payload: ${jsonEncode(payload)}');
 
       final response = await dio.post(
         '/GetAccountLedger',
@@ -449,9 +465,7 @@ class _StatementPageState extends State<StatementPage> {
       bgColor = index % 2 == 0 ? Colors.white : const Color(0xFFF9FAFB);
     }
 
-    final debitColor = Colors.red[700];
-    final creditColor = Colors.green[800];
-    final balanceColor = runningAmount >= 0 ? creditColor : debitColor;
+    final balanceText = runningAmount.toStringAsFixed(2);
 
     return InkWell(
       onTap: () => _loadAndShowTranDetail(entry, cs),
@@ -509,24 +523,24 @@ class _StatementPageState extends State<StatementPage> {
                   ),
                 ),
                 Container(width: 1, height: 40, color: Colors.grey[300]),
-                // AMOUNT column: show debit or credit amount
+                // AMOUNT column: show debit or credit amount in black
                 Expanded(
                   flex: 2,
                   child: Text(
-                    (dr > 0 ? dr : cr).toStringAsFixed(2),
+                    '₹${(dr > 0 ? dr : cr).toStringAsFixed(2)}',
                     textAlign: TextAlign.right,
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: dr > 0 ? debitColor : creditColor),
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.black87),
                   ),
                 ),
                 const SizedBox(width: 4),
                 Container(width: 1, height: 40, color: Colors.grey[300]),
-                // BALANCE column: show running balance without Cr/Dr
+                // BALANCE column: show running balance with sign, black text
                 Expanded(
                   flex: 2,
                   child: Text(
-                    runningAmount.abs().toStringAsFixed(2),
+                    '₹$balanceText',
                     textAlign: TextAlign.right,
-                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: balanceColor),
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.black87),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -623,13 +637,11 @@ class _StatementPageState extends State<StatementPage> {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      // If 'All' is selected, we can show 'Custom' or a hint in dropdown to avoid confusion,
-                      // or keep it simple. Here we show current selection if it's not All, else 'This Month' as placeholder
-                      value: _selectedFilter == 'All' ? 'This Month' : _selectedFilter,
+                      value: _selectedFilter,
                       icon: const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
                       isDense: true,
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[800]),
-                      items: ['Today', 'This Week', 'This Month', 'This Year', 'Custom']
+                      items: ['All', 'Today', 'This Week', 'This Month', 'This Year', 'Custom']
                           .map((String value) {
                         return DropdownMenuItem<String>(
                           value: value,
@@ -721,7 +733,7 @@ class _StatementPageState extends State<StatementPage> {
               const Text('OPENING', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
               const SizedBox(height: 2),
               Text(
-                '₹${_openingBalance.abs().toStringAsFixed(2)} ${_openingBalance < 0 ? 'Dr' : 'Cr'}',
+                '₹${_openingBalance.toStringAsFixed(2)}',
                 style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.black87),
               ),
             ],
@@ -733,7 +745,7 @@ class _StatementPageState extends State<StatementPage> {
               const Text('CLOSING', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 0.5)),
               const SizedBox(height: 2),
               Text(
-                '₹${_closingBalance.abs().toStringAsFixed(2)} ${_closingBalance < 0 ? 'Dr' : 'Cr'}',
+                '₹${_closingBalance.toStringAsFixed(2)}',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: _closingBalance < 0 ? const Color(0xFFD32F2F) : const Color(0xFF388E3C)),
               ),
             ],
@@ -813,116 +825,15 @@ class _StatementPageState extends State<StatementPage> {
     }
   }
 
-  // Show bottom sheet: first show loading, then populate with API response
+  // Show transaction detail in a full page instead of bottom sheet
   void _loadAndShowTranDetail(LedgerEntry entry, ColorScheme cs) {
-    showModalBottomSheet<Map<String, dynamic>>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-      builder: (ctx) {
-        return FutureBuilder<Map<String, dynamic>?>(
-          future: _fetchTranDetailFromApi(entry),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return SizedBox(
-                height: 220,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 12),
-                    Text('Loading transaction details...'),
-                  ],
-                ),
-              );
-            }
-
-            if (snapshot.hasError || snapshot.data == null) {
-              final err = snapshot.error ?? 'Unable to fetch transaction details';
-              return Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Error fetching details: $err', style: const TextStyle(color: Colors.red)),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            final result = snapshot.data!;
-            if (result.containsKey('error')) {
-              return Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Error fetching details: ${result['error']}', style: const TextStyle(color: Colors.red)),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            final data = result['data'] ?? result;
-            final d = data is Map<String, dynamic> ? data : <String, dynamic>{};
-
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)))),
-                    const SizedBox(height: 12),
-                    Center(child: Text('Transaction Detail', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: cs.primary))),
-                    const SizedBox(height: 12),
-                    _detailRow('Date', d['Date']?.toString()),
-                    _detailRow('Number', d['Number']?.toString()),
-                    _detailRow('Code', d['CODE']?.toString()),
-                    _detailRow('Name', d['NAME']?.toString()),
-                    _detailRow('Address', d['Address1']?.toString()),
-                    _detailRow('TranType', d['TranType']?.toString()),
-                    _detailRow('Bill Amount', d['BillAmt']?.toString()),
-                    _detailRow('Item Amount', d['ITEMAMT']?.toString()),
-                    _detailRow('Tax Amount', d['TAXAMT']?.toString()),
-                    const SizedBox(height: 12),
-                    SizedBox(width: double.infinity, height: 44, child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _detailRow(String label, String? value, {bool isAmount = false, Color? amountColor}) {
-    if (value == null || value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(value, textAlign: TextAlign.right, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isAmount ? amountColor : Colors.black87)),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TransactionDetailPage(
+          entry: entry,
+          fetchDetail: _fetchTranDetailFromApi,
+          colorScheme: cs,
+        ),
       ),
     );
   }
@@ -979,7 +890,7 @@ class _StatementPageState extends State<StatementPage> {
             onChanged: (val) => setState(() => _txnSearchText = val),
           ),
         )
-            : const Text('Passbook Statement', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            : const Text('Account Statement', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
@@ -999,7 +910,8 @@ class _StatementPageState extends State<StatementPage> {
               });
             },
           ),
-          if (!_isSearching)
+          if (!_isSearching
+          )
             IconButton(icon: const Icon(Icons.refresh), onPressed: () => _fetchLedger(reset: true)),
         ],
       ),

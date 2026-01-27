@@ -100,9 +100,12 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
       final placemarks = await geocoding.placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
         final placemark = placemarks.first;
-        final address = [placemark.name, placemark.street, placemark.locality, placemark.postalCode, placemark.country]
-            .where((e) => e != null && e.isNotEmpty)
-            .join(', ');
+        final parts = [placemark.name, placemark.street, placemark.locality, placemark.postalCode, placemark.country]
+            .whereType<String>()
+            .map((s) => s.trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+        final address = parts.join(', ');
         if (mounted) {
           setState(() {
             _addressController.text = address;
@@ -494,4 +497,3 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
     );
   }
 }
-

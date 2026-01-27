@@ -49,8 +49,8 @@ dependencies:
   geolocator: ^10.0.0
   permission_handler: ^11.0.0
   image_picker: ^0.8.7
+  share_plus: ^7.2.2
   geocoding: ^3.0.0
-  share_plus: ^10.0.0
 
 dev_dependencies:
   flutter_test:
