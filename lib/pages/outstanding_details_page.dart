@@ -785,13 +785,7 @@ class _LedgerItem extends StatelessWidget {
                                       labelStyle: labelStyle,
                                       valueStyle: valueStyle,
                                     ),
-                                    const SizedBox(height: 2),
-                                    _RichInfo(
-                                      label: "Type",
-                                      value: item.trantype.isEmpty ? "-" : item.trantype,
-                                      labelStyle: labelStyle,
-                                      valueStyle: valueStyle,
-                                    ),
+
                                   ],
                                 ),
                               ),
@@ -801,13 +795,7 @@ class _LedgerItem extends StatelessWidget {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    _RichInfo(
-                                      label: "Key ID",
-                                      value: item.keyEntryNo.isEmpty ? "-" : item.keyEntryNo,
-                                      labelStyle: labelStyle,
-                                      valueStyle: valueStyle,
-                                      alignRight: true,
-                                    ),
+
                                     const SizedBox(height: 2),
                                     if (isNegative)
                                       const Text(
