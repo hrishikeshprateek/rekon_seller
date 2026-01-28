@@ -13,6 +13,7 @@ import 'package:cross_file/cross_file.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart';
 import '../models/ledger_entry_model.dart';
+import '../services/account_selection_service.dart';
 import 'select_account_page.dart';
 import 'outstanding_details_page.dart';
 import 'transaction_detail_page.dart';
@@ -67,7 +68,17 @@ class _StatementPageState extends State<StatementPage> {
     _toDate = null;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _pickAccount();
+      // Get account from service (set by SelectAccountPage)
+      final accountService = Provider.of<AccountSelectionService>(context, listen: false);
+      if (accountService.hasSelectedAccount) {
+        setState(() {
+          _selectedAccount = accountService.selectedAccount;
+        });
+        _fetchLedger(reset: true);
+      } else {
+        // No account selected, show account picker
+        _pickAccount();
+      }
     });
   }
 
@@ -161,11 +172,19 @@ class _StatementPageState extends State<StatementPage> {
   }
 
   Future<void> _pickAccount() async {
-    final account = await SelectAccountPage.show(context,
-        title: 'Select Party', showBalance: true);
-    if (account != null && mounted) {
+    // Push SelectAccountPage on top and wait for account selection
+    final result = await Navigator.of(context).push<Account>(
+      MaterialPageRoute(
+        builder: (_) => SelectAccountPage(
+          title: 'Select Party',
+          showBalance: true,
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
       setState(() {
-        _selectedAccount = account;
+        _selectedAccount = result;
         _txnSearchController.clear();
         _txnSearchText = '';
         _isSearching = false;
@@ -859,9 +878,9 @@ class _StatementPageState extends State<StatementPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: _isSearching
-            ? Container(
+        appBar: AppBar(
+          title: _isSearching
+              ? Container(
           height: 40,
           decoration: BoxDecoration(
             color: Colors.grey[100],

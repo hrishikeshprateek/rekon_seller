@@ -18,6 +18,7 @@ class SelectAccountPage extends StatefulWidget {
   final String? accountType;
   final bool showBalance;
   final Account? selectedAccount;
+  final Function(Account)? onAccountSelected;
 
   const SelectAccountPage({
     super.key,
@@ -25,6 +26,7 @@ class SelectAccountPage extends StatefulWidget {
     this.accountType,
     this.showBalance = true,
     this.selectedAccount,
+    this.onAccountSelected,
   });
 
   static Future<Account?> show(
@@ -230,7 +232,13 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   }
 
   void _selectAccount(Account account) {
-    Navigator.of(context).pop(account);
+    if (widget.onAccountSelected != null) {
+      // If callback is provided, use it (keeps SelectAccountPage in stack)
+      widget.onAccountSelected!(account);
+    } else {
+      // Otherwise, pop with result (normal behavior)
+      Navigator.of(context).pop(account);
+    }
   }
 
   void _showLocationPicker(BuildContext context, Account account) {

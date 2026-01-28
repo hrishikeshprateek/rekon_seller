@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'dashboard_service.dart';
+import 'services/account_selection_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -19,6 +20,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => AccountSelectionService()),
         ProxyProvider<AuthService, DashboardService>(
           update: (_, authService, __) => DashboardService(authService),
         ),
