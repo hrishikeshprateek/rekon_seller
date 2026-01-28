@@ -14,6 +14,7 @@ class Account {
   final String? gstNumber;
   final String? address2;
   final String? address3;
+  final String? pincode;
   final int? rcount;
   final int? acIdCol;
   final double? opBal;
@@ -36,6 +37,7 @@ class Account {
     this.gstNumber,
     this.address2,
     this.address3,
+    this.pincode,
     this.rcount,
     this.acIdCol,
     this.opBal,
@@ -64,6 +66,7 @@ class Account {
     'gstNumber': gstNumber,
     'address2': address2,
     'address3': address3,
+    'pincode': pincode,
     'rcount': rcount,
     'acIdCol': acIdCol,
     'opBal': opBal,
@@ -139,6 +142,7 @@ class Account {
       gstNumber: json['GstNumber'] != null ? _str(json['GstNumber']) : null,
       address2: json['Address2'] != null ? _str(json['Address2']) : null,
       address3: json['Address3'] != null ? _str(json['Address3']) : null,
+      pincode: json['PinCode'] != null ? _str(json['PinCode']) : null,
       rcount: _toInt(json['RCount'] ?? json['rcount']),
       acIdCol: _toInt(json['ac_id_col'] ?? json['acIdCol'] ?? json['AcIdCol']),
       opBal: _toDouble(json['OpBal'] ?? json['opbal']),

@@ -374,6 +374,9 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     final address = (account.address ?? '').trim();
     if (address.isNotEmpty) lines.add('Address: $address');
 
+    final pincode = (account.pincode ?? '').trim();
+    if (pincode.isNotEmpty) lines.add('Pincode: $pincode');
+
     final phone = (account.phone ?? '').trim();
     if (phone.isNotEmpty) lines.add('Mobile: $phone');
 
@@ -617,7 +620,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: isNegative ? Colors.red[700] : Colors.green[700]),
                         ),
                         Text(
-                          'ClosBal ${isNegative ? "Dr" : "Cr"}',
+                          'Balance',
                           style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isNegative ? Colors.red[700] : Colors.green[700]),
                         ),
                       ],
@@ -728,10 +731,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     const SizedBox(height: 32),
                     _detailRow("Account ID", account.id),
                     if (account.phone != null) _detailRow("Phone Number", account.phone!),
-                    if (account.email != null) _detailRow("Email Address", account.email!),
+                    if (account.email != null) _detailRow("Email", account.email!),
                     if (account.address != null) _detailRow("Address", account.address!),
+                    if (account.pincode != null) _detailRow("Pincode", account.pincode!),
                     if (account.gstNumber != null) _detailRow("GSTIN", account.gstNumber!),
-                    if (account.balance != null) _detailRow("Current Balance", "₹${account.balance}"),
+                    if (account.accountCreditDays != null) _detailRow("Credit Days", account.accountCreditDays.toString()),
                     const SizedBox(height: 40),
                     Row(
                       children: [

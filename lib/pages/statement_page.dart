@@ -294,6 +294,7 @@ class _StatementPageState extends State<StatementPage> {
       }
 
       final oppBal = _toDouble(data['OppBal']);
+
       final closingBal = _toDouble(data['ClosingBal']);
       final list = (data['Ledger'] as List<dynamic>? ?? []);
       final fetched = list
