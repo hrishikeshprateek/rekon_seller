@@ -619,6 +619,47 @@ class _StatementPageState extends State<StatementPage> {
 
           const SizedBox(height: 8),
 
+          // Show full address (Address1/Address2/Address3) when account selected
+          if (_selectedAccount != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.grey[200]!),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Prefer the assembled `address` (Address1+2+3) if available
+                  if ((_selectedAccount!.address ?? '').trim().isNotEmpty)
+                    Text(_selectedAccount!.address!, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+
+                  // Otherwise, show address2 and address3 separately if present
+                  if ((_selectedAccount!.address ?? '').trim().isEmpty) ...[
+                    if ((_selectedAccount!.address2 ?? '').trim().isNotEmpty)
+                      Text(_selectedAccount!.address2!, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                    if ((_selectedAccount!.address3 ?? '').trim().isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text(_selectedAccount!.address3!, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                      ),
+                  ],
+
+                  // Pincode (if available)
+                  if ((_selectedAccount!.pincode ?? '').trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6.0),
+                      child: Text('Pincode: ${_selectedAccount!.pincode!}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                    ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 8),
+          ],
+
           // Row 2: All Button | Date Dropdown | Bills Button
           Row(
             children: [
@@ -1008,8 +1049,9 @@ class _StatementPageState extends State<StatementPage> {
                   if (index >= displayEntries.length) {
                     return const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator()));
                   }
+
                   return _buildPassbookRow(displayEntries[index], cs, index);
-                },
+                 },
               ),
             ),
           ),
