@@ -745,34 +745,18 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     if (account.gstNumber != null) _detailRow("GSTIN", account.gstNumber!),
                     if (account.accountCreditDays != null) _detailRow("Credit Days", account.accountCreditDays.toString()),
                     const SizedBox(height: 40),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 50,
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                final text = _formatAccountShareText(account);
-                                try { await Share.share(text, subject: account.name); } catch (_) { await Clipboard.setData(ClipboardData(text: text)); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied!'))); }
-                              },
-                              icon: const Icon(Icons.share_outlined),
-                              label: const Text('Share Details'),
-                              style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SizedBox(
-                            height: 50,
-                            child: FilledButton(
-                              onPressed: () { Navigator.pop(ctx); _selectAccount(account); },
-                              style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), backgroundColor: const Color(0xFF1E1E1E)),
-                              child: const Text("Select Account"),
-                            ),
-                          ),
-                        ),
-                      ],
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final text = _formatAccountShareText(account);
+                          try { await Share.share(text, subject: account.name); } catch (_) { await Clipboard.setData(ClipboardData(text: text)); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copied!'))); }
+                        },
+                        icon: const Icon(Icons.share_outlined),
+                        label: const Text('Share Details'),
+                        style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      ),
                     ),
                     const SizedBox(height: 20),
                   ],

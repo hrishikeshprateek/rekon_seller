@@ -60,26 +60,203 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
               ? data
               : <String, dynamic>{'data': data.toString()};
 
-          return SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 12),
-                _buildHeaderCard(d),
-                const SizedBox(height: 12),
-                _buildBillDetailsCard(d),
-                const SizedBox(height: 12),
-                _buildDispatchDetailsCard(d),
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
+          // Check transaction type to render appropriate UI
+          final tranType = _getValue(d['TranType']).toUpperCase();
+
+          if (tranType == 'RC') {
+            // Receipt (RC) transaction
+            return _buildReceiptUI(d);
+          } else {
+            // Sale/Purchase transaction (SALE, PUR, etc.)
+            return _buildSaleUI(d);
+          }
         },
       ),
     );
   }
 
+  // Receipt (RC) Transaction UI
+  Widget _buildReceiptUI(Map<String, dynamic> d) {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          _buildHeaderCard(d),
+          const SizedBox(height: 12),
+          _buildReceiptDetailsCard(d),
+          const SizedBox(height: 24),
+          _buildViewBillButton(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // Sale/Purchase Transaction UI
+  Widget _buildSaleUI(Map<String, dynamic> d) {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          const SizedBox(height: 12),
+          _buildHeaderCard(d),
+          const SizedBox(height: 12),
+          _buildBillDetailsCard(d),
+          const SizedBox(height: 12),
+          _buildDispatchDetailsCard(d),
+          const SizedBox(height: 24),
+          _buildViewBillButton(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // Receipt Details Card (for RC transactions)
+  Widget _buildReceiptDetailsCard(Map<String, dynamic> d) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Detail Section Title
+            const Text(
+              'Detail',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+            const SizedBox(height: 12),
+
+            // Receipt Detail Items
+            _buildTextRow('Collected By', _getValue(d['CollectedBy'])),
+            _buildTextRow('Mode', _getValue(d['MODE'])),
+            _buildTextRow('Bank Name', _getValue(d['BankName'])),
+            _buildTextRow('Branch', _getValue(d['BranchName'])),
+            _buildTextRow('Document No', _getValue(d['DocumentNo'])),
+            _buildTextRow('Document Date', _getValue(d['DocumentDate'])),
+            _buildTextRow('Amount', _formatAmount(d['Amount'])),
+
+            const SizedBox(height: 16),
+
+            // Adjustment Detail Section
+            const Text(
+              'Adjustment Detail',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
+            const SizedBox(height: 12),
+
+            // Adjustment items - support new `AdjustmentDetail` array or fallbacks
+            ..._buildAdjustmentWidgets(d),
+
+            const SizedBox(height: 12),
+            const Divider(height: 1, thickness: 2, color: Color(0xFFEEEEEE)),
+            const SizedBox(height: 12),
+
+            // Total Amount
+            _buildTotalRow('Total Received', d['Amount']),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Build adjustment widgets from various possible payload shapes
+  List<Widget> _buildAdjustmentWidgets(Map<String, dynamic> d) {
+    final List<Widget> rows = [];
+
+    // Case A: new API field 'AdjustmentDetail' => list of objects with Particular and AdjAmt
+    if (d.containsKey('AdjustmentDetail') && d['AdjustmentDetail'] is List) {
+      final List list = d['AdjustmentDetail'] as List;
+      if (list.isNotEmpty) {
+        for (final item in list) {
+          if (item is Map) {
+            final part = item['Particular'] ?? item['particular'] ?? '';
+            final adj = item['AdjAmt'] ?? item['Adjamt'] ?? item['adjAmt'] ?? item['adjamt'] ?? 0;
+            rows.add(_buildAdjustmentRow(_getValue(part), adj));
+          }
+        }
+        return rows;
+      }
+    }
+
+    // Case B: older shape - Particular and AdjAmt may be lists or strings
+    final partic = d['Particular'];
+    final adj = d['AdjAmt'];
+
+    // If both are lists, pair them
+    if (partic is List && adj is List) {
+      final max = partic.length > adj.length ? partic.length : adj.length;
+      for (var i = 0; i < max; i++) {
+        final p = i < partic.length ? partic[i] : '';
+        final a = i < adj.length ? adj[i] : 0;
+        rows.add(_buildAdjustmentRow(_getValue(p), a));
+      }
+      return rows;
+    }
+
+    // If AdjAmt is a list but Particular is single, pair accordingly
+    if (partic is String && adj is List) {
+      for (var a in adj) {
+        rows.add(_buildAdjustmentRow(_getValue(partic), a));
+      }
+      return rows;
+    }
+
+    // If Particular is a list but AdjAmt is single
+    if (partic is List && (adj is String || adj is num)) {
+      for (var p in partic) {
+        rows.add(_buildAdjustmentRow(_getValue(p), adj));
+      }
+      return rows;
+    }
+
+    // If both are comma/newline separated strings, split them
+    if (partic is String && adj is String) {
+      final parts = partic.split(RegExp(r"[\n,;]+")).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      final amts = adj.split(RegExp(r"[\n,;]+")).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      final max = parts.length > amts.length ? parts.length : amts.length;
+      for (var i = 0; i < max; i++) {
+        final p = i < parts.length ? parts[i] : '';
+        final aStr = i < amts.length ? amts[i] : '0';
+        final a = double.tryParse(aStr.replaceAll(',', '')) ?? 0.0;
+        rows.add(_buildAdjustmentRow(_getValue(p), a));
+      }
+      return rows;
+    }
+
+    // Fallback: single pair
+    rows.add(_buildAdjustmentRow(_getValue(partic), adj));
+    return rows;
+  }
+
   // Header Section - Account Information Card
   Widget _buildHeaderCard(Map<String, dynamic> d) {
+    final tranType = _getValue(d['TranType']).toUpperCase();
+    final isReceipt = tranType == 'RC';
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -127,7 +304,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                _getValue(d['TranType']),
+                isReceipt ? 'Receipt Voucher' : _getValue(d['TranType']),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -137,12 +314,10 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             ),
             const SizedBox(height: 12),
 
-            // Bill Number, Code, Date
-            _buildInfoRow('Bill No', _getValue(d['Number'])),
+            // Bill Number/Receipt Voucher and Date
+            _buildInfoRow(isReceipt ? 'Receipt Voucher' : 'Bill No', _getValue(d['Number'])),
             const Divider(height: 20, color: Color(0xFFEEEEEE)),
-            _buildInfoRow('Code', _getValue(d['CODE'])),
-            const Divider(height: 20, color: Color(0xFFEEEEEE)),
-            _buildInfoRow('Date', _getValue(d['Date'])),
+            _buildInfoRow(isReceipt ? 'Paid' : 'Date', _getValue(d['Date'])),
           ],
         ),
       ),
@@ -175,6 +350,41 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
 
   // Bill Details Section Card
   Widget _buildBillDetailsCard(Map<String, dynamic> d) {
+    // Build items list dynamically
+    List<Map<String, dynamic>> items = [];
+
+    // Add basic items - show all fields including 0 values
+    items.add({'title': 'Goods Value', 'value': d['ITEMAMT'] ?? 0});
+    items.add({'title': 'Scheme', 'value': d['ASchemeAmt'] ?? 0});
+    items.add({'title': 'Product Discount', 'value': d['DISCAMT'] ?? 0});
+    items.add({'title': 'Bill Discount', 'value': d['BILLDISC'] ?? 0});
+
+    // Add taxable value
+    items.add({'title': 'Taxable Value', 'value': d['TAXABLE'] ?? 0});
+
+    // Add SGST/CGST dynamically - show even if 0
+    final totalTaxAmt = _toDouble(d['TAXAMT']); // Total tax amount
+
+    // Use same TAXAMT value for both SGST and CGST (no division)
+    items.add({
+      'title': 'SGST',
+      'value': totalTaxAmt,
+    });
+
+    items.add({
+      'title': 'CGST',
+      'value': totalTaxAmt,
+    });
+
+    // Add other tax items - show all including 0 values
+    items.add({'title': 'Cess', 'value': d['EDUCESS'] ?? 0});
+    items.add({'title': 'Special Cess', 'value': d['HEDUCESS'] ?? 0});
+
+    // Add TCS, Add/Less, Round Off - show all
+    items.add({'title': 'TCS', 'value': d['Tcs'] ?? 0});
+    items.add({'title': 'Add/Less', 'value': d['AddLess'] ?? 0});
+    items.add({'title': 'Round Off', 'value': d['RoundAmt'] ?? 0});
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -206,29 +416,8 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
             const SizedBox(height: 12),
 
-            // Bill Detail Items (matching Android app structure)
-            _buildDetailRow('Goods Value', d['ITEMAMT']),
-            _buildDetailRow('Scheme', d['ASchemeAmt']),
-            _buildDetailRow('Product Discount', d['DISCAMT']),
-            _buildDetailRow('Bill Discount', d['BILLDISC']),
-
-            const SizedBox(height: 8),
-            const Divider(height: 1, color: Color(0xFFEEEEEE)),
-            const SizedBox(height: 8),
-
-            _buildDetailRow('Taxable Value', d['TAXABLE']),
-            _buildDetailRow('SGST', d['TAXAMT']),
-            _buildDetailRow('CGST', d['OTAXAMT']),
-            _buildDetailRow('Cess', d['EDUCESS']),
-            _buildDetailRow('Special Cess', d['HEDUCESS']),
-
-            const SizedBox(height: 8),
-            const Divider(height: 1, color: Color(0xFFEEEEEE)),
-            const SizedBox(height: 8),
-
-            _buildDetailRow('TCS', d['Tcs']),
-            _buildDetailRow('Add/Less', d['AddLess']),
-            _buildDetailRow('Round Off', d['RoundAmt']),
+            // Dynamic items list
+            ...items.map((item) => _buildDetailRow(item['title'], item['value'])),
 
             const SizedBox(height: 12),
             const Divider(height: 1, thickness: 2, color: Color(0xFFEEEEEE)),
@@ -279,6 +468,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             _buildTextRow('Delivery By', _getValue(d['DeliverdBy'])),
             _buildTextRow('Transporter', _getValue(d['TransporterName'])),
             _buildTextRow('LR No', _getValue(d['LRNO'])),
+            _buildTextRow('LR Date', _getValue(d['LRDate'])),
             _buildTextRow('No Of Cases', _getValue(d['NoOfCase'])),
             _buildTextRow('E-Way Bill No', _getValue(d['EwayBill'])),
           ],
@@ -310,7 +500,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           ),
           const SizedBox(width: 16),
           Text(
-            amount,
+            '₹$amount',
             textAlign: TextAlign.right,
             style: const TextStyle(
               fontSize: 14,
@@ -381,10 +571,47 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             ),
           ),
           Text(
-            amount,
+            '₹$amount',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Adjustment Row (for receipt adjustments) - kept as separate method for reuse
+  Widget _buildAdjustmentRow(String particular, dynamic adjAmount) {
+    final amount = _formatAmount(adjAmount);
+    final displayPart = particular.trim().isEmpty ? '-' : (particular.startsWith('*') ? particular : '*$particular');
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              displayPart,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Text(
+            '₹${amount}',
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
           ),
@@ -408,11 +635,23 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
 
     final numVal = num.tryParse(str);
     if (numVal != null) {
-      // Format with 1 decimal place as shown in the documentation
-      return numVal.toStringAsFixed(1);
+      // Format with 2 decimal places
+      return numVal.toStringAsFixed(2);
     }
 
     return '0.0';
+  }
+
+  // Helper to convert dynamic value to double
+  double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+
+    final str = value.toString().trim();
+    if (str.isEmpty || str.toLowerCase() == 'null') return 0.0;
+
+    return double.tryParse(str) ?? 0.0;
   }
 
   Widget _errorState(String message) {
@@ -459,5 +698,37 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       ),
     );
   }
-}
 
+  // View Bill Button
+  Widget _buildViewBillButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () {
+          // TODO: Implement view bill functionality
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('View Bill feature coming soon')),
+          );
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF1976D2),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          elevation: 0,
+        ),
+        child: const Text(
+          'View Bill',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
