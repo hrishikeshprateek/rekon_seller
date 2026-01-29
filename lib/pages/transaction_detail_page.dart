@@ -284,16 +284,6 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 color: Colors.black87,
               ),
             ),
-            const SizedBox(height: 4),
-
-            // Address (acc_address)
-            Text(
-              _getValue(d['Address1']),
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.black54,
-              ),
-            ),
             const SizedBox(height: 12),
 
             // Transaction Type Badge (transection_type)
@@ -362,19 +352,21 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     // Add taxable value
     items.add({'title': 'Taxable Value', 'value': d['TAXABLE'] ?? 0});
 
-    // Add SGST/CGST dynamically - show even if 0
-    final totalTaxAmt = _toDouble(d['TAXAMT']); // Total tax amount
+    // Tax fields mapping:
+    // SGST -> TAXAMT
+    // CGST -> ATAXAMT (fallback to OTAXAMT)
+    // If ATAXAMT == 0 then show IGST instead of SGST (IGST = TAXAMT)
+    final taxAmt = _toDouble(d['TAXAMT']);
+    final aTaxAmt = _toDouble(d['ATAXAMT'] ?? d['OTAXAMT']);
 
-    // Use same TAXAMT value for both SGST and CGST (no division)
-    items.add({
-      'title': 'SGST',
-      'value': totalTaxAmt,
-    });
-
-    items.add({
-      'title': 'CGST',
-      'value': totalTaxAmt,
-    });
+    if (aTaxAmt == 0.0) {
+      // Inter-state: show IGST (use TAXAMT)
+      items.add({'title': 'IGST', 'value': taxAmt});
+    } else {
+      // Intra-state: show SGST (TAXAMT) and CGST (ATAXAMT)
+      items.add({'title': 'SGST', 'value': taxAmt});
+      items.add({'title': 'CGST', 'value': aTaxAmt});
+    }
 
     // Add other tax items - show all including 0 values
     items.add({'title': 'Cess', 'value': d['EDUCESS'] ?? 0});
