@@ -60,14 +60,21 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
               ? data
               : <String, dynamic>{'data': data.toString()};
 
-          // Check transaction type to render appropriate UI
-          final tranType = _getValue(d['TranType']).toUpperCase();
+          // Debug: print the parsed transaction payload so we can verify available keys
+          try { debugPrint('TransactionDetail parsed payload: ${d}'); } catch (_) {}
 
-          if (tranType == 'RC') {
-            // Receipt (RC) transaction
+          // Determine transaction type (prefer explicit keys, else infer from payload)
+          final rawTran = d['TranType'] ?? d['tran_type'] ?? d['tranType'] ?? d['TranType'];
+          // If API didn't provide tran type, fallback to ledger entry's tranType
+          final entryTran = widget.entry.tranType;
+          final rawTranCandidate = (rawTran ?? entryTran) ?? '';
+          final tranType = _getValue(rawTranCandidate).toUpperCase();
+          // Detect receipt only by explicit TranType codes or presence of adjustments list
+          final bool isReceipt = tranType == 'RC' || tranType == 'RCV' || d.containsKey('adjustments');
+
+          if (isReceipt) {
             return _buildReceiptUI(d);
           } else {
-            // Sale/Purchase transaction (SALE, PUR, etc.)
             return _buildSaleUI(d);
           }
         },
@@ -145,13 +152,13 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             const SizedBox(height: 12),
 
             // Receipt Detail Items
-            _buildTextRow('Collected By', _getValue(d['CollectedBy'])),
-            _buildTextRow('Mode', _getValue(d['MODE'])),
-            _buildTextRow('Bank Name', _getValue(d['BankName'])),
-            _buildTextRow('Branch', _getValue(d['BranchName'])),
-            _buildTextRow('Document No', _getValue(d['DocumentNo'])),
-            _buildTextRow('Document Date', _getValue(d['DocumentDate'])),
-            _buildTextRow('Amount', _formatAmount(d['Amount'])),
+            _buildTextRow('Collected By', _getValue(d['collected_by'] ?? d['CollectedBy'])),
+            _buildTextRow('Mode', _getValue(d['mode'] ?? d['MODE'])),
+            _buildTextRow('Bank Name', _getValue(d['bank_name'] ?? d['BankName'])),
+            _buildTextRow('Branch', _getValue(d['branch_name'] ?? d['BranchName'])),
+            _buildTextRow('Document No', _getValue(d['document_no'] ?? d['DocumentNo'])),
+            _buildTextRow('Document Date', _getValue(d['document_date'] ?? d['DocumentDate'])),
+            _buildTextRow('Amount', _formatAmount(d['amount'] ?? d['Amount'])),
 
             const SizedBox(height: 16),
 
@@ -183,199 +190,56 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     );
   }
 
-  // Build adjustment widgets from various possible payload shapes
-  List<Widget> _buildAdjustmentWidgets(Map<String, dynamic> d) {
-    final List<Widget> rows = [];
-
-    // Case A: new API field 'AdjustmentDetail' => list of objects with Particular and AdjAmt
-    if (d.containsKey('AdjustmentDetail') && d['AdjustmentDetail'] is List) {
-      final List list = d['AdjustmentDetail'] as List;
-      if (list.isNotEmpty) {
-        for (final item in list) {
-          if (item is Map) {
-            final part = item['Particular'] ?? item['particular'] ?? '';
-            final adj = item['AdjAmt'] ?? item['Adjamt'] ?? item['adjAmt'] ?? item['adjamt'] ?? 0;
-            rows.add(_buildAdjustmentRow(_getValue(part), adj));
-          }
-        }
-        return rows;
-      }
-    }
-
-    // Case B: older shape - Particular and AdjAmt may be lists or strings
-    final partic = d['Particular'];
-    final adj = d['AdjAmt'];
-
-    // If both are lists, pair them
-    if (partic is List && adj is List) {
-      final max = partic.length > adj.length ? partic.length : adj.length;
-      for (var i = 0; i < max; i++) {
-        final p = i < partic.length ? partic[i] : '';
-        final a = i < adj.length ? adj[i] : 0;
-        rows.add(_buildAdjustmentRow(_getValue(p), a));
-      }
-      return rows;
-    }
-
-    // If AdjAmt is a list but Particular is single, pair accordingly
-    if (partic is String && adj is List) {
-      for (var a in adj) {
-        rows.add(_buildAdjustmentRow(_getValue(partic), a));
-      }
-      return rows;
-    }
-
-    // If Particular is a list but AdjAmt is single
-    if (partic is List && (adj is String || adj is num)) {
-      for (var p in partic) {
-        rows.add(_buildAdjustmentRow(_getValue(p), adj));
-      }
-      return rows;
-    }
-
-    // If both are comma/newline separated strings, split them
-    if (partic is String && adj is String) {
-      final parts = partic.split(RegExp(r"[\n,;]+")).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      final amts = adj.split(RegExp(r"[\n,;]+")).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      final max = parts.length > amts.length ? parts.length : amts.length;
-      for (var i = 0; i < max; i++) {
-        final p = i < parts.length ? parts[i] : '';
-        final aStr = i < amts.length ? amts[i] : '0';
-        final a = double.tryParse(aStr.replaceAll(',', '')) ?? 0.0;
-        rows.add(_buildAdjustmentRow(_getValue(p), a));
-      }
-      return rows;
-    }
-
-    // Fallback: single pair
-    rows.add(_buildAdjustmentRow(_getValue(partic), adj));
-    return rows;
-  }
-
-  // Header Section - Account Information Card
-  Widget _buildHeaderCard(Map<String, dynamic> d) {
-    final tranType = _getValue(d['TranType']).toUpperCase();
-    final isReceipt = tranType == 'RC';
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Firm Name (acc_name)
-            Text(
-              _getValue(d['NAME']),
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Transaction Type Badge (transection_type)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                isReceipt ? 'Receipt Voucher' : _getValue(d['TranType']),
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF2E7D32),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Bill Number/Receipt Voucher and Date
-            _buildInfoRow(isReceipt ? 'Receipt Voucher' : 'Bill No', _getValue(d['Number'])),
-            const Divider(height: 20, color: Color(0xFFEEEEEE)),
-            _buildInfoRow(isReceipt ? 'Paid' : 'Date', _getValue(d['Date'])),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            color: Colors.black54,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-      ],
-    );
-  }
-
   // Bill Details Section Card
   Widget _buildBillDetailsCard(Map<String, dynamic> d) {
     // Build items list dynamically
     List<Map<String, dynamic>> items = [];
 
     // Add basic items - show all fields including 0 values
-    items.add({'title': 'Goods Value', 'value': d['ITEMAMT'] ?? 0});
-    items.add({'title': 'Scheme', 'value': d['ASchemeAmt'] ?? 0});
-    items.add({'title': 'Product Discount', 'value': d['DISCAMT'] ?? 0});
-    items.add({'title': 'Bill Discount', 'value': d['BILLDISC'] ?? 0});
+    items.add({'title': 'Goods Value', 'value': d['ITEMAMT'] ?? d['goods_value'] ?? 0});
+    items.add({'title': 'Scheme', 'value': d['ASchemeAmt'] ?? d['scheme_amt'] ?? 0});
+    items.add({'title': 'Product Discount', 'value': d['DISCAMT'] ?? d['product_discount'] ?? 0});
+    items.add({'title': 'Bill Discount', 'value': d['BILLDISC'] ?? d['bill_discount'] ?? 0});
 
     // Add taxable value
-    items.add({'title': 'Taxable Value', 'value': d['TAXABLE'] ?? 0});
+    items.add({'title': 'Taxable Value', 'value': d['TAXABLE'] ?? d['taxable_value'] ?? 0});
 
-    // Tax fields mapping:
-    // SGST -> TAXAMT
-    // CGST -> ATAXAMT (fallback to OTAXAMT)
-    // If ATAXAMT == 0 then show IGST instead of SGST (IGST = TAXAMT)
-    final taxAmt = _toDouble(d['TAXAMT']);
-    final aTaxAmt = _toDouble(d['ATAXAMT'] ?? d['OTAXAMT']);
-
-    if (aTaxAmt == 0.0) {
-      // Inter-state: show IGST (use TAXAMT)
-      items.add({'title': 'IGST', 'value': taxAmt});
+    // Tax fields mapping: prefer new dedicated keys (sgst/cgst)
+    // If new keys not present, fallback to TAXAMT/ATAXAMT logic used earlier
+    final bool hasNewTaxKeys = d.containsKey('sgst') || d.containsKey('cgst');
+    if (hasNewTaxKeys) {
+      final sgstVal = _toDouble(d['sgst'] ?? d['SGST']);
+      final cgstVal = _toDouble(d['cgst'] ?? d['CGST']);
+      // If cgst is zero (or missing) treat as IGST case: show IGST = sgstVal (or taxable tax total)
+      if (cgstVal == 0.0) {
+        items.add({'title': 'IGST', 'value': sgstVal});
+      } else {
+        items.add({'title': 'SGST', 'value': sgstVal});
+        items.add({'title': 'CGST', 'value': cgstVal});
+      }
     } else {
-      // Intra-state: show SGST (TAXAMT) and CGST (ATAXAMT)
-      items.add({'title': 'SGST', 'value': taxAmt});
-      items.add({'title': 'CGST', 'value': aTaxAmt});
+      // Fallback to older TAXAMT/ATAXAMT behaviour
+      final taxAmt = _toDouble(d['TAXAMT'] ?? d['TaxAmt'] ?? d['taxAmt']);
+      final aTaxAmt = _toDouble(d['ATAXAMT'] ?? d['OTAXAMT'] ?? d['ATaxAmt'] ?? d['aTaxAmt']);
+
+      if (aTaxAmt == 0.0) {
+        // Inter-state: show IGST (use TAXAMT)
+        items.add({'title': 'IGST', 'value': taxAmt});
+      } else {
+        // Intra-state: show SGST (TAXAMT) and CGST (ATAXAMT)
+        items.add({'title': 'SGST', 'value': taxAmt});
+        items.add({'title': 'CGST', 'value': aTaxAmt});
+      }
     }
 
-    // Add other tax items - show all including 0 values
-    items.add({'title': 'Cess', 'value': d['EDUCESS'] ?? 0});
-    items.add({'title': 'Special Cess', 'value': d['HEDUCESS'] ?? 0});
+    // Add other tax items - support both snake_case and original names
+    items.add({'title': 'Cess', 'value': d['EDUCESS'] ?? d['cess'] ?? 0});
+    items.add({'title': 'Special Cess', 'value': d['HEDUCESS'] ?? d['special_cess'] ?? 0});
 
     // Add TCS, Add/Less, Round Off - show all
-    items.add({'title': 'TCS', 'value': d['Tcs'] ?? 0});
-    items.add({'title': 'Add/Less', 'value': d['AddLess'] ?? 0});
-    items.add({'title': 'Round Off', 'value': d['RoundAmt'] ?? 0});
+    items.add({'title': 'TCS', 'value': d['Tcs'] ?? d['tcs'] ?? 0});
+    items.add({'title': 'Add/Less', 'value': d['AddLess'] ?? d['add_less'] ?? 0});
+    items.add({'title': 'Round Off', 'value': d['RoundAmt'] ?? d['round_off'] ?? 0});
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -416,7 +280,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             const SizedBox(height: 12),
 
             // Total Amount Row (matching total section from Android)
-            _buildTotalRow('Total Value', d['BillAmt']),
+            _buildTotalRow('Total Value', d['BillAmt'] ?? d['bill_amt'] ?? d['BillAmt']),
           ],
         ),
       ),
@@ -425,6 +289,14 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
 
   // Dispatch Details Section Card
   Widget _buildDispatchDetailsCard(Map<String, dynamic> d) {
+    // Prefer snake_case fields from updated API, fallback to legacy keys
+    final deliveredBy = d['delivered_by'] ?? d['DeliverdBy'] ?? d['DeliveredBy'];
+    final transporter = d['transporter_name'] ?? d['TransporterName'] ?? d['Transporter'];
+    final lrNo = d['lr_no'] ?? d['LRNO'] ?? d['LRNo'] ?? d['LR_NO'];
+    final lrDate = d['lr_date'] ?? d['LRDate'] ?? d['LR_Date'];
+    final noOfCase = d['no_of_case'] ?? d['NoOfCase'] ?? d['NoOfCases'] ?? d['NoOfCase'];
+    final eway = d['eway_bill'] ?? d['EwayBill'] ?? d['EWayBill'] ?? d['Eway'];
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
@@ -456,13 +328,13 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             const Divider(height: 1, thickness: 1, color: Color(0xFFEEEEEE)),
             const SizedBox(height: 12),
 
-            // Dispatch Detail Items (matching Android app structure)
-            _buildTextRow('Delivery By', _getValue(d['DeliverdBy'])),
-            _buildTextRow('Transporter', _getValue(d['TransporterName'])),
-            _buildTextRow('LR No', _getValue(d['LRNO'])),
-            _buildTextRow('LR Date', _getValue(d['LRDate'])),
-            _buildTextRow('No Of Cases', _getValue(d['NoOfCase'])),
-            _buildTextRow('E-Way Bill No', _getValue(d['EwayBill'])),
+            // Dispatch Detail Items
+            _buildTextRow('Delivery By', _getValue(deliveredBy)),
+            _buildTextRow('Transporter', _getValue(transporter)),
+            _buildTextRow('LR No', _getValue(lrNo)),
+            _buildTextRow('LR Date', _getValue(lrDate)),
+            _buildTextRow('No Of Cases', _getValue(noOfCase)),
+            _buildTextRow('E-Way Bill No', _getValue(eway)),
           ],
         ),
       ),
@@ -610,6 +482,194 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
         ],
       ),
     );
+  }
+
+  // Header Section - Account Information Card
+  Widget _buildHeaderCard(Map<String, dynamic> d) {
+    // Prefer API tran type keys, fallback to ledger entry's tranType
+    final rawTran = d['TranType'] ?? d['tran_type'] ?? d['tranType'] ?? d['type'];
+    final entryTran = widget.entry.tranType;
+    final rawTranCandidate = (rawTran ?? entryTran) ?? '';
+    final tranType = _getValue(rawTranCandidate).toUpperCase();
+    final isReceipt = tranType == 'RC' || tranType == 'RCV' || d.containsKey('adjustments');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Firm Name (acc_name)
+            Text(
+              _getValue(d['acc_name'] ?? d['NAME'] ?? d['Name'] ?? d['name']),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Transaction Type Badge (transection_type)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                isReceipt ? 'Receipt Voucher' : 'Sale',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF2E7D32),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Bill Number/Receipt Voucher and Date
+            _buildInfoRow(isReceipt ? 'Receipt Voucher' : 'Bill No', _getValue(d['number'] ?? d['Number'] ?? d['Number'])),
+            const Divider(height: 20, color: Color(0xFFEEEEEE)),
+            _buildInfoRow(isReceipt ? 'Paid' : 'Date', _getValue(d['date'] ?? d['Date'] ?? d['Date'])),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: Colors.black54,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Build adjustment widgets from various possible payload shapes
+  List<Widget> _buildAdjustmentWidgets(Map<String, dynamic> d) {
+    final List<Widget> rows = [];
+
+    // Case A: new API field 'adjustments' => list of objects with particular and adj_amt
+    if (d.containsKey('adjustments') && d['adjustments'] is List) {
+      final List list = d['adjustments'] as List;
+      if (list.isNotEmpty) {
+        for (final item in list) {
+          if (item is Map) {
+            final part = item['particular'] ?? item['Particular'] ?? '';
+            final adj = item['adj_amt'] ?? item['AdjAmt'] ?? item['adjAmt'] ?? item['Adjamt'] ?? 0;
+            rows.add(_buildAdjustmentRow(_getValue(part), adj));
+          }
+        }
+        return rows;
+      }
+    }
+
+    // Case B: existing 'AdjustmentDetail' (old API) => list of objects
+    if (d.containsKey('AdjustmentDetail') && d['AdjustmentDetail'] is List) {
+      final List list = d['AdjustmentDetail'] as List;
+      if (list.isNotEmpty) {
+        for (final item in list) {
+          if (item is Map) {
+            final part = item['Particular'] ?? item['particular'] ?? '';
+            final adj = item['AdjAmt'] ?? item['Adjamt'] ?? item['adjAmt'] ?? item['adjamt'] ?? 0;
+            rows.add(_buildAdjustmentRow(_getValue(part), adj));
+          }
+        }
+        return rows;
+      }
+    }
+
+    // Case C: older shape - Particular and AdjAmt may be lists or strings (legacy fallback)
+    final partic = d['Particular'] ?? d['particular'];
+    final adj = d['AdjAmt'] ?? d['adj_amt'] ?? d['Adjamt'] ?? d['adjAmt'];
+
+    // If both are lists, pair them
+    if (partic is List && adj is List) {
+      final max = partic.length > adj.length ? partic.length : adj.length;
+      for (var i = 0; i < max; i++) {
+        final p = i < partic.length ? partic[i] : '';
+        final a = i < adj.length ? adj[i] : 0;
+        rows.add(_buildAdjustmentRow(_getValue(p), a));
+      }
+      return rows;
+    }
+
+    // If AdjAmt is a list but Particular is single, pair accordingly
+    if (partic is String && adj is List) {
+      for (var a in adj) {
+        rows.add(_buildAdjustmentRow(_getValue(partic), a));
+      }
+      return rows;
+    }
+
+    // If Particular is a list but AdjAmt is single
+    if (partic is List && (adj is String || adj is num)) {
+      for (var p in partic) {
+        rows.add(_buildAdjustmentRow(_getValue(p), adj));
+      }
+      return rows;
+    }
+
+    // If both are comma/newline separated strings, split them
+    if (partic is String && adj is String) {
+      final parts = partic.split(RegExp(r"[\n,;]+")).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      final amts = adj.split(RegExp(r"[\n,;]+")).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      final max = parts.length > amts.length ? parts.length : amts.length;
+      for (var i = 0; i < max; i++) {
+        final p = i < parts.length ? parts[i] : '';
+        final aStr = i < amts.length ? amts[i] : '0';
+        final a = double.tryParse(aStr.replaceAll(',', '')) ?? 0.0;
+        rows.add(_buildAdjustmentRow(_getValue(p), a));
+      }
+      return rows;
+    }
+
+    // Fallback: single pair
+    rows.add(_buildAdjustmentRow(_getValue(partic), adj));
+    return rows;
+  }
+
+  // Helper: produce a readable transaction label from raw code
+  String _friendlyTranLabelFromRaw(dynamic raw, {required bool isReceipt}) {
+    if (isReceipt) return 'Receipt Voucher';
+    if (raw == null) return 'Sale';
+    final s = raw.toString().trim();
+    if (s.isEmpty || s == '-' || s.toLowerCase() == 'null') return 'Sale';
+    final up = s.toUpperCase();
+    if (up.contains('SALE') || up.contains('OUT') || up == 'S') return 'Sale';
+    if (up.contains('PUR') || up.contains('IN')) return 'Purchase';
+    if (up.startsWith('RC')) return 'Receipt Voucher';
+    // Otherwise return raw cleaned (capitalize first letter)
+    return s[0].toUpperCase() + (s.length > 1 ? s.substring(1) : '');
   }
 
   String _getValue(dynamic value) {

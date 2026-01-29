@@ -525,7 +525,7 @@ class _StatementPageState extends State<StatementPage> {
                           Padding(
                             padding: const EdgeInsets.only(top: 3),
                             child: Text(
-                              'Entry No: ${entry.entryNo}',
+                              'No: ${entry.entryNo}',
                               style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w500, color: Colors.black87),
                             ),
                           ),
@@ -647,12 +647,6 @@ class _StatementPageState extends State<StatementPage> {
                       ),
                   ],
 
-                  // Pincode (if available)
-                  if ((_selectedAccount!.pincode ?? '').trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Text('Pincode: ${_selectedAccount!.pincode!}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                    ),
                 ],
               ),
             ),
