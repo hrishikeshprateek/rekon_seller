@@ -562,7 +562,7 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
         elevation: 0,
         centerTitle: false,
         title: const Text(
-          "Outstanding Bill wise",
+          "OUTSTANDING BILL WISE",
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
