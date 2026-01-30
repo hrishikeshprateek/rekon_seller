@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart'; // Ensure share_plus is in pubspec.
 import '../models/account_model.dart';
 import '../auth_service.dart';
 import 'location_picker_sheet.dart';
+import 'account_filter_page.dart';
 
 class SelectAccountPage extends StatefulWidget {
   final String title;
@@ -420,6 +421,20 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
             icon: const Icon(Icons.refresh, color: Colors.black87),
             onPressed: () => _loadAccounts(reset: true),
           ),
+          IconButton(
+            icon: const Icon(Icons.filter_list, color: Colors.black87),
+            onPressed: () async {
+              // open filter page and wait for result
+              final result = await Navigator.of(context).push<Map<String, dynamic>>(MaterialPageRoute(builder: (_) => const AccountFilterPage()));
+              if (result != null) {
+                // apply filters by setting search or triggering reload as needed
+                debugPrint('Filters applied: $result');
+                // TODO: map selected filters to request payload fields (e.g., lArea, lStation, lRoute)
+                // For now we simply reload accounts
+                _loadAccounts(reset: true);
+              }
+            },
+          ),
         ],
       ),
       body: Column(
@@ -794,3 +809,4 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     }
   }
 }
+
