@@ -47,7 +47,7 @@ class SelectAccountPageForStatement extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SelectAccountPage(
-      title: 'Select Party for Statement',
+      title: 'Select Account',
       showBalance: true,
       onAccountSelected: (account) {
         // Save account to service
