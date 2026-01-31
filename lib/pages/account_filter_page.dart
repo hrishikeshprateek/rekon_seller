@@ -5,7 +5,9 @@ import 'dart:convert';
 import '../auth_service.dart';
 
 class AccountFilterPage extends StatefulWidget {
-  const AccountFilterPage({Key? key}) : super(key: key);
+  final List<Map<String, dynamic>>? initialSelectedFilters;
+
+  const AccountFilterPage({Key? key, this.initialSelectedFilters}) : super(key: key);
 
   @override
   State<AccountFilterPage> createState() => _AccountFilterPageState();
@@ -83,6 +85,22 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
           }
         }
 
+        // If we have initial selected filters passed from caller, apply them so selections persist
+        if (widget.initialSelectedFilters != null) {
+          try {
+            for (final f in widget.initialSelectedFilters!) {
+              final int catId = (f['id'] is int) ? f['id'] as int : int.tryParse(f['id']?.toString() ?? '') ?? 0;
+              final items = (f['items'] as List<dynamic>?)?.map((e) => int.tryParse(e.toString()) ?? 0).where((e) => e != 0).toSet() ?? <int>{};
+              if (_selected.containsKey(catId)) {
+                _selected[catId] = items;
+              }
+            }
+          } catch (e) {
+            // ignore malformed initial filters
+            debugPrint('Failed to apply initialSelectedFilters: $e');
+          }
+        }
+
         if (_categories.isEmpty) {
           _error = 'No filters available';
         }
@@ -97,22 +115,20 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
   }
 
   void _apply() {
-    // Return selected map
-    final result = <String, List<Map<String, dynamic>>>{};
+    // Return selected filters as a list of {id: categoryId, items: [itemIds]}
+    final List<Map<String, dynamic>> result = [];
 
     for (final cat in _categories) {
       final selectedIds = _selected[cat.id] ?? <int>{};
       if (selectedIds.isNotEmpty) {
-        final selectedItems = cat.items
-            .where((item) => selectedIds.contains(item.id))
-            .map((item) => {'id': item.id, 'title': item.title})
-            .toList();
-
-        if (selectedItems.isNotEmpty) {
-          result[cat.title] = selectedItems;
-        }
+        result.add({
+          'id': cat.id,
+          'items': selectedIds.toList(),
+        });
       }
     }
+
+    // If nothing selected, return an empty list so the caller can treat it as "no filters"
     Navigator.of(context).pop(result);
   }
 
@@ -144,9 +160,6 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
       _searchController.clear();
     });
   }
-
-  // ... (Keep _buildVerticalTabs, _buildActiveList, and build() exactly as they were in the previous code)
-  // Just ensure _buildActiveList calls _toggleItem correctly.
 
   Widget _buildVerticalTabs() {
     return Container(
@@ -320,7 +333,8 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _reset,
+                    // Immediately clear and return empty filters list to caller
+                    onPressed: () => Navigator.of(context).pop(<Map<String, dynamic>>[]),
                     style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                     child: const Text('Clear All'),
                   ),

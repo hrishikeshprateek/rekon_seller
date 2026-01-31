@@ -13,7 +13,6 @@ import '../models/account_model.dart';
 import '../auth_service.dart';
 import 'location_picker_sheet.dart';
 import 'account_filter_page.dart';
-
 class SelectAccountPage extends StatefulWidget {
   final String title;
   final String? accountType;
@@ -65,6 +64,9 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   late ScrollController _scrollController;
   String _searchQuery = '';
   Timer? _searchDebounce;
+
+  // Applied filters from AccountFilterPage; sent as `filters` in payload
+  List<Map<String, dynamic>> _appliedFilters = [];
 
   @override
   void initState() {
@@ -149,7 +151,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         'cu_id': auth.currentUser!.userId,
         'latitude': position?.latitude.toString() ?? '',
         'longitude': position?.longitude.toString() ?? '',
+        // include filters (empty list if none)
+        'filters': _appliedFilters,
       };
+
+      debugPrint('GetAccount payload: ${jsonEncode(payload)}');
 
       final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(seconds: 30)));
       final response = await dio.post(
@@ -424,105 +430,118 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
           IconButton(
             icon: const Icon(Icons.filter_list, color: Colors.black87),
             onPressed: () async {
-              // open filter page and wait for result
-              final result = await Navigator.of(context).push<Map<String, dynamic>>(MaterialPageRoute(builder: (_) => const AccountFilterPage()));
+              // open filter page and wait for List<Map<String,dynamic>> result
+              final result = await Navigator.of(context).push<List<Map<String, dynamic>>>(
+                MaterialPageRoute(builder: (_) => AccountFilterPage(initialSelectedFilters: _appliedFilters)),
+              );
               if (result != null) {
-                // apply filters by setting search or triggering reload as needed
-                debugPrint('Filters applied: $result');
-                // TODO: map selected filters to request payload fields (e.g., lArea, lStation, lRoute)
-                // For now we simply reload accounts
-                _loadAccounts(reset: true);
+                // store applied filters and reload accounts
+                setState(() {
+                  _appliedFilters = result;
+                });
+                debugPrint('Filters applied: ${jsonEncode(_appliedFilters)}');
+                await _loadAccounts(reset: true);
+              } else {
+                // If user returned without selection (null) do nothing
+                debugPrint('Filter page dismissed');
               }
             },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() {});
-                    _performSearch(value);
-                  },
-                  decoration: InputDecoration(
-                    hintText: 'Search Account / ID...',
-                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.grey),
-                      onPressed: () {
-                        setState(() { _searchController.clear(); });
-                        _performSearch('');
-                      },
-                    )
-                        : null,
-                    filled: true,
-                    fillColor: const Color(0xFFF1F3F4),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                  ),
-                ),
-                if (widget.accountType == null) ...[
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        _buildFilterChip('All', null),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Parties', 'Party'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Banks', 'Bank'),
-                        const SizedBox(width: 8),
-                        _buildFilterChip('Cash', 'Cash'),
-                      ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: (v) => _performSearch(v),
+                      decoration: InputDecoration(
+                        hintText: 'Search Account / ID...',
+                        prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                        suffixIcon: _searchController.text.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear, color: Colors.grey),
+                                onPressed: () {
+                                  setState(() {
+                                    _searchController.clear();
+                                  });
+                                  _performSearch('');
+                                },
+                              )
+                            : null,
+                        filled: true,
+                        fillColor: const Color(0xFFF1F3F4),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
                     ),
                   ),
                 ],
-              ],
-            ),
-          ),
-          Expanded(
-            child: _isLoading
-                ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
-                : _filteredAccounts.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
-                  const SizedBox(height: 16),
-                  const Text('No accounts found', style: TextStyle(color: Colors.grey)),
-                ],
-              ),
-            )
-                : RefreshIndicator(
-              onRefresh: () async => await _loadAccounts(reset: true),
-              child: ListView.separated(
-                controller: _scrollController,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemCount: _filteredAccounts.length + (_isLoadingMore ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (index >= _filteredAccounts.length) {
-                    return Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Center(child: _isLoadingMore ? const CircularProgressIndicator(strokeWidth: 2) : const SizedBox.shrink()),
-                    );
-                  }
-                  return _buildProfessionalCard(context, _filteredAccounts[index]);
-                },
               ),
             ),
-          ),
-        ],
+
+            if (widget.accountType == null) ...[
+              const SizedBox(height: 4),
+              SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                  children: [
+                    _buildFilterChip('All', null),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Parties', 'Party'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Banks', 'Bank'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Cash', 'Cash'),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 8),
+
+            Expanded(
+              child: _isLoading
+                  ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
+                  : _filteredAccounts.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
+                              const SizedBox(height: 16),
+                              const Text('No accounts found', style: TextStyle(color: Colors.grey)),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: () async => await _loadAccounts(reset: true),
+                          child: ListView.separated(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemCount: _filteredAccounts.length + (_isLoadingMore ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (index >= _filteredAccounts.length) {
+                                return Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Center(child: _isLoadingMore ? const CircularProgressIndicator(strokeWidth: 2) : const SizedBox.shrink()),
+                                );
+                              }
+                              return _buildProfessionalCard(context, _filteredAccounts[index]);
+                            },
+                          ),
+                        ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -809,4 +828,3 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     }
   }
 }
-
