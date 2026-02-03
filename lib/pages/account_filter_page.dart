@@ -163,7 +163,7 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
 
   Widget _buildVerticalTabs() {
     return Container(
-      width: 110,
+      width: 130,
       color: Colors.grey.shade100,
       child: ListView.builder(
         itemCount: _categories.length,
@@ -176,7 +176,7 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
           return InkWell(
             onTap: () => _handleTabChange(index),
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
               decoration: BoxDecoration(
                 color: isActive ? Colors.white : Colors.transparent,
                 border: isActive
@@ -196,16 +196,16 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
                   ),
                   if (selectedCount > 0)
                     Padding(
-                      padding: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.only(top: 6),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(10),
+                          color: Theme.of(context).primaryColor.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          '$selectedCount selected',
-                          style: TextStyle(fontSize: 10, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold),
+                          '$selectedCount',
+                          style: TextStyle(fontSize: 11, color: Theme.of(context).primaryColor, fontWeight: FontWeight.w700),
                         ),
                       ),
                     )
@@ -238,12 +238,12 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search ${activeCat.title}...',
-                prefixIcon: const Icon(Icons.search, size: 20),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: Colors.grey.shade300)),
+                prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
                 isDense: true,
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Colors.grey.shade50,
               ),
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
@@ -282,14 +282,19 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
                 final item = filteredItems[index];
                 final isChecked = selectedSet.contains(item.id);
 
-                return CheckboxListTile(
-                  value: isChecked,
-                  dense: true,
-                  activeColor: Theme.of(context).primaryColor,
-                  controlAffinity: ListTileControlAffinity.leading,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 0),
-                  title: Text(item.title, style: const TextStyle(fontSize: 14)),
-                  onChanged: (_) => _toggleItem(activeCat.id, item.id),
+                return Column(
+                  children: [
+                    CheckboxListTile(
+                      value: isChecked,
+                      visualDensity: const VisualDensity(vertical: -3, horizontal: 0),
+                      activeColor: Theme.of(context).primaryColor,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                      title: Text(item.title, style: const TextStyle(fontSize: 14, color: Color(0xFF222222))),
+                      onChanged: (_) => _toggleItem(activeCat.id, item.id),
+                    ),
+                    if (index < filteredItems.length - 1) const Divider(height: 1, indent: 8, endIndent: 8)
+                  ],
                 );
               },
             ),
@@ -327,7 +332,7 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
             ),
           ),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, -2))]),
             child: Row(
               children: [
@@ -335,15 +340,15 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
                   child: OutlinedButton(
                     // Immediately clear and return empty filters list to caller
                     onPressed: () => Navigator.of(context).pop(<Map<String, dynamic>>[]),
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
                     child: const Text('Clear All'),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _apply,
-                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), backgroundColor: Theme.of(context).primaryColor, foregroundColor: Colors.white),
+                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), backgroundColor: Theme.of(context).primaryColor, foregroundColor: Colors.white),
                     child: Text('Apply (${_selected.values.fold(0, (sum, set) => sum + set.length)})'),
                   ),
                 ),

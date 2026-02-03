@@ -48,7 +48,6 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 
   // Controllers
   final _amountController = TextEditingController();
-  final _discAmtController = TextEditingController();
   final _docNoController = TextEditingController();
   final _narrationController = TextEditingController();
 
@@ -59,7 +58,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   final DateTime _entryDate = DateTime.now();
 
   // Account options come from the selected account passed into this screen
-  final List<String> _paymentModes = ['Cash', 'Cheque', 'UPI', 'NEFT/RTGS'];
+  final List<String> _paymentModes = ['Cash', 'Bank'];
 
   // Bill lines from selection
   List<_BillLine> _lines = [];
@@ -112,7 +111,6 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   @override
   void dispose() {
     _amountController.dispose();
-    _discAmtController.dispose();
     _docNoController.dispose();
     _narrationController.dispose();
     super.dispose();
@@ -185,7 +183,6 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       'mode': _selectedPaymentMode ?? 'Cash',
       'doc_number': _docNoController.text.trim(),
       'narration': _narrationController.text.trim(),
-      'disc_amount': double.tryParse(_discAmtController.text.replaceAll(',', '')) ?? 0.0,
       'adjustment_details': adjustmentDetails,
     };
 
@@ -420,69 +417,17 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                       const SizedBox(height: 20),
                     ],
 
-                    // --- 2.8 Share Receipt Button ---
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 20),
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          // TODO: Implement share receipt functionality
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Share functionality coming soon')),
-                          );
-                        },
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          backgroundColor: colorScheme.surface,
-                        ),
-                        icon: Icon(Icons.share_rounded, size: 20, color: colorScheme.primary),
-                        label: Text(
-                          'Share Receipt',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    // --- 3. Amount & Discount ---
-                    Row(
+                    // --- 3. Amount ---
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          flex: 3,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel(context, "Amount"),
-                              TextFormField(
-                                controller: _amountController,
-                                keyboardType: TextInputType.number,
-                                style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.primary, fontSize: 16),
-                                decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.currency_rupee_rounded),
-                                validator: (v) => (v?.isEmpty ?? true) ? 'Required' : null,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel(context, "Disc Amt"),
-                              TextFormField(
-                                controller: _discAmtController,
-                                keyboardType: TextInputType.number,
-                                decoration: _homeThemeDecoration(context, "₹ 0", Icons.percent_rounded),
-                              ),
-                            ],
-                          ),
+                        _buildLabel(context, "Amount"),
+                        TextFormField(
+                          controller: _amountController,
+                          keyboardType: TextInputType.number,
+                          style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.primary, fontSize: 16),
+                          decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.currency_rupee_rounded),
+                          validator: (v) => (v?.isEmpty ?? true) ? 'Required' : null,
                         ),
                       ],
                     ),
@@ -540,21 +485,23 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                     const SizedBox(height: 24),
 
                     // --- 6. Add Bills (Button styled like Home Cards) ---
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton.tonalIcon(
-                        onPressed: () {},
-                        style: FilledButton.styleFrom(
-                          backgroundColor: colorScheme.surfaceContainerLow, // Same as input bg
-                          foregroundColor: colorScheme.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          elevation: 0,
+                    // Hide the "Attach Bills / Invoices" button when bills were passed into this screen
+                    if (_lines.isEmpty)
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton.tonalIcon(
+                          onPressed: () {},
+                          style: FilledButton.styleFrom(
+                            backgroundColor: colorScheme.surfaceContainerLow, // Same as input bg
+                            foregroundColor: colorScheme.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.add_circle_outline_rounded),
+                          label: const Text("Attach Bills / Invoices", style: TextStyle(fontWeight: FontWeight.w600)),
                         ),
-                        icon: const Icon(Icons.add_circle_outline_rounded),
-                        label: const Text("Attach Bills / Invoices", style: TextStyle(fontWeight: FontWeight.w600)),
                       ),
-                    ),
                     const SizedBox(height: 24),
 
                     // --- 7. Narration ---
