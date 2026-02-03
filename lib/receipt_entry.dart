@@ -50,6 +50,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   final _amountController = TextEditingController();
   final _docNoController = TextEditingController();
   final _narrationController = TextEditingController();
+  final _discountController = TextEditingController(text: '0.00');
 
   // State
   String? _selectedAccount;
@@ -113,6 +114,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     _amountController.dispose();
     _docNoController.dispose();
     _narrationController.dispose();
+    _discountController.dispose();
     super.dispose();
   }
 
@@ -180,6 +182,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       'entry_date': DateFormat('dd/MMM/yyyy').format(_entryDate),
       'receipt_date': _docDate != null ? DateFormat('dd/MMM/yyyy').format(_docDate!) : DateFormat('dd/MMM/yyyy').format(_entryDate),
       'amount': double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0,
+      'discount': double.tryParse(_discountController.text.replaceAll(',', '')) ?? 0.0,
       'mode': _selectedPaymentMode ?? 'Cash',
       'doc_number': _docNoController.text.trim(),
       'narration': _narrationController.text.trim(),
@@ -428,6 +431,22 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                           style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.primary, fontSize: 16),
                           decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.currency_rupee_rounded),
                           validator: (v) => (v?.isEmpty ?? true) ? 'Required' : null,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // --- 3.5 Discount (added back per request) ---
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildLabel(context, "Discount"),
+                        TextFormField(
+                          controller: _discountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.percent),
+                          // Discount is optional; keep numeric formatting to 2 decimals when submitting
                         ),
                       ],
                     ),
