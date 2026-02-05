@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
+import 'pages/select_account_page.dart';
+import 'pages/attach_bills_page.dart';
+import 'models/account_model.dart' as models;
 import 'dart:convert';
 import 'package:dio/dio.dart';
 
@@ -54,6 +57,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 
   // State
   String? _selectedAccount;
+  String? _selectedAccountNo;
   String? _selectedPaymentMode;
   DateTime? _docDate;
   final DateTime _entryDate = DateTime.now();
@@ -71,6 +75,13 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     print('[ReceiptEntry] Received accountNo: ${widget.accountNo}');
     print('[ReceiptEntry] Received accountName: ${widget.accountName}');
     print('[ReceiptEntry] Received selectedBills count: ${widget.selectedBills?.length ?? 0}');
+
+    // Add listener to amount controller to trigger state updates
+    _amountController.addListener(() {
+      setState(() {
+        // Rebuild to update button enabled state
+      });
+    });
 
     // If bills were passed, initialize lines
     if (widget.selectedBills != null && widget.selectedBills!.isNotEmpty) {
@@ -100,9 +111,11 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 
     if (hasName) {
       _selectedAccount = widget.accountName;
+      _selectedAccountNo = widget.accountNo;
       print('[ReceiptEntry] Account set to: $_selectedAccount (from name)');
     } else if (hasNo) {
       _selectedAccount = widget.accountNo;
+      _selectedAccountNo = widget.accountNo;
       print('[ReceiptEntry] Account set to: $_selectedAccount (from number)');
     } else {
       print('[ReceiptEntry] WARNING: No account info received!');
@@ -143,6 +156,14 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 
   double get _linesTotal => _lines.fold<double>(0, (s, l) => s + (l.included ? l.payment : 0));
 
+  // Helper to check if Add Bills button should be enabled
+  bool get _canAddBills {
+    final hasAccount = _selectedAccount != null && _selectedAccount!.isNotEmpty;
+    final hasAmount = _amountController.text.trim().isNotEmpty &&
+                      (double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0) > 0;
+    return hasAccount && hasAmount;
+  }
+
   void _onLinePaymentChanged(int idx, String v) {
     final parsed = double.tryParse(v.replaceAll(',', '')) ?? 0.0;
     setState(() {
@@ -164,6 +185,15 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     if (_formKey.currentState == null) return;
     if (!_formKey.currentState!.validate()) return;
 
+    // Debug: Log account information
+    print('═══════════════════════════════════════════════════');
+    print('🔍 ACCOUNT DEBUG INFO');
+    print('═══════════════════════════════════════════════════');
+    print('_selectedAccountNo: $_selectedAccountNo');
+    print('widget.accountNo: ${widget.accountNo}');
+    print('Using account: ${_selectedAccountNo ?? widget.accountNo ?? "NONE"}');
+    print('═══════════════════════════════════════════════════\n');
+
     // Build payload expected by SubmitReceipt API
     final auth = Provider.of<AuthService>(context, listen: false);
     final dio = auth.getDioClient();
@@ -178,7 +208,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       'lLicNo': auth.currentUser?.licenseNumber ?? '',
       'lFirmCode': (auth.currentUser?.stores.isNotEmpty == true) ? auth.currentUser!.stores.first.firmCode : '',
       'lUserId': auth.currentUser?.userId ?? '',
-      'lAcNo': widget.accountNo ?? '',
+      'lAcNo': _selectedAccountNo ?? widget.accountNo ?? '',
       'entry_date': DateFormat('dd/MMM/yyyy').format(_entryDate),
       'receipt_date': _docDate != null ? DateFormat('dd/MMM/yyyy').format(_docDate!) : DateFormat('dd/MMM/yyyy').format(_entryDate),
       'amount': double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0,
@@ -289,6 +319,9 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    // Move local display vars here so they are not declared inside the widget children
+    final displayName = _selectedAccount ?? widget.accountName;
+    final displayNo = _selectedAccountNo ?? widget.accountNo;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -343,9 +376,10 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // --- 1.5 Party Summary ---
-                    if (widget.accountName != null && widget.accountName!.isNotEmpty ||
-                        widget.accountNo != null && widget.accountNo!.isNotEmpty)
+                    // --- 1.5 Party Summary / Select Account ---
+                    // Always show a select-account area: prefer local selection if present,
+                    // otherwise fall back to widget-provided account info.
+                    if ((displayName != null && displayName.isNotEmpty) || (displayNo != null && displayNo.isNotEmpty))
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
@@ -357,13 +391,50 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (widget.accountName != null && widget.accountName!.isNotEmpty)
-                              Text(widget.accountName!, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                            if (widget.accountNo != null && widget.accountNo!.isNotEmpty)
+                            if (displayName != null && displayName.isNotEmpty)
+                              Text(displayName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                            if (displayNo != null && displayNo.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
-                                child: Text('Account No: ${widget.accountNo}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                child: Text('Account No: ${displayNo}', style: const TextStyle(fontSize: 12, color: Colors.black54)),
                               ),
+                          ],
+                        ),
+                      )
+                    else
+                      // No account selected: give user a clear CTA to select one
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'No account selected',
+                                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                              ),
+                            ),
+                            FilledButton.icon(
+                              onPressed: () async {
+                                // Open SelectAccountPage and wait for selection
+                                final models.Account? result = await SelectAccountPage.show(context);
+                                if (result != null) {
+                                  setState(() {
+                                    _selectedAccount = result.name;
+                                    _selectedAccountNo = result.id;
+                                  });
+                                  // Debug
+                                  print('[ReceiptEntry] Selected account: ${result.name} (${result.id})');
+                                }
+                              },
+                              icon: const Icon(Icons.search),
+                              label: const Text('Select Account'),
+                            ),
                           ],
                         ),
                       ),
@@ -505,23 +576,94 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 
                     // --- 6. Add Bills (Button styled like Home Cards) ---
                     // Hide the "Attach Bills / Invoices" button when bills were passed into this screen
-                    if (_lines.isEmpty)
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton.tonalIcon(
-                          onPressed: () {},
-                          style: FilledButton.styleFrom(
-                            backgroundColor: colorScheme.surfaceContainerLow, // Same as input bg
-                            foregroundColor: colorScheme.primary,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            elevation: 0,
+                    if (_lines.isEmpty) ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: FilledButton.tonalIcon(
+                              onPressed: _canAddBills ? () async {
+                                print('[ReceiptEntry] Attach Bills tapped for account: $_selectedAccount');
+
+                                // Parse amount
+                                final amount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+
+                                // Navigate to AttachBillsPage
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => AttachBillsPage(
+                                      accountNo: _selectedAccountNo ?? '',
+                                      accountName: _selectedAccount ?? '',
+                                      amount: amount,
+                                    ),
+                                  ),
+                                );
+
+                                // Handle result if bills were selected
+                                if (result != null && result is List<Map<String, dynamic>>) {
+                                  print('[ReceiptEntry] Received bills from AttachBillsPage: $result');
+                                  setState(() {
+                                    // Convert the returned bills to _BillLine objects
+                                    _lines = result.map((b) {
+                                      final paymentAmt = (b['payment'] is num)
+                                          ? (b['payment'] as num).toDouble()
+                                          : double.tryParse(b['payment']?.toString() ?? '0') ?? 0.0;
+                                      final outstandingAmt = (b['outstanding'] is num)
+                                          ? (b['outstanding'] as num).toDouble()
+                                          : double.tryParse(b['outstanding']?.toString() ?? '0') ?? 0.0;
+
+                                      return _BillLine(
+                                        included: true,
+                                        entryNo: b['entryNo']?.toString() ?? '',
+                                        date: b['date']?.toString() ?? '',
+                                        outstanding: outstandingAmt,
+                                        payment: paymentAmt, // This contains the adjusted amount
+                                        keyEntryNo: b['keyEntryNo']?.toString() ?? '',
+                                        dueDate: b['dueDate']?.toString() ?? '',
+                                        trantype: b['trantype']?.toString() ?? '',
+                                      );
+                                    }).toList();
+
+                                    // Update amount controller with total of adjusted amounts
+                                    final total = _lines.fold<double>(0, (s, l) => s + (l.included ? l.payment : 0));
+                                    _amountController.text = total.toStringAsFixed(2);
+                                  });
+                                  print('[ReceiptEntry] Bills added: ${_lines.length}, Total: ${_amountController.text}');
+                                }
+                              } : null,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: _canAddBills
+                                    ? colorScheme.surfaceContainerLow
+                                    : colorScheme.surfaceContainerLow,
+                                foregroundColor: _canAddBills
+                                    ? colorScheme.primary
+                                    : colorScheme.onSurface.withValues(alpha: 0.38),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
+                              icon: const Icon(Icons.add_circle_outline_rounded),
+                              label: const Text("Attach Bills / Invoices", style: TextStyle(fontWeight: FontWeight.w600)),
+                            ),
                           ),
-                          icon: const Icon(Icons.add_circle_outline_rounded),
-                          label: const Text("Attach Bills / Invoices", style: TextStyle(fontWeight: FontWeight.w600)),
-                        ),
+                          if (!_canAddBills) ...[
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              child: Text(
+                                _selectedAccount == null || _selectedAccount!.isEmpty
+                                    ? 'Select an account first to attach bills.'
+                                    : 'Enter an amount to attach bills.',
+                                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
+                    ],
 
                     // --- 7. Narration ---
                     _buildLabel(context, "Narration"),
