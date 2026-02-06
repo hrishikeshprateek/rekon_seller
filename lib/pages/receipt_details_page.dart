@@ -11,27 +11,47 @@ class ReceiptDetailsPage extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    // --- Data Mapping ---
-    final String amount = receipt['amount']?.toString() ?? '10759';
-    final String partyName = receipt['party'] ?? receipt['accountName'] ?? 'ARIHANT SALES';
-    final String id = receipt['id'] ?? '#0092444';
+    // --- Data Mapping with safe type conversion ---
+    final String amount = receipt['amount']?.toString() ?? '0';
+    final String partyName = receipt['acName']?.toString() ?? receipt['party']?.toString() ?? receipt['accountName']?.toString() ?? 'Unknown Party';
+    final String id = receipt['id']?.toString() ?? '0';
 
     String formatDate(dynamic date) {
-      if (date == null) return '16/Aug/2025';
+      if (date == null) return 'N/A';
       if (date is DateTime) return DateFormat('dd/MMM/yyyy').format(date);
-      return date.toString();
+      try {
+        final parsed = DateTime.parse(date.toString());
+        return DateFormat('dd/MMM/yyyy').format(parsed);
+      } catch (_) {
+        return date.toString();
+      }
     }
 
-    final String createdDate = formatDate(receipt['entryDate'] ?? receipt['createdDate']);
-    final String paymentMode = receipt['mode'] ?? receipt['paymentMode'] ?? 'Bank';
-    final String docNo = receipt['docNo'] ?? 'dffgggggfd';
-    final String docDate = formatDate(receipt['docDate']);
-    final String? narration = receipt['narration'] ?? 'dghh test';
+    // Extract data from details or fallback to main receipt
+    final detailsData = receipt['details'];
 
-    final List<dynamic> adjustments = receipt['adjustments'] ?? [
-      {'no': '*S0400019', 'amount': '5,000'},
-      {'no': 'S0400005', 'amount': '5,759'},
-    ];
+    // Get adjustments from Item array - could be in details.Item or directly in receipt
+    List<dynamic> adjustments = [];
+
+    if (detailsData != null && detailsData is Map) {
+      // First check if Item is in the details
+      if (detailsData['Item'] is List) {
+        adjustments = detailsData['Item'] as List;
+      }
+    }
+
+    // Fallback: check if Item is directly in receipt
+    if (adjustments.isEmpty && receipt['Item'] is List) {
+      adjustments = receipt['Item'] as List;
+    }
+
+    debugPrint('[ReceiptDetails] Found ${adjustments.length} adjustment items');
+
+    final String createdDate = formatDate(receipt['date'] ?? receipt['entryDate'] ?? receipt['createdDate']);
+    final String paymentMode = (receipt['type'] ?? receipt['mode'] ?? receipt['paymentMode'] ?? 'N/A').toString();
+    final String docNo = (receipt['docno'] ?? receipt['docNo'] ?? '-').toString();
+    final String docDate = formatDate(receipt['docdt'] ?? receipt['docDate']);
+    final String? narration = receipt['narration']?.toString();
 
     return Scaffold(
       // UPDATED: Use a neutral surface tone instead of a strong color
@@ -193,8 +213,14 @@ class ReceiptDetailsPage extends StatelessWidget {
                                 String no = '';
                                 String amt = '';
                                 if (adj is Map) {
-                                  no = adj['no'] ?? '';
-                                  amt = adj['amount'] ?? '';
+                                  // API returns 'billnumber' and 'amount'
+                                  no = (adj['billnumber'] ?? adj['no'] ?? adj['KeyNo'] ?? '').toString();
+                                  final amountValue = adj['amount'];
+                                  if (amountValue is num) {
+                                    amt = amountValue.toStringAsFixed(2);
+                                  } else {
+                                    amt = amountValue?.toString() ?? '0.00';
+                                  }
                                 } else {
                                   no = adj.toString();
                                 }
@@ -206,7 +232,7 @@ class ReceiptDetailsPage extends StatelessWidget {
                                     children: [
                                       Row(
                                         children: [
-                                          Icon(Icons.receipt_long, size: 14, color: colorScheme.primary.withOpacity(0.7)),
+                                          Icon(Icons.receipt_long, size: 14, color: colorScheme.primary.withValues(alpha: 0.7)),
                                           const SizedBox(width: 8),
                                           Text(
                                             no,

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'pages/receipt_details_page.dart'; // Import the new page
+import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
+import 'dart:convert';
+import 'auth_service.dart';
 
 class ReceiptBookPage extends StatefulWidget {
   const ReceiptBookPage({super.key});
@@ -10,65 +13,278 @@ class ReceiptBookPage extends StatefulWidget {
 }
 
 class _ReceiptBookPageState extends State<ReceiptBookPage> {
-  // --- STATE VARIABLES ---
-  String _selectedAccount = 'All Accounts';
-  String _selectedMode = 'All Modes';
-  DateTimeRange? _selectedDateRange;
+  // API state
+  List<Map<String, dynamic>> _receipts = [];
+  bool _isLoading = false;
+  String? _error;
 
-  // Mock Data Source
-  final List<Map<String, dynamic>> _allReceipts = List.generate(20, (i) => {
-    'id': 'RCPT-${1000 + i}',
-    'party': 'Party Name ${i + 1}',
-    'amount': (500 + i * 150),
-    'mode': ['Cash', 'UPI', 'Cheque', 'NEFT'][i % 4],
-    'account': ['Cash Account', 'HDFC Bank', 'SBI Bank'][i % 3],
-    'docNo': 'INV-2025-${800 + i}',
-    'docDate': DateTime.now().subtract(Duration(days: i + 2)),
-    'entryDate': DateTime.now().subtract(Duration(days: i)),
-    'narration': 'Payment received for invoice #${800 + i}. Thank you.',
-  });
+  // Filter state
+  String _selectedMode = 'All';
+  final List<String> _modeOptions = ['All', 'Bank', 'CASH'];
 
-  // --- FILTERS & LOGIC ---
-  List<String> get _accountOptions => ['All Accounts', 'Cash Account', 'HDFC Bank', 'SBI Bank'];
-  List<String> get _modeOptions => ['All Modes', 'Cash', 'UPI', 'Cheque', 'NEFT'];
+  String _selectedDateFilter = 'All';
+  final List<String> _dateFilterOptions = [
+    'All',
+    'Today',
+    'Yesterday',
+    'This Week',
+    'This Month',
+    'This Year',
+    'Custom',
+  ];
+  DateTime? _fromDate;
+  DateTime? _toDate;
 
-  List<Map<String, dynamic>> get _filteredReceipts {
-    return _allReceipts.where((r) {
-      final matchAccount = _selectedAccount == 'All Accounts' || r['account'] == _selectedAccount;
-      final matchMode = _selectedMode == 'All Modes' || r['mode'] == _selectedMode;
-      return matchAccount && matchMode;
-    }).toList();
+  @override
+  void initState() {
+    super.initState();
+    _fetchReceipts();
   }
 
-  double get _totalAmount {
-    return _filteredReceipts.fold(0, (sum, item) => sum + (item['amount'] as int));
-  }
+  // --- API CALL ---
+  Future<void> _fetchReceipts() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
-  Future<void> _pickDateRange() async {
-    final DateTimeRange? picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(primary: Theme.of(context).colorScheme.primary),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() => _selectedDateRange = picked);
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      String firmCode = '';
+      try {
+        final stores = auth.currentUser?.stores ?? [];
+        debugPrint('[ReceiptBook] User has ${stores.length} stores');
+
+        if (stores.isNotEmpty) {
+          // Debug each store
+          for (var i = 0; i < stores.length; i++) {
+            debugPrint('[ReceiptBook] Store $i: firmCode=${stores[i].firmCode}, primary=${stores[i].primary}');
+          }
+
+          final primary = stores.firstWhere((s) => s.primary,
+              orElse: () => stores.first);
+          firmCode = primary.firmCode;
+          debugPrint('[ReceiptBook] Selected firmCode: $firmCode');
+        } else {
+          debugPrint('[ReceiptBook] No stores found for user');
+        }
+      } catch (e) {
+        debugPrint('[ReceiptBook] Error getting firmCode: $e');
+        firmCode = '';
+      }
+
+      debugPrint('[ReceiptBook] User ID: ${auth.currentUser?.userId}');
+      debugPrint('[ReceiptBook] Mobile Number: ${auth.currentUser?.mobileNumber}');
+      debugPrint('[ReceiptBook] License: ${auth.currentUser?.licenseNumber}');
+
+      final payload = {
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lUserId': auth.currentUser?.mobileNumber ?? '',
+        'lFirmCode': firmCode,
+        'lStatus': 0,
+        'AcCode': '',
+        'from_date': _fromDate != null ? DateFormat('yyyy-MM-dd').format(_fromDate!) : '',
+        'till_date': _toDate != null ? DateFormat('yyyy-MM-dd').format(_toDate!) : '',
+        'mode': _selectedMode,
+      };
+
+      debugPrint('[ReceiptBook] GetReceiptBook payload: ${jsonEncode(payload)}');
+
+      final response = await dio.post(
+        '/GetReceiptBook',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      String raw = response.data?.toString() ?? '';
+      String clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
+      Map<String, dynamic> data;
+      try {
+        final decoded = jsonDecode(clean);
+        data = decoded is Map<String, dynamic>
+            ? decoded
+            : {'Message': decoded.toString()};
+      } catch (_) {
+        data = {'Message': clean};
+      }
+
+      debugPrint('[ReceiptBook] Response: ${jsonEncode(data)}');
+
+      if (data['success'] == true) {
+        debugPrint('[ReceiptBook] Response has success=true');
+        debugPrint('[ReceiptBook] data keys: ${data['data']?.keys.toList()}');
+
+        final items = (data['data']?['Item'] as List<dynamic>? ?? [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+
+        debugPrint('[ReceiptBook] Parsed ${items.length} items from response');
+
+        // Debug: Print each receipt
+        for (var i = 0; i < items.length; i++) {
+          debugPrint('[ReceiptBook] Receipt $i: ID=${items[i]['id']}, Amount=${items[i]['amount']}, Name=${items[i]['acName']}');
+        }
+
+        setState(() {
+          _receipts = items;
+          _isLoading = false;
+        });
+
+        debugPrint('[ReceiptBook] Loaded ${_receipts.length} receipts into state');
+      } else {
+        setState(() {
+          _error = data['message'] ?? 'Failed to load receipts';
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[ReceiptBook] Error: $e');
+      debugPrint('[ReceiptBook] Stack trace: $stackTrace');
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
-  // --- NAVIGATION LOGIC ---
-  void _openDetails(BuildContext context, Map<String, dynamic> receipt) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ReceiptDetailsPage(receipt: receipt),
+  double get _totalAmount {
+    return _receipts.fold(0.0, (sum, item) {
+      final amount = item['amount'];
+      if (amount is num) return sum + amount.toDouble();
+      return sum + (double.tryParse(amount?.toString() ?? '0') ?? 0.0);
+    });
+  }
+
+  void _applyDateFilter(String? type) {
+    if (type == null) return;
+
+    if (type == 'All') {
+      setState(() {
+        _selectedDateFilter = 'All';
+        _fromDate = null;
+        _toDate = null;
+      });
+      _fetchReceipts();
+      return;
+    }
+
+    if (type == 'Custom') {
+      setState(() {
+        _selectedDateFilter = type;
+        if (_fromDate == null) _fromDate = DateTime.now().subtract(const Duration(days: 30));
+        if (_toDate == null) _toDate = DateTime.now();
+      });
+      return;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    DateTime start;
+    DateTime end;
+
+    switch (type) {
+      case 'Today':
+        start = today;
+        end = today;
+        break;
+      case 'Yesterday':
+        start = today.subtract(const Duration(days: 1));
+        end = today.subtract(const Duration(days: 1));
+        break;
+      case 'This Week':
+        start = today.subtract(const Duration(days: 6));
+        end = today;
+        break;
+      case 'This Month':
+        start = today.subtract(const Duration(days: 29));
+        end = today;
+        break;
+      case 'This Year':
+        start = today.subtract(const Duration(days: 364));
+        end = today;
+        break;
+      default:
+        start = today;
+        end = today;
+    }
+
+    setState(() {
+      _selectedDateFilter = type;
+      _fromDate = start;
+      _toDate = end;
+    });
+    _fetchReceipts();
+  }
+
+  Future<void> _pickFromDate() async {
+    final now = DateTime.now();
+    final initial = _fromDate ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _fromDate = picked;
+        _selectedDateFilter = 'Custom';
+      });
+      _fetchReceipts();
+    }
+  }
+
+  Future<void> _pickToDate() async {
+    final now = DateTime.now();
+    final initial = _toDate ?? now;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 5),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _toDate = picked;
+        _selectedDateFilter = 'Custom';
+      });
+      _fetchReceipts();
+    }
+  }
+
+  Widget _buildDateBox(DateTime? date, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.calendar_month, size: 14, color: Colors.grey),
+            const SizedBox(width: 4),
+            Text(
+              date != null ? DateFormat('dd/MM/yy').format(date) : 'Date',
+              style: const TextStyle(fontSize: 11, color: Colors.black87, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -77,7 +293,6 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final receipts = _filteredReceipts;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -96,62 +311,158 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
       ),
       body: Column(
         children: [
-          // --- FILTERS ---
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              border: Border(bottom: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.2))),
-            ),
-            child: Row(
+          // --- FILTER ---
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Column(
               children: [
-                Expanded(
-                  child: _buildFilterDropdown(
-                    context,
-                    value: _selectedAccount,
-                    items: _accountOptions,
-                    onChanged: (v) => setState(() => _selectedAccount = v!),
-                    icon: Icons.account_balance_wallet_outlined,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedMode,
+                            isExpanded: true,
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: colorScheme.onSurfaceVariant),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                            items: _modeOptions.map((e) => DropdownMenuItem(
+                              value: e,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.payment_outlined, size: 18, color: colorScheme.primary.withValues(alpha: 0.8)),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(e, overflow: TextOverflow.ellipsis)),
+                                ],
+                              ),
+                            )).toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _selectedMode = value);
+                              _fetchReceipts();
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerLow,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedDateFilter,
+                            isExpanded: true,
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: colorScheme.onSurfaceVariant),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                            items: _dateFilterOptions.map((e) => DropdownMenuItem(
+                              value: e,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.calendar_month, size: 18, color: colorScheme.primary.withValues(alpha: 0.8)),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(e, overflow: TextOverflow.ellipsis)),
+                                ],
+                              ),
+                            )).toList(),
+                            onChanged: _applyDateFilter,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildFilterDropdown(
-                    context,
-                    value: _selectedMode,
-                    items: _modeOptions,
-                    onChanged: (v) => setState(() => _selectedMode = v!),
-                    icon: Icons.payment_outlined,
+                if (_selectedDateFilter == 'Custom') ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(child: _buildDateBox(_fromDate, _pickFromDate)),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 4),
+                        child: Text('-', style: TextStyle(color: Colors.grey)),
+                      ),
+                      Expanded(child: _buildDateBox(_toDate, _pickToDate)),
+                    ],
                   ),
-                ),
+                ],
               ],
             ),
           ),
 
           // --- LIST ---
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              itemCount: receipts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final receipt = receipts[index];
-                return _buildReceiptCard(context, receipt);
-              },
-            ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.error_outline, size: 64, color: Colors.red[300]),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Error loading receipts',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 32),
+                              child: Text(
+                                _error!,
+                                style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: _fetchReceipts,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _receipts.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.receipt_long_outlined, size: 64, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No receipts found',
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                                ),
+                              ],
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _fetchReceipts,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
+                              itemCount: _receipts.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 12),
+                              itemBuilder: (context, index) {
+                                final receipt = _receipts[index];
+                                return _buildReceiptCard(context, receipt);
+                              },
+                            ),
+                          ),
           ),
-
-          const SizedBox(height: 80),
         ],
-      ),
-
-      floatingActionButton: FloatingActionButton(
-        onPressed: _pickDateRange,
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Icons.calendar_month_rounded),
       ),
 
       bottomSheet: Container(
@@ -161,7 +472,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
           color: colorScheme.surfaceContainerLow,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 12,
               offset: const Offset(0, -4),
             ),
@@ -184,7 +495,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "₹${NumberFormat('#,##0').format(_totalAmount)}",
+                  "₹${NumberFormat('#,##0.00').format(_totalAmount)}",
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
@@ -200,122 +511,130 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
     );
   }
 
-  // --- WIDGET HELPERS ---
-
-  Widget _buildFilterDropdown(BuildContext context, {
-    required String value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-    required IconData icon,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.4)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: colorScheme.onSurfaceVariant),
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
-          items: items.map((e) => DropdownMenuItem(
-            value: e,
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: colorScheme.primary.withOpacity(0.8)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(e, overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-          )).toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
   Widget _buildReceiptCard(BuildContext context, Map<String, dynamic> receipt) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    // Parse amount
+    final amount = receipt['amount'];
+    final amountValue = amount is num ? amount.toDouble() : (double.tryParse(amount?.toString() ?? '0') ?? 0.0);
+
+    // Parse date
+    DateTime? receiptDate;
+    try {
+      receiptDate = DateTime.parse(receipt['date'] ?? '');
+    } catch (_) {
+      receiptDate = null;
+    }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 3)),
         ],
       ),
-      child: InkWell(
-        onTap: () => _openDetails(context, receipt), // Navigation Logic
-        borderRadius: BorderRadius.circular(16),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        receipt['party'],
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: colorScheme.onSurface),
-                        maxLines: 1, overflow: TextOverflow.ellipsis,
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      receipt['acName'] ?? 'Unknown Party',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: colorScheme.onSurface),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          receipt['id'],
-                          style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-                        ),
+                      child: Text(
+                        'ID: ${receipt['id']}',
+                        style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Text(
-                  "₹${NumberFormat('#,##0').format(receipt['amount'])}",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                "₹${NumberFormat('#,##0.00').format(amountValue)}",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: colorScheme.primary),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+          Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: _buildCardDetailItem(
+                  context,
+                  "Mode",
+                  receipt['type'] ?? 'N/A',
+                  Icons.payment
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: _buildCardDetailItem(
+                  context,
+                  "Date",
+                  receiptDate != null ? DateFormat('dd MMM yyyy').format(receiptDate) : 'N/A',
+                  Icons.calendar_today
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: _buildCardDetailItem(
+                  context,
+                  "Doc No",
+                  receipt['docno']?.isNotEmpty == true ? receipt['docno'] : '-',
+                  Icons.description,
+                  alignEnd: true
+                ),
+              ),
+            ],
+          ),
+
+          // Firm info
+          if (receipt['FirmName'] != null && receipt['FirmName'].toString().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.business, size: 14, color: colorScheme.onSurfaceVariant),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    receipt['FirmName'],
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
-
-            const SizedBox(height: 16),
-            Divider(height: 1, color: colorScheme.outlineVariant.withOpacity(0.3)),
-            const SizedBox(height: 16),
-
-            Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _buildCardDetailItem(context, "Mode", receipt['mode'], Icons.payment),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: _buildCardDetailItem(context, "Doc Date", DateFormat('dd MMM').format(receipt['docDate']), Icons.calendar_today),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: _buildCardDetailItem(context, "Doc No", receipt['docNo'], Icons.description, alignEnd: true),
-                ),
-              ],
-            )
           ],
-        ),
+        ],
       ),
     );
   }
@@ -336,7 +655,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
           ],
         ),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface.withOpacity(0.9))),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface.withValues(alpha: 0.9))),
       ],
     );
   }
