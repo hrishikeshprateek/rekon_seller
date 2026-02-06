@@ -119,7 +119,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
 
       final payload = {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
-        'lUserId': auth.currentUser?.mobileNumber ?? '',
+        'lUserId': auth.currentUser?.userId ?? '',
         'lFirmCode': firmCode,
         'lStatus': 0,
         'AcCode': '',
@@ -608,7 +608,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
 
       final payload = {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
-        'lUserId': auth.currentUser?.mobileNumber ?? '',
+        'lUserId': auth.currentUser?.userId ?? '',
         'lid': receiptId,
         'lStatus': -1,
         'lFirm': '',

@@ -211,15 +211,34 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     // Add discount to amount
     final finalAmount = baseAmount + discountAmount;
 
+    // Get firmCode from user's stores
+    String firmCode = '';
+    try {
+      final stores = auth.currentUser?.stores ?? [];
+      if (stores.isNotEmpty) {
+        // Find primary store or use first store
+        final primary = stores.firstWhere(
+          (s) => s.primary,
+          orElse: () => stores.first,
+        );
+        firmCode = primary.firmCode;
+        print('[ReceiptEntry] Using firmCode from stores: $firmCode');
+      } else {
+        print('[ReceiptEntry] No stores found for user');
+      }
+    } catch (e) {
+      print('[ReceiptEntry] Error getting firmCode: $e');
+    }
+
     final payload = {
       'lLicNo': auth.currentUser?.licenseNumber ?? '',
-      'lFirmCode': (auth.currentUser?.stores.isNotEmpty == true) ? auth.currentUser!.stores.first.firmCode : '',
+      'lFirmCode': firmCode,
       'lUserId': auth.currentUser?.userId ?? '',
       'lAcNo': _selectedAccountNo ?? widget.accountNo ?? '',
       'entry_date': DateFormat('dd/MMM/yyyy').format(_entryDate),
       'receipt_date': _docDate != null ? DateFormat('dd/MMM/yyyy').format(_docDate!) : DateFormat('dd/MMM/yyyy').format(_entryDate),
       'amount': finalAmount,
-      'discount': discountAmount,
+      'disc_amount': discountAmount,
       'mode': _selectedPaymentMode ?? 'Cash',
       'doc_number': _docNoController.text.trim(),
       'narration': _narrationController.text.trim(),

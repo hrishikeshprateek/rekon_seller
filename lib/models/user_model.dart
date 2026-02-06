@@ -43,11 +43,13 @@ class UserModel {
   }
 
   /// Construct user from ValidateLicense `Profile` structure
-  factory UserModel.fromProfileJson(Map<String, dynamic> json, {String? licenseNumber}) {
+  factory UserModel.fromProfileJson(Map<String, dynamic> json, {String? licenseNumber, Map<String, dynamic>? storesData}) {
     // Parse stores array if present
+    // Store array is at root level of validateLicense response, not inside Profile
     List<Store> parsedStores = [];
     try {
-      final rawStores = json['Store'];
+      // First try to get Store from the storesData (root level of API response)
+      final rawStores = storesData?['Store'] ?? json['Store'];
       if (rawStores is List) {
         parsedStores = rawStores.map((e) {
           if (e is Map<String, dynamic>) return Store.fromJson(e);

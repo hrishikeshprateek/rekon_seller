@@ -341,7 +341,8 @@ class AuthService with ChangeNotifier {
             } catch (_) {}
           }
           if (profile != null) {
-            _currentUser = UserModel.fromProfileJson(profile, licenseNumber: licenseNumber);
+            // Pass the entire data response which contains Store array at root level
+            _currentUser = UserModel.fromProfileJson(profile, licenseNumber: licenseNumber, storesData: data);
           }
 
           // Persist
@@ -557,7 +558,7 @@ class AuthService with ChangeNotifier {
         _accessToken = data['AccessToken']?.toString();
         _jwtToken = _accessToken;
         final profile = data['Profile'] is Map<String, dynamic> ? data['Profile'] as Map<String, dynamic> : null;
-        if (profile != null) _currentUser = UserModel.fromProfileJson(profile);
+        if (profile != null) _currentUser = UserModel.fromProfileJson(profile, storesData: data);
         if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
         if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
         if (_currentUser != null) await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
