@@ -23,7 +23,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
   String _selectedMode = 'All';
   final List<String> _modeOptions = ['All', 'Bank', 'CASH'];
 
-  String _selectedDateFilter = 'All';
+  String _selectedDateFilter = 'Today';
   final List<String> _dateFilterOptions = [
     'All',
     'Today',
@@ -57,6 +57,11 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
   @override
   void initState() {
     super.initState();
+    // Set today's date as default
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    _fromDate = today;
+    _toDate = today;
     _fetchReceipts();
   }
 
@@ -98,14 +103,28 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
       debugPrint('[ReceiptBook] Mobile Number: ${auth.currentUser?.mobileNumber}');
       debugPrint('[ReceiptBook] License: ${auth.currentUser?.licenseNumber}');
 
+      // Format dates with time
+      String fromDateStr = '';
+      String tillDateStr = '';
+
+      if (_fromDate != null) {
+        final fromDateTime = DateTime(_fromDate!.year, _fromDate!.month, _fromDate!.day, 0, 0, 0);
+        fromDateStr = DateFormat('dd/MMM/yyyy HH:mm:ss').format(fromDateTime);
+      }
+
+      if (_toDate != null) {
+        final toDateTime = DateTime(_toDate!.year, _toDate!.month, _toDate!.day, 23, 59, 59);
+        tillDateStr = DateFormat('dd/MMM/yyyy HH:mm:ss').format(toDateTime);
+      }
+
       final payload = {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'lUserId': auth.currentUser?.mobileNumber ?? '',
         'lFirmCode': firmCode,
         'lStatus': 0,
         'AcCode': '',
-        'from_date': _fromDate != null ? DateFormat('yyyy-MM-dd').format(_fromDate!) : '',
-        'till_date': _toDate != null ? DateFormat('yyyy-MM-dd').format(_toDate!) : '',
+        'from_date': fromDateStr,
+        'till_date': tillDateStr,
         'mode': _selectedMode,
       };
 

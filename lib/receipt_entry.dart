@@ -204,6 +204,13 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       'bill_number': l.entryNo,
     }).toList();
 
+    // Parse amount and discount values
+    final baseAmount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+    final discountAmount = double.tryParse(_discountController.text.replaceAll(',', '')) ?? 0.0;
+
+    // Add discount to amount
+    final finalAmount = baseAmount + discountAmount;
+
     final payload = {
       'lLicNo': auth.currentUser?.licenseNumber ?? '',
       'lFirmCode': (auth.currentUser?.stores.isNotEmpty == true) ? auth.currentUser!.stores.first.firmCode : '',
@@ -211,8 +218,8 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       'lAcNo': _selectedAccountNo ?? widget.accountNo ?? '',
       'entry_date': DateFormat('dd/MMM/yyyy').format(_entryDate),
       'receipt_date': _docDate != null ? DateFormat('dd/MMM/yyyy').format(_docDate!) : DateFormat('dd/MMM/yyyy').format(_entryDate),
-      'amount': double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0,
-      'discount': double.tryParse(_discountController.text.replaceAll(',', '')) ?? 0.0,
+      'amount': finalAmount,
+      'discount': discountAmount,
       'mode': _selectedPaymentMode ?? 'Cash',
       'doc_number': _docNoController.text.trim(),
       'narration': _narrationController.text.trim(),
@@ -587,17 +594,19 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                               onPressed: _canAddBills ? () async {
                                 print('[ReceiptEntry] Attach Bills tapped for account: $_selectedAccount');
 
-                                // Parse amount
-                                final amount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+                                // Parse amount and discount, calculate final amount
+                                final baseAmount = double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+                                final discountAmount = double.tryParse(_discountController.text.replaceAll(',', '')) ?? 0.0;
+                                final finalAmount = baseAmount + discountAmount;
 
-                                // Navigate to AttachBillsPage
+                                // Navigate to AttachBillsPage with final amount (base + discount)
                                 final result = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => AttachBillsPage(
                                       accountNo: _selectedAccountNo ?? '',
                                       accountName: _selectedAccount ?? '',
-                                      amount: amount,
+                                      amount: finalAmount,
                                     ),
                                   ),
                                 );
