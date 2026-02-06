@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
 import 'auth_service.dart';
+import 'pages/receipt_details_page.dart';
 
 class ReceiptBookPage extends StatefulWidget {
   const ReceiptBookPage({super.key});
@@ -35,13 +36,30 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
   DateTime? _fromDate;
   DateTime? _toDate;
 
+  // Firm filter state
+  String _selectedFirmName = 'All';
+
+  List<String> get _firmNames {
+    final names = <String>{};
+    for (final r in _receipts) {
+      final name = (r['FirmName']?.toString().trim() ?? '');
+      if (name.isNotEmpty) names.add(name);
+    }
+    final list = names.toList()..sort();
+    return ['All', ...list];
+  }
+
+  List<Map<String, dynamic>> get _visibleReceipts {
+    if (_selectedFirmName == 'All') return _receipts;
+    return _receipts.where((r) => (r['FirmName']?.toString().trim() ?? '') == _selectedFirmName).toList();
+  }
+
   @override
   void initState() {
     super.initState();
     _fetchReceipts();
   }
 
-  // --- API CALL ---
   Future<void> _fetchReceipts() async {
     setState(() {
       _isLoading = true;
@@ -53,6 +71,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
       final dio = auth.getDioClient();
 
       String firmCode = '';
+
       try {
         final stores = auth.currentUser?.stores ?? [];
         debugPrint('[ReceiptBook] User has ${stores.length} stores');
@@ -402,6 +421,43 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
             ),
           ),
 
+          const SizedBox(height: 12),
+          // Firm filter
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _selectedFirmName,
+                  isExpanded: true,
+                  icon: Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: colorScheme.onSurfaceVariant),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
+                  items: _firmNames.map((e) => DropdownMenuItem(
+                    value: e,
+                    child: Row(
+                      children: [
+                        Icon(Icons.business_center, size: 18, color: colorScheme.primary.withValues(alpha: 0.8)),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(e, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
+                  )).toList(),
+                  onChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _selectedFirmName = value);
+                  },
+                ),
+              ),
+            ),
+          ),
+
           // --- LIST ---
           Expanded(
             child: _isLoading
@@ -418,16 +474,13 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
                             ),
                             const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 32),
-                              child: Text(
-                                _error!,
-                                style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
-                                textAlign: TextAlign.center,
-                              ),
+                            Text(
+                              _error!,
+                              style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
+                              textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 24),
-                            ElevatedButton.icon(
+                            FilledButton.icon(
                               onPressed: _fetchReceipts,
                               icon: const Icon(Icons.refresh),
                               label: const Text('Retry'),
@@ -435,31 +488,33 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
                           ],
                         ),
                       )
-                    : _receipts.isEmpty
+                    : _visibleReceipts.isEmpty
                         ? Center(
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.receipt_long_outlined, size: 64, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                                Icon(Icons.receipt_long_outlined, size: 64, color: colorScheme.outlineVariant),
                                 const SizedBox(height: 16),
                                 Text(
                                   'No receipts found',
                                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
                                 ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Try adjusting your filters',
+                                  style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant),
+                                ),
                               ],
                             ),
                           )
-                        : RefreshIndicator(
-                            onRefresh: _fetchReceipts,
-                            child: ListView.separated(
-                              padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 100),
-                              itemCount: _receipts.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
-                              itemBuilder: (context, index) {
-                                final receipt = _receipts[index];
-                                return _buildReceiptCard(context, receipt);
-                              },
-                            ),
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                            itemCount: _visibleReceipts.length,
+                            separatorBuilder: (context, index) => const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final receipt = _visibleReceipts[index];
+                              return _buildReceiptCard(context, receipt);
+                            },
                           ),
           ),
         ],
@@ -511,6 +566,120 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
     );
   }
 
+  Future<void> _openReceiptDetails(BuildContext context, Map<String, dynamic> receipt) async {
+    final receiptId = receipt['id'];
+
+    if (receiptId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid receipt ID'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      final payload = {
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lUserId': auth.currentUser?.mobileNumber ?? '',
+        'lid': receiptId,
+        'lStatus': -1,
+        'lFirm': '',
+      };
+
+      debugPrint('[ReceiptBook] GetReceiptDetail payload: ${jsonEncode(payload)}');
+
+      final response = await dio.post(
+        '/GetReceiptDetail',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      String raw = response.data?.toString() ?? '';
+      String clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
+      Map<String, dynamic> data;
+      try {
+        final decoded = jsonDecode(clean);
+        data = decoded is Map<String, dynamic>
+            ? decoded
+            : {'Message': decoded.toString()};
+      } catch (_) {
+        data = {'Message': clean};
+      }
+
+      debugPrint('[ReceiptBook] GetReceiptDetail Response: ${jsonEncode(data)}');
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (data['success'] == true && data['data'] != null) {
+        final responseData = data['data'] as Map<String, dynamic>;
+        Map<String, dynamic> detailedReceipt = {};
+
+        // Check if Receipt is an array and extract the first item
+        if (responseData['Receipt'] is List && (responseData['Receipt'] as List).isNotEmpty) {
+          detailedReceipt = Map<String, dynamic>.from((responseData['Receipt'] as List)[0] as Map);
+          debugPrint('[ReceiptBook] Extracted receipt from Receipt array');
+        } else {
+          // Fallback: use the entire data object
+          detailedReceipt = responseData;
+          debugPrint('[ReceiptBook] Using full data object as receipt');
+        }
+
+        debugPrint('[ReceiptBook] Detailed receipt keys: ${detailedReceipt.keys.toList()}');
+
+        if (mounted) {
+          // ignore: use_build_context_synchronously
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ReceiptDetailsPage(receipt: detailedReceipt),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(data['message'] ?? 'Failed to load receipt details'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('[ReceiptBook] GetReceiptDetail Error: $e');
+      debugPrint('[ReceiptBook] Stack trace: $stackTrace');
+
+      // Close loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildReceiptCard(BuildContext context, Map<String, dynamic> receipt) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -526,18 +695,21 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
       receiptDate = null;
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 3)),
-        ],
-      ),
-      child: Column(
-        children: [
+    return InkWell(
+      onTap: () => _openReceiptDetails(context, receipt),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 3)),
+          ],
+        ),
+        child: Column(
+          children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,7 +806,8 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
               ],
             ),
           ],
-        ],
+            ],
+        ),
       ),
     );
   }

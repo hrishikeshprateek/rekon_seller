@@ -13,13 +13,23 @@ class ReceiptDetailsPage extends StatelessWidget {
 
     // --- Data Mapping with safe type conversion ---
     final String amount = receipt['amount']?.toString() ?? '0';
-    final String partyName = receipt['acName']?.toString() ?? receipt['party']?.toString() ?? receipt['accountName']?.toString() ?? 'Unknown Party';
+    final String partyName = receipt['acName']?.toString() ?? receipt['party']?.toString() ?? 'Unknown Party';
     final String id = receipt['id']?.toString() ?? '0';
+    final String acno = receipt['acno']?.toString() ?? '';
+    final String paymentType = receipt['type']?.toString() ?? 'N/A';
+    final String customerName = receipt['customerName']?.toString() ?? '';
+    final String firmName = receipt['firmName']?.toString() ?? '';
+    final String firmAdd1 = receipt['firmAdd1']?.toString() ?? '';
+    final String firmAdd2 = receipt['firmAdd2']?.toString() ?? '';
+    final String narration = receipt['narration']?.toString() ?? '';
+    final String docno = receipt['docno']?.toString() ?? '';
+    final String docdt = receipt['docdt']?.toString() ?? '';
 
     String formatDate(dynamic date) {
-      if (date == null) return 'N/A';
+      if (date == null || date == '') return 'N/A';
       if (date is DateTime) return DateFormat('dd/MMM/yyyy').format(date);
       try {
+        if (date.toString().isEmpty) return 'N/A';
         final parsed = DateTime.parse(date.toString());
         return DateFormat('dd/MMM/yyyy').format(parsed);
       } catch (_) {
@@ -27,40 +37,23 @@ class ReceiptDetailsPage extends StatelessWidget {
       }
     }
 
-    // Extract data from details or fallback to main receipt
-    final detailsData = receipt['details'];
+    final createdDate = formatDate(receipt['date']);
+    final docDate = formatDate(docdt);
 
-    // Get adjustments from Item array - could be in details.Item or directly in receipt
+    // Get adjustments from Item array
     List<dynamic> adjustments = [];
-
-    if (detailsData != null && detailsData is Map) {
-      // First check if Item is in the details
-      if (detailsData['Item'] is List) {
-        adjustments = detailsData['Item'] as List;
-      }
-    }
-
-    // Fallback: check if Item is directly in receipt
-    if (adjustments.isEmpty && receipt['Item'] is List) {
+    if (receipt['Item'] is List) {
       adjustments = receipt['Item'] as List;
+      debugPrint('[ReceiptDetails] Found ${adjustments.length} adjustment items');
     }
-
-    debugPrint('[ReceiptDetails] Found ${adjustments.length} adjustment items');
-
-    final String createdDate = formatDate(receipt['date'] ?? receipt['entryDate'] ?? receipt['createdDate']);
-    final String paymentMode = (receipt['type'] ?? receipt['mode'] ?? receipt['paymentMode'] ?? 'N/A').toString();
-    final String docNo = (receipt['docno'] ?? receipt['docNo'] ?? '-').toString();
-    final String docDate = formatDate(receipt['docdt'] ?? receipt['docDate']);
-    final String? narration = receipt['narration']?.toString();
 
     return Scaffold(
-      // UPDATED: Use a neutral surface tone instead of a strong color
       backgroundColor: colorScheme.surfaceContainerHigh,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
-        title: Text("Transaction Details",
+        title: Text("Receipt Details",
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -78,9 +71,8 @@ class ReceiptDetailsPage extends StatelessWidget {
             Container(
               width: double.infinity,
               decoration: BoxDecoration(
-                color: colorScheme.surface, // Clean White Card
+                color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(24),
-                // Deeper shadow for "floating" effect on grey background
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.08),
@@ -92,51 +84,33 @@ class ReceiptDetailsPage extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // --- TOP SECTION: AMOUNT & PARTY ---
+                  // --- TOP SECTION: RECEIPT ID & AMOUNT ---
                   Container(
-                    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                    padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
                     decoration: BoxDecoration(
                       color: colorScheme.surface,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     ),
                     child: Column(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            shape: BoxShape.circle,
+                        Text(
+                          "Receipt ID: $id",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.primary,
+                            letterSpacing: 0.5,
+                            fontFamily: 'Monospace',
                           ),
-                          child: const Icon(Icons.check_rounded, color: Colors.green, size: 32),
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          "Payment Received",
+                          "₹${NumberFormat('#,##0.00').format(double.tryParse(amount.replaceAll(',', '')) ?? 0)}",
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "₹${NumberFormat('#,##0').format(double.tryParse(amount.replaceAll(',', '')) ?? 0)}",
-                          style: TextStyle(
-                            fontSize: 42,
+                            fontSize: 36,
                             fontWeight: FontWeight.w800,
                             color: colorScheme.onSurface,
-                            letterSpacing: -1.0,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "from $partyName",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w500,
+                            letterSpacing: -0.5,
                           ),
                         ),
                       ],
@@ -152,120 +126,152 @@ class ReceiptDetailsPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Row 1
+                        // Row 1: Created Date & Account Name
                         _buildDataRow(context,
                             label1: "Created Date",
                             value1: createdDate,
-                            label2: "Payment Mode",
-                            value2: paymentMode),
+                            label2: "Account Name",
+                            value2: partyName.trim()),
                         const SizedBox(height: 24),
 
-                        // Row 2
+                        // Row 2: Payment Mode & Amount
                         _buildDataRow(context,
-                            label1: "Document No",
-                            value1: docNo,
-                            label2: "Document Date",
-                            value2: docDate),
+                            label1: "Payment Mode",
+                            value1: paymentType,
+                            label2: "Amount",
+                            value2: "₹${NumberFormat('#,##0.00').format(double.tryParse(amount.replaceAll(',', '')) ?? 0)}"),
                         const SizedBox(height: 24),
 
-                        // --- ADJUSTMENT DETAILS TABLE ---
-                        Row(
+                        // Row 3: Discount Amount
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.list_alt_rounded, size: 16, color: colorScheme.primary),
-                            const SizedBox(width: 8),
                             Text(
-                              "ADJUSTMENT DETAILS",
+                              "Discount Amount",
                               style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: colorScheme.primary,
-                                letterSpacing: 1.0,
+                                fontSize: 12,
+                                color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "₹${NumberFormat('#,##0.00').format(double.tryParse(receipt['disc_amount']?.toString().replaceAll(',', '') ?? '0') ?? 0)}",
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onSurface,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 24),
 
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: colorScheme.surfaceContainerLow,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
-                          ),
-                          child: Column(
+                        // --- ADJUSTMENT DETAILS TABLE ---
+                        if (adjustments.isNotEmpty) ...[
+                          Row(
                             children: [
-                              // Table Header
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text("No.", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colorScheme.onSurfaceVariant)),
-                                  Text("Amount", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colorScheme.onSurfaceVariant)),
-                                ],
+                              Icon(Icons.list_alt_rounded, size: 16, color: colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                "ADJUSTMENT DETAILS",
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: colorScheme.primary,
+                                  letterSpacing: 1.0,
+                                ),
                               ),
-                              const SizedBox(height: 8),
-                              Divider(height: 1, color: colorScheme.outlineVariant.withOpacity(0.5)),
-                              const SizedBox(height: 12),
-
-                              // Rows
-                              ...adjustments.map<Widget>((adj) {
-                                String no = '';
-                                String amt = '';
-                                if (adj is Map) {
-                                  // API returns 'billnumber' and 'amount'
-                                  no = (adj['billnumber'] ?? adj['no'] ?? adj['KeyNo'] ?? '').toString();
-                                  final amountValue = adj['amount'];
-                                  if (amountValue is num) {
-                                    amt = amountValue.toStringAsFixed(2);
-                                  } else {
-                                    amt = amountValue?.toString() ?? '0.00';
-                                  }
-                                } else {
-                                  no = adj.toString();
-                                }
-
-                                return Padding(
-                                  padding: const EdgeInsets.only(bottom: 12.0),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Icon(Icons.receipt_long, size: 14, color: colorScheme.primary.withValues(alpha: 0.7)),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            no,
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: colorScheme.onSurface,
-                                              fontFamily: 'Monospace',
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      Text(
-                                        amt.isNotEmpty ? "₹$amt" : "",
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: colorScheme.onSurface,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
                             ],
                           ),
-                        ),
+                          const SizedBox(height: 12),
+
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: colorScheme.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
+                            ),
+                            child: Column(
+                              children: [
+                                // Table Header
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text("Key No.", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colorScheme.onSurfaceVariant)),
+                                    Text("Amount", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: colorScheme.onSurfaceVariant)),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Divider(height: 1, color: colorScheme.outlineVariant.withOpacity(0.5)),
+                                const SizedBox(height: 12),
+
+                                // Rows
+                                ...adjustments.map<Widget>((adj) {
+                                  String keyNo = '';
+                                  String amt = '';
+                                  if (adj is Map) {
+                                    keyNo = (adj['KeyNo'] ?? adj['keyNo'] ?? adj['billnumber'] ?? '').toString();
+                                    final amountValue = adj['amount'];
+                                    if (amountValue is num) {
+                                      amt = amountValue.toStringAsFixed(2);
+                                    } else {
+                                      amt = amountValue?.toString() ?? '0.00';
+                                    }
+                                  } else {
+                                    keyNo = adj.toString();
+                                  }
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12.0),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.receipt_long, size: 14, color: colorScheme.primary.withValues(alpha: 0.7)),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  keyNo.trim(),
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: colorScheme.onSurface,
+                                                    fontFamily: 'Monospace',
+                                                  ),
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Text(
+                                          amt.isNotEmpty ? "₹$amt" : "₹0.00",
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: colorScheme.onSurface,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
                       ],
                     ),
                   ),
 
                   // --- NARRATION SECTION ---
-                  if (narration != null)
+                  if (narration.isNotEmpty)
                     Container(
                       width: double.infinity,
                       margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
@@ -299,27 +305,6 @@ class ReceiptDetailsPage extends StatelessWidget {
                         ],
                       ),
                     ),
-
-                  // --- FOOTER: RECEIPT ID ---
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerHighest.withOpacity(0.3),
-                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
-                    ),
-                    child: Center(
-                      child: Text(
-                        "Receipt Id: $id",
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Monospace',
-                          color: colorScheme.onSurfaceVariant.withOpacity(0.8),
-                        ),
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -333,7 +318,7 @@ class ReceiptDetailsPage extends StatelessWidget {
               child: FilledButton.icon(
                 onPressed: () {},
                 style: FilledButton.styleFrom(
-                  backgroundColor: colorScheme.primary, // Solid primary for CTA
+                  backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 2,
@@ -398,7 +383,6 @@ class ReceiptDetailsPage extends StatelessWidget {
           width: 20, height: 40,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              // Match the background color of the Scaffold (surfaceContainerHigh)
               color: colorScheme.surfaceContainerHigh,
               borderRadius: const BorderRadius.horizontal(right: Radius.circular(20)),
             ),
@@ -420,7 +404,6 @@ class ReceiptDetailsPage extends StatelessWidget {
           width: 20, height: 40,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              // Match the background color of the Scaffold
               color: colorScheme.surfaceContainerHigh,
               borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
             ),
