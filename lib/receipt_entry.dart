@@ -233,7 +233,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     final payload = {
       'lLicNo': auth.currentUser?.licenseNumber ?? '',
       'lFirmCode': firmCode,
-      'lUserId': auth.currentUser?.userId ?? '',
+      'lUserId': auth.currentUser?.mobileNumber ?? '',
       'lAcNo': _selectedAccountNo ?? widget.accountNo ?? '',
       'entry_date': DateFormat('dd/MMM/yyyy').format(_entryDate),
       'receipt_date': _docDate != null ? DateFormat('dd/MMM/yyyy').format(_docDate!) : DateFormat('dd/MMM/yyyy').format(_entryDate),
