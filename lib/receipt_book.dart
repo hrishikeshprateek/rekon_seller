@@ -36,13 +36,13 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
   DateTime? _fromDate;
   DateTime? _toDate;
 
-  // Firm filter state
-  String _selectedFirmName = 'All';
+  // Account name filter state
+  String _selectedAccountName = 'All';
 
-  List<String> get _firmNames {
+  List<String> get _accountNames {
     final names = <String>{};
     for (final r in _receipts) {
-      final name = (r['FirmName']?.toString().trim() ?? '');
+      final name = (r['acName']?.toString().trim() ?? '');
       if (name.isNotEmpty) names.add(name);
     }
     final list = names.toList()..sort();
@@ -50,8 +50,9 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
   }
 
   List<Map<String, dynamic>> get _visibleReceipts {
-    if (_selectedFirmName == 'All') return _receipts;
-    return _receipts.where((r) => (r['FirmName']?.toString().trim() ?? '') == _selectedFirmName).toList();
+    // Filter by account name
+    if (_selectedAccountName == 'All') return _receipts;
+    return _receipts.where((r) => (r['acName']?.toString().trim() ?? '') == _selectedAccountName).toList();
   }
 
   @override
@@ -441,7 +442,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
           ),
 
           const SizedBox(height: 12),
-          // Firm filter
+          // Account name filter
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
@@ -454,15 +455,15 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: _selectedFirmName,
+                  value: _selectedAccountName,
                   isExpanded: true,
                   icon: Icon(Icons.keyboard_arrow_down_rounded, size: 22, color: colorScheme.onSurfaceVariant),
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colorScheme.onSurface),
-                  items: _firmNames.map((e) => DropdownMenuItem(
+                  items: _accountNames.map((e) => DropdownMenuItem(
                     value: e,
                     child: Row(
                       children: [
-                        Icon(Icons.business_center, size: 18, color: colorScheme.primary.withValues(alpha: 0.8)),
+                        Icon(Icons.person_outline, size: 18, color: colorScheme.primary.withValues(alpha: 0.8)),
                         const SizedBox(width: 8),
                         Expanded(child: Text(e, overflow: TextOverflow.ellipsis)),
                       ],
@@ -470,7 +471,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
                   )).toList(),
                   onChanged: (value) {
                     if (value == null) return;
-                    setState(() => _selectedFirmName = value);
+                    setState(() => _selectedAccountName = value);
                   },
                 ),
               ),

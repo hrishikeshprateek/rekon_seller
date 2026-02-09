@@ -542,7 +542,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                           controller: _discountController,
                           keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                          decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.percent),
+                          decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.currency_rupee_rounded),
                           // Discount is optional; keep numeric formatting to 2 decimals when submitting
                         ),
                       ],
