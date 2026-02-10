@@ -167,6 +167,16 @@ class ReceiptDetailsPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 24),
 
+                        // Row 4: Doc No & Doc Date
+                        if (docno.isNotEmpty || docdt.isNotEmpty)
+                          _buildDataRow(context,
+                              label1: "Doc No.",
+                              value1: docno.isNotEmpty ? docno : "N/A",
+                              label2: "Doc Date",
+                              value2: docDate),
+                        if (docno.isNotEmpty || docdt.isNotEmpty)
+                          const SizedBox(height: 24),
+
                         // --- ADJUSTMENT DETAILS TABLE ---
                         if (adjustments.isNotEmpty) ...[
                           Row(

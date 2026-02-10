@@ -52,7 +52,8 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
       final entry = _entries[index];
       final dr = _toDouble(entry.drAmt);
       final cr = _toDouble(entry.crAmt);
-      final amount = dr > 0 ? dr : cr;
+      // Get the actual amount (can be positive or negative)
+      final amount = dr != 0 ? dr : cr;
       return sum + amount;
     });
   }
@@ -123,19 +124,20 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
       final payload = {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'lAcNo': widget.accountNo,
-        'lFromDate': '',
-        'lTillDate': '',
-        'lFirmCode': firmCode,
         'lPageNo': _pageNo,
         'lSize': _pageSize,
         'lExecuteTotalRows': 1,
         'lSharePdf': 0,
+        'firm_code': firmCode,
+        'lSearchFieldValue': '',
+        'lFromDate': '',
+        'lTillDate': '',
       };
 
-      debugPrint('[AttachBills] GetAccountLedger payload: ${jsonEncode(payload)}');
+      debugPrint('[AttachBills] GetOutstandingDetails payload: ${jsonEncode(payload)}');
 
       final response = await dio.post(
-        '/GetAccountLedger',
+        '/GetOutstandingDetails',
         data: payload,
         options: Options(
           headers: {
@@ -159,7 +161,7 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
         data = {'Message': clean};
       }
 
-      final list = (data['Ledger'] as List<dynamic>? ?? []);
+      final list = (data['Items'] as List<dynamic>? ?? []);
       final fetched = list
           .map((e) => _safeMap(e))
           .map((m) => LedgerEntry.fromJson(m))
@@ -203,6 +205,22 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
   }
 
   void _toggleSelection(int index) {
+    final entry = _entries[index];
+    final dr = _toDouble(entry.drAmt);
+    final cr = _toDouble(entry.crAmt);
+    final amount = dr != 0 ? dr : cr;
+
+    // If pending amount is negative and this is a positive bill, don't allow selection
+    if (_pendingAmount < 0 && amount > 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot add positive bills when pending amount is negative'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       if (_selectedIndices.contains(index)) {
         // Deselecting
@@ -210,23 +228,28 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
         _partialAmounts.remove(index); // Clear partial amount if deselected
       } else {
         // Selecting
-        final entry = _entries[index];
-        final dr = _toDouble(entry.drAmt);
-        final cr = _toDouble(entry.crAmt);
-        final amount = dr > 0 ? dr : cr;
 
-        // Calculate what the pending amount would be if we add this bill fully
-        final currentPending = _pendingAmount;
-
-        if (amount > currentPending && currentPending > 0) {
-          // Partial adjustment needed
+        // For negative amounts, we subtract them (e.g., credit note)
+        // For positive amounts, we compare with pending
+        if (amount < 0) {
+          // Negative amount - always select fully (it reduces the total)
           _selectedIndices.add(index);
-          _partialAmounts[index] = currentPending; // Only adjust the pending amount
-          debugPrint('[AttachBills] Partial adjustment applied: Bill amount=$amount, Adjusted amount=$currentPending');
+          _partialAmounts.remove(index);
+          debugPrint('[AttachBills] Negative amount selected: $amount (will subtract from adjusted)');
         } else {
-          // Full adjustment
-          _selectedIndices.add(index);
-          _partialAmounts.remove(index); // Remove any existing partial adjustment
+          // Positive amount
+          final currentPending = _pendingAmount;
+
+          if (amount > currentPending && currentPending > 0) {
+            // Partial adjustment needed
+            _selectedIndices.add(index);
+            _partialAmounts[index] = currentPending; // Only adjust the pending amount
+            debugPrint('[AttachBills] Partial adjustment applied: Bill amount=$amount, Adjusted amount=$currentPending');
+          } else {
+            // Full adjustment
+            _selectedIndices.add(index);
+            _partialAmounts.remove(index); // Remove any existing partial adjustment
+          }
         }
       }
     });
@@ -239,22 +262,36 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
 
       double remaining = widget.amount;
 
-      // Process bills in sequence (by their original order/index)
+      // First pass: Process negative amounts (credit notes/returns) in sequence
       for (int index = 0; index < _entries.length; index++) {
-        if (remaining <= 0) break;
+        final entry = _entries[index];
+        final dr = _toDouble(entry.drAmt);
+        final cr = _toDouble(entry.crAmt);
+        final amount = dr != 0 ? dr : cr;
+
+        if (amount < 0) {
+          // Negative amount - always select it
+          _selectedIndices.add(index);
+          remaining -= amount; // Subtracting a negative = adding the absolute value
+        }
+      }
+
+      // Second pass: Process positive amounts in sequence
+      for (int index = 0; index < _entries.length; index++) {
+        if (remaining < 0) break;  // Changed from <= 0 to < 0 to allow adding bills when pending = 0
 
         final entry = _entries[index];
         final dr = _toDouble(entry.drAmt);
         final cr = _toDouble(entry.crAmt);
-        final amount = dr > 0 ? dr : cr;
+        final amount = dr != 0 ? dr : cr;
 
         if (amount > 0) {
           if (amount <= remaining) {
             // Full adjustment
             _selectedIndices.add(index);
             remaining -= amount;
-          } else {
-            // Partial adjustment for the last bill
+          } else if (remaining > 0) {
+            // Partial adjustment only if there's remaining balance
             _selectedIndices.add(index);
             _partialAmounts[index] = remaining;
             remaining = 0;
@@ -272,7 +309,8 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
       final entry = _entries[idx];
       final dr = _toDouble(entry.drAmt);
       final cr = _toDouble(entry.crAmt);
-      final fullAmount = dr > 0 ? dr : cr;
+      // Get the actual amount (can be positive or negative)
+      final fullAmount = dr != 0 ? dr : cr;
 
       // Use partial amount if it exists, otherwise use full amount
       final paymentAmount = _partialAmounts.containsKey(idx)
@@ -284,7 +322,7 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
         'date': entry.date != null ? DateFormat('yyyy-MM-dd').format(entry.date!) : '',
         'amount': fullAmount,
         'outstanding': fullAmount,
-        'payment': paymentAmount, // This is the actual adjusted amount
+        'payment': paymentAmount, // This is the actual adjusted amount (can be negative)
         'keyEntryNo': entry.keyEntryNo ?? '',
         'dueDate': entry.date != null ? DateFormat('yyyy-MM-dd').format(entry.date!) : '',
         'trantype': entry.tranType ?? '',
@@ -301,23 +339,20 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
     final dateStr = entry.date != null ? df.format(entry.date!) : '';
     final dr = _toDouble(entry.drAmt);
     final cr = _toDouble(entry.crAmt);
-    final totalAmount = dr > 0 ? dr : cr;
+    final totalAmount = dr != 0 ? dr : cr;
     final isSelected = _selectedIndices.contains(index);
     final isPartial = _partialAmounts.containsKey(index);
     final adjustedAmount = isPartial ? _partialAmounts[index]! : (isSelected ? totalAmount : 0.0);
     final overdueDays = _getOverdueDays(entry.date);
+
+    // Disable if pending < 0 and this is a positive bill and not already selected
+    final isDisabled = _pendingAmount < 0 && totalAmount > 0 && !isSelected;
 
     return Container(
       margin: const EdgeInsets.all(5),
       decoration: BoxDecoration(
         color: cs.primary,
         borderRadius: BorderRadius.circular(5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0),
-            blurRadius: 0,
-          ),
-        ],
       ),
       child: Container(
         margin: const EdgeInsets.all(1),
@@ -325,188 +360,117 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(5),
         ),
-        child: InkWell(
-          onTap: () => _toggleSelection(index),
-          borderRadius: BorderRadius.circular(5),
-          child: Padding(
-            padding: const EdgeInsets.all(0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Transaction Type
-                Padding(
-                  padding: const EdgeInsets.only(left: 5, top: 5, right: 5),
-                  child: Text(
-                    entry.tranType ?? 'TRANSACTION',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: Color(0xFF666666),
+        child: Opacity(
+          opacity: isDisabled ? 0.5 : 1.0,
+          child: InkWell(
+            onTap: isDisabled ? null : () => _toggleSelection(index),
+            borderRadius: BorderRadius.circular(5),
+            child: Padding(
+              padding: const EdgeInsets.all(0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(left: 5, top: 5, right: 5),
+                    child: Text(
+                      entry.tranType ?? 'TRANSACTION',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: Color(0xFF666666)),
                     ),
                   ),
-                ),
-
-                // Invoice number, date, and checkbox
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(left: 5, right: 5),
-                            child: Text(
-                              entry.entryNo ?? '',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w400,
-                                color: Color(0xFF666666),
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 5),
-                            child: Text(
-                              dateStr,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Checkbox on the right
-                    Padding(
-                      padding: const EdgeInsets.only(left: 10, top: 5, right: 10, bottom: 5),
-                      child: SizedBox(
-                        width: 25,
-                        height: 25,
-                        child: Checkbox(
-                          value: isSelected,
-                          onChanged: (_) => _toggleSelection(index),
-                          activeColor: cs.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Amount section
-                Row(
-                  children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 5, right: 5, bottom: 2),
-                        child: Text(
-                          '₹${totalAmount.toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.red,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          if (isSelected)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 10, right: 10),
-                              child: Text(
-                                '₹${adjustedAmount.toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: isPartial ? Colors.orange[700] : const Color(0xFF666666),
-                                ),
-                              ),
-                            ),
-                          Container(
-                            margin: const EdgeInsets.only(left: 70, top: 3, bottom: 5, right: 10),
-                            height: 0.5,
-                            color: Colors.grey,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Due date and overdue section
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(
                         child: Row(
                           children: [
-                            const Padding(
-                              padding: EdgeInsets.only(left: 5, right: 5),
-                              child: Text(
-                                'Due date:',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.black,
-                                ),
-                              ),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 5, right: 5),
+                              child: Text(entry.entryNo ?? '', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: Color(0xFF666666))),
                             ),
                             Padding(
                               padding: const EdgeInsets.only(right: 5),
-                              child: Text(
-                                dateStr,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.black,
-                                ),
-                              ),
+                              child: Text(dateStr, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: Colors.black87)),
                             ),
                           ],
                         ),
                       ),
-                      if (overdueDays > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10, top: 5, right: 10, bottom: 5),
+                        child: SizedBox(
+                          width: 25,
+                          height: 25,
+                          child: Checkbox(
+                            value: isSelected,
+                            onChanged: isDisabled ? null : (_) => _toggleSelection(index),
+                            activeColor: cs.primary,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 5, right: 5, bottom: 2),
+                          child: Text('₹${totalAmount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.red)),
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (isSelected)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 10, right: 10),
+                                child: Text('₹${adjustedAmount.toStringAsFixed(0)}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: isPartial ? Colors.orange[700] : const Color(0xFF666666))),
+                              ),
+                            Container(margin: const EdgeInsets.only(left: 70, top: 3, bottom: 5, right: 10), height: 0.5, color: Colors.grey),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
                         Expanded(
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               const Padding(
                                 padding: EdgeInsets.only(left: 5, right: 5),
-                                child: Text(
-                                  'Over Due:',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.black,
-                                  ),
-                                ),
+                                child: Text('Due date:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black)),
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(right: 5),
-                                child: Text(
-                                  '$overdueDays Days',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.black,
-                                  ),
-                                ),
+                                child: Text(dateStr, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black)),
                               ),
                             ],
                           ),
                         ),
-                    ],
+                        if (overdueDays > 0)
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.only(left: 5, right: 5),
+                                  child: Text('Over Due:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black)),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 5),
+                                  child: Text('$overdueDays Days', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black)),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

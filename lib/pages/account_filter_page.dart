@@ -318,7 +318,7 @@ class _AccountFilterPageState extends State<AccountFilterPage> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-          ? Center(child: Text(_error!, style: const TextStyle(color: Colors.red)))
+          ? Center(child: Text(_error!, style: const TextStyle(color: Colors.black87)))
           : Column(
         children: [
           Expanded(

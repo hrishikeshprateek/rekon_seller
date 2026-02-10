@@ -36,19 +36,21 @@ class LedgerEntry {
   });
 
   factory LedgerEntry.fromJson(Map<String, dynamic> json) {
+    // Support both GetAccountLedger (TitleCase) and GetOutstandingDetails (camelCase) responses
     return LedgerEntry(
-      tranType: json['TranType'] as String?,
+      tranType: json['TranType'] as String? ?? json['trantype'] as String?,
       licNo: json['LicNo'] as String?,
-      entryNo: json['EntryNo'] as String?,
+      entryNo: json['EntryNo'] as String? ?? json['entryNo'] as String?,
       keyEntrySrNo: json['KeyEntrySrNo'] as int?,
-      drAmt: _toDouble(json['DrAmt']),
+      // GetOutstandingDetails returns 'amount' instead of DrAmt/CrAmt
+      drAmt: _toDouble(json['DrAmt']) ?? _toDouble(json['amount']),
       rCount: json['RCount'] as int?,
       tranId: json['TranId'] as String?,
-      date: _parseDate(json['Date'] as String?),
+      date: _parseDate(json['Date'] as String?) ?? _parseDate(json['date'] as String?),
       runningAmt: _toDouble(json['RunningAmt']),
       vchNumber: json['VchNumber'] as String?,
       tranFirm: json['TranFirm'] as String?,
-      keyEntryNo: json['KeyEntryNo'] as String?,
+      keyEntryNo: json['KeyEntryNo'] as String? ?? json['keyentryno'] as String?,
       tranNumber: json['TranNumber'] as String?,
       isEntryRecord: json['IsEntryRecord'] as int?,
       crAmt: _toDouble(json['CrAmt']),

@@ -245,7 +245,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
         end = today;
         break;
       case 'This Month':
-        start = today.subtract(const Duration(days: 29));
+        start = DateTime(today.year, today.month, 1);
         end = today;
         break;
       case 'This Year':

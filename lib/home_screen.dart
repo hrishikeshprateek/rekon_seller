@@ -566,7 +566,7 @@ class _HomeScreenState extends State<HomeScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
+              backgroundColor: Colors.grey.shade700,
             ),
             child: const Text('Logout'),
           ),
@@ -716,9 +716,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         onTap: () => _handleLogout(context, authService),
                         child: Row(
                           children: [
-                            Icon(Icons.logout, size: 18, color: Colors.red.shade700),
+                            Icon(Icons.logout, size: 18, color: Colors.grey.shade700),
                             const SizedBox(width: 12),
-                            Text('Logout', style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w600)),
+                            Text('Logout', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
