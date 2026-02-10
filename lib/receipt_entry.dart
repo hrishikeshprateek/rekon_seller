@@ -99,9 +99,10 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
         );
       }).toList();
 
-      // DO NOT prefill amount - let user enter it manually
-      // The bills are just there for reference/adjustment, not to auto-fill the amount
-      print('[ReceiptEntry] Bills loaded: ${_lines.length} (user will enter amount manually)');
+      // When bills are passed, prefill amount with total bill payments.
+      final total = _lines.fold<double>(0, (s, l) => s + (l.included ? l.payment : 0));
+      _amountController.text = total.toStringAsFixed(2);
+      print('[ReceiptEntry] Bills loaded: ${_lines.length}, Total: $total');
     }
 
     // Prefill selected account name/number if provided
@@ -583,20 +584,22 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                     const SizedBox(height: 20),
 
                     // --- 3.5 Discount (added back per request) ---
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildLabel(context, "Discount"),
-                        TextFormField(
-                          controller: _discountController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                          decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.currency_rupee_rounded),
-                          // Discount is optional; keep numeric formatting to 2 decimals when submitting
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
+                    if (!(widget.selectedBills != null && widget.selectedBills!.isNotEmpty)) ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildLabel(context, "Discount"),
+                          TextFormField(
+                            controller: _discountController,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                            decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.currency_rupee_rounded),
+                            // Discount is optional; keep numeric formatting to 2 decimals when submitting
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                    ],
 
                     // --- 4. Payment Mode ---
                     _buildLabel(context, "Payment Mode"),
@@ -945,11 +948,13 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 class ReceiptSubmissionConfirmation extends StatelessWidget {
   final Map<String, dynamic> receiptData;
   final List<Map<String, dynamic>> adjustmentDetails;
+  final String selectedAccountName;
 
   const ReceiptSubmissionConfirmation({
     super.key,
     required this.receiptData,
     required this.adjustmentDetails,
+    required this.selectedAccountName,
   });
 
   @override
@@ -960,7 +965,7 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
     // Extract data from API response
     final receiptId = receiptData['no']?.toString() ?? 'N/A';
     final createdDate = receiptData['date']?.toString() ?? 'N/A';
-    final accountName = receiptData['acName']?.toString() ?? 'N/A';
+    final accountName = selectedAccountName;  // Use passed parameter instead of API response
     final accountCode = receiptData['acCode']?.toString() ?? 'N/A';
     final paymentMode = receiptData['mode']?.toString() ?? 'N/A';
     final amount = receiptData['amount'] ?? 0.0;
