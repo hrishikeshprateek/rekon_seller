@@ -1,15 +1,110 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
+import '../auth_service.dart';
 
-class ReceiptDetailsPage extends StatelessWidget {
+class ReceiptDetailsPage extends StatefulWidget {
   final Map<String, dynamic> receipt;
 
   const ReceiptDetailsPage({super.key, required this.receipt});
 
   @override
+  State<ReceiptDetailsPage> createState() => _ReceiptDetailsPageState();
+}
+
+class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
+  bool _isLoadingPdf = false;
+  final dio = Dio();
+
+  Future<void> _shareReceiptPdf() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final receiptId = widget.receipt['id']?.toString() ?? '0';
+
+    setState(() => _isLoadingPdf = true);
+
+    try {
+      // Parse receipt ID as integer
+      final lid = int.tryParse(receiptId) ?? 0;
+
+      final payload = {
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lUserId': auth.currentUser?.mobileNumber ?? '',
+        'lid': lid,
+        'lStatus': -1,
+        'lFirm': '',
+        'lSharePdf': 1,
+      };
+
+      debugPrint('[ReceiptDetails] GetReceiptDetail payload: $payload');
+
+      final response = await dio.post(
+        'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder/GetReceiptDetail',
+        data: payload,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      Uint8List? bytes;
+      if (response.data is Uint8List) {
+        bytes = response.data as Uint8List;
+      } else if (response.data is List<int>) {
+        bytes = Uint8List.fromList(List<int>.from(response.data));
+      }
+
+      if (bytes == null || bytes.isEmpty) {
+        throw 'No PDF data received from server.';
+      }
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/receipt_${receiptId}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+
+      final xfile = XFile(file.path, mimeType: 'application/pdf');
+
+      final accountName = widget.receipt['acName']?.toString() ?? 'Receipt';
+
+      if (mounted) {
+        await Share.shareXFiles(
+          [xfile],
+          text: 'Receipt - $accountName',
+        );
+      }
+    } catch (e) {
+      debugPrint('[ReceiptDetails] Share PDF error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not fetch/share PDF: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPdf = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final receipt = widget.receipt;
 
     // --- Data Mapping with safe type conversion ---
     final String amount = receipt['amount']?.toString() ?? '0';
@@ -75,7 +170,7 @@ class ReceiptDetailsPage extends StatelessWidget {
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
+                    color: Colors.black.withValues(alpha: 0.08),
                     blurRadius: 24,
                     offset: const Offset(0, 12),
                   ),
@@ -150,7 +245,7 @@ class ReceiptDetailsPage extends StatelessWidget {
                               "Discount Amount",
                               style: TextStyle(
                                 fontSize: 12,
-                                color: colorScheme.onSurfaceVariant.withOpacity(0.8),
+                                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -202,7 +297,7 @@ class ReceiptDetailsPage extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: colorScheme.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
+                              border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
                             ),
                             child: Column(
                               children: [
@@ -215,7 +310,7 @@ class ReceiptDetailsPage extends StatelessWidget {
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Divider(height: 1, color: colorScheme.outlineVariant.withOpacity(0.5)),
+                                Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
                                 const SizedBox(height: 12),
 
                                 // Rows
@@ -326,15 +421,28 @@ class ReceiptDetailsPage extends StatelessWidget {
               width: double.infinity,
               height: 56,
               child: FilledButton.icon(
-                onPressed: () {},
+                onPressed: _isLoadingPdf ? null : _shareReceiptPdf,
                 style: FilledButton.styleFrom(
                   backgroundColor: colorScheme.primary,
                   foregroundColor: colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 2,
+                  disabledBackgroundColor: colorScheme.primary.withOpacity(0.6),
                 ),
-                icon: const Icon(Icons.share_rounded),
-                label: const Text("Share Receipt", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                icon: _isLoadingPdf
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+                        ),
+                      )
+                    : const Icon(Icons.share_rounded),
+                label: Text(
+                  _isLoadingPdf ? "Generating PDF..." : "Share Receipt",
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ],
@@ -368,7 +476,7 @@ class ReceiptDetailsPage extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 12,
-            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8),
+            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
             fontWeight: FontWeight.w500,
           ),
         ),
