@@ -7,6 +7,11 @@ import 'pages/attach_bills_page.dart';
 import 'models/account_model.dart' as models;
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:cross_file/cross_file.dart';
 
 class CreateReceiptScreen extends StatefulWidget {
   final String? accountNo;
@@ -945,7 +950,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
 // RECEIPT SUBMISSION CONFIRMATION PAGE
 // ============================================================================
 
-class ReceiptSubmissionConfirmation extends StatelessWidget {
+class ReceiptSubmissionConfirmation extends StatefulWidget {
   final Map<String, dynamic> receiptData;
   final List<Map<String, dynamic>> adjustmentDetails;
   final String selectedAccountName;
@@ -958,18 +963,117 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
   });
 
   @override
+  State<ReceiptSubmissionConfirmation> createState() =>
+      _ReceiptSubmissionConfirmationState();
+}
+
+class _ReceiptSubmissionConfirmationState
+    extends State<ReceiptSubmissionConfirmation> {
+  bool _isLoadingPdf = false;
+
+  Future<void> _downloadAndSharePdf() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = auth.getDioClient();
+
+    // Get receipt ID from receiptData
+    final receiptId = widget.receiptData['no']?.toString() ?? '';
+    if (receiptId.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Receipt ID not found'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLoadingPdf = true);
+
+    try {
+      // Parse receipt ID as integer
+      final lid = int.tryParse(receiptId) ?? 0;
+
+      final payload = {
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lUserId': auth.currentUser?.mobileNumber ?? '',
+        'lid': lid,
+        'lStatus': -1,
+        'lFirm': '',
+        'lSharePdf': 1,
+      };
+
+      debugPrint('[ReceiptConfirmation] GetReceiptDetail payload: $payload');
+
+      final response = await dio.post(
+        'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder/GetReceiptDetail',
+        data: payload,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      Uint8List? bytes;
+      if (response.data is Uint8List) {
+        bytes = response.data as Uint8List;
+      } else if (response.data is List<int>) {
+        bytes = Uint8List.fromList(List<int>.from(response.data));
+      }
+
+      if (bytes == null || bytes.isEmpty) {
+        throw 'No PDF data received from server.';
+      }
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/receipt_${receiptId}_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      await file.writeAsBytes(bytes, flush: true);
+
+      final xfile = XFile(file.path, mimeType: 'application/pdf');
+
+      if (mounted) {
+        await Share.shareXFiles(
+          [xfile],
+          text: 'Receipt - ${widget.selectedAccountName}',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not fetch/share PDF: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPdf = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     // Extract data from API response
-    final receiptId = receiptData['no']?.toString() ?? 'N/A';
-    final createdDate = receiptData['date']?.toString() ?? 'N/A';
-    final accountName = selectedAccountName;  // Use passed parameter instead of API response
-    final accountCode = receiptData['acCode']?.toString() ?? 'N/A';
-    final paymentMode = receiptData['mode']?.toString() ?? 'N/A';
-    final amount = receiptData['amount'] ?? 0.0;
-    final discAmount = receiptData['disc_amount'] ?? 0.0;
+    final receiptId = widget.receiptData['no']?.toString() ?? 'N/A';
+    final createdDate = widget.receiptData['date']?.toString() ?? 'N/A';
+    final accountName = widget.selectedAccountName;
+    final accountCode = widget.receiptData['acCode']?.toString() ?? 'N/A';
+    final paymentMode = widget.receiptData['mode']?.toString() ?? 'N/A';
+    final amount = widget.receiptData['amount'] ?? 0.0;
+    final discAmount = widget.receiptData['disc_amount'] ?? 0.0;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -1034,6 +1138,42 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
 
             const SizedBox(height: 24),
 
+            // Account Name Section
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Account',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    accountName,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Details Section
             Card(
               elevation: 0,
@@ -1055,8 +1195,6 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
                     const SizedBox(height: 16),
                     _buildDetailRow(context, 'Created Date', createdDate),
                     const SizedBox(height: 12),
-                    _buildDetailRow(context, 'Account Name', accountName),
-                    const SizedBox(height: 12),
                     _buildDetailRow(context, 'Account Code', accountCode),
                     const SizedBox(height: 12),
                     _buildDetailRow(context, 'Payment Mode', paymentMode),
@@ -1072,7 +1210,7 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
             const SizedBox(height: 24),
 
             // Adjustment Details
-            if (adjustmentDetails.isNotEmpty) ...[
+            if (widget.adjustmentDetails.isNotEmpty) ...[
               Text(
                 'Adjustment Details',
                 style: TextStyle(
@@ -1115,7 +1253,7 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
                       ),
                       const Divider(height: 16),
                       // Items
-                      ...adjustmentDetails.asMap().entries.map((entry) {
+                      ...widget.adjustmentDetails.asMap().entries.map((entry) {
                         final idx = entry.key;
                         final item = entry.value;
                         final billNo = item['bill_number']?.toString() ?? 'N/A';
@@ -1141,7 +1279,7 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            if (idx < adjustmentDetails.length - 1)
+                            if (idx < widget.adjustmentDetails.length - 1)
                               const Divider(height: 16),
                           ],
                         );
@@ -1158,19 +1296,26 @@ class ReceiptSubmissionConfirmation extends StatelessWidget {
               width: double.infinity,
               height: 48,
               child: FilledButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Share functionality coming soon'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.share_rounded, size: 20),
-                label: const Text('SHARE NOW'),
+                onPressed: _isLoadingPdf ? null : _downloadAndSharePdf,
+                icon: _isLoadingPdf
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            colorScheme.onPrimary,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.share_rounded, size: 20),
+                label: Text(_isLoadingPdf ? 'Loading PDF...' : 'SHARE NOW'),
                 style: FilledButton.styleFrom(
                   backgroundColor: colorScheme.primary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  disabledBackgroundColor: colorScheme.primary.withValues(alpha: 0.5),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),

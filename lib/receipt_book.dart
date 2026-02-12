@@ -30,6 +30,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
     'Yesterday',
     'This Week',
     'This Month',
+    'Previous Month',
     'This Year',
     'Custom',
   ];
@@ -241,12 +242,20 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
         end = today.subtract(const Duration(days: 1));
         break;
       case 'This Week':
-        start = today.subtract(const Duration(days: 6));
+        // Calculate Monday of the current week (weekday: 1=Monday, 7=Sunday)
+        final daysToSubtract = today.weekday - 1; // Monday = 0 days back, Tuesday = 1 day back, etc.
+        start = today.subtract(Duration(days: daysToSubtract));
         end = today;
         break;
       case 'This Month':
         start = DateTime(today.year, today.month, 1);
         end = today;
+        break;
+      case 'Previous Month':
+        final firstDayOfCurrentMonth = DateTime(today.year, today.month, 1);
+        final lastDayOfPreviousMonth = firstDayOfCurrentMonth.subtract(const Duration(days: 1));
+        start = DateTime(lastDayOfPreviousMonth.year, lastDayOfPreviousMonth.month, 1);
+        end = lastDayOfPreviousMonth;
         break;
       case 'This Year':
         start = today.subtract(const Duration(days: 364));
