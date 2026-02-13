@@ -68,19 +68,35 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
 
       // _apiFilters is already in the correct format: List<Map<String, dynamic>>
       // Each map has 'id' (categoryId) and 'items' (list of itemIds)
+      // Extract area ID (category id 2) and route ID (category id 3) from filters
+      int areaId = 0;
+      int routeId = 0;
+
+      for (final filter in _apiFilters) {
+        final categoryId = filter['id'] as int;
+        final items = filter['items'] as List<dynamic>;
+
+        if (categoryId == 2 && items.isNotEmpty) {
+          // Area category - take first selected item
+          areaId = items.first is int ? items.first : int.tryParse(items.first.toString()) ?? 0;
+        } else if (categoryId == 3 && items.isNotEmpty) {
+          // Route category - take first selected item
+          routeId = items.first is int ? items.first : int.tryParse(items.first.toString()) ?? 0;
+        }
+      }
 
       final payload = jsonEncode({
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'luserid': auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
         'lPageNo': _pageNo.toString(),
         'lSize': _pageSize.toString(),
-        'laid': 0,
-        'lrtid': 0,
+        'laid': areaId,
+        'lrtid': routeId,
         'lExecuteTotalRows': 1,
         'filters': _apiFilters,
       });
 
-      debugPrint('[DeliveryBook] Loading page $_pageNo with size $_pageSize and ${_apiFilters.length} filter categories');
+      debugPrint('[DeliveryBook] Loading page $_pageNo with size $_pageSize, laid: $areaId, lrtid: $routeId, ${_apiFilters.length} filter categories');
 
       final headers = {
         'Content-Type': 'application/json',
