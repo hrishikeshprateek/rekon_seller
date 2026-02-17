@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:reckon_seller_2_0/pages/account_statement_wrapper.dart';
+import 'package:reckon_seller_2_0/pages/completed_deliveries_page.dart';
 import 'package:reckon_seller_2_0/pages/outstanding_details_page.dart';
 import 'package:reckon_seller_2_0/pages/account_outstanding_list_page.dart';
 import 'package:reckon_seller_2_0/receipt_book.dart';
@@ -463,7 +464,7 @@ class _HomeScreenState extends State<HomeScreen> {
       'creditors': const OutstandingPage(),
       'payables': const OutstandingPage(),
       'pendingdeliveries': const DeliveryBookPage(),
-      'deliverystaus': const AccountOutstandingListPage(), // Assuming Delivery Status
+      'deliverystaus': const CompletedDeliveriesPage(), // Completed Deliveries
       'deliveryperformance': const DeliveryCollectionPage(),
       'deliveryreport': const DeliveryCollectionPage(),
       'pobook': const POBookPage(),

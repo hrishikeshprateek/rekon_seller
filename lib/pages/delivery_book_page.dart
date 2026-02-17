@@ -17,7 +17,8 @@ class DeliveryBookPage extends StatefulWidget {
   State<DeliveryBookPage> createState() => _DeliveryBookPageState();
 }
 
-class _DeliveryBookPageState extends State<DeliveryBookPage> {
+class _DeliveryBookPageState extends State<DeliveryBookPage>
+    with TickerProviderStateMixin {
   static const int _pageSize = 10;
 
   final ScrollController _scrollController = ScrollController();
@@ -28,16 +29,25 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
   int _pageNo = 1;
   bool _hasMore = true;
 
-  // API Filters - matches new format from DeliveryFilterPage
+  // API Filters
   List<Map<String, dynamic>> _apiFilters = [];
   bool _sortByLocation = true;
 
-  // UI Status Filter
-  TaskStatus? _statusFilter;
+  // Tab Controller
+  late TabController _tabController;
+
+  // Status mapping: 0=Pending, 1=Completed, 2=Return
+  final List<TaskStatus> _tabStatuses = [
+    TaskStatus.pending,
+    TaskStatus.done,
+    TaskStatus.returnTask
+  ];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_onTabChanged);
     _scrollController.addListener(_onScroll);
     _loadBills(reset: true);
   }
@@ -45,58 +55,90 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
+  void _onTabChanged() {
+    debugPrint('[DeliveryBook] Tab changed to index: ${_tabController.index}');
+    _loadBills(reset: true);
+  }
+
   void _onScroll() {
-    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200 &&
-        !_isLoading && _hasMore) {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200 &&
+        !_isLoading &&
+        _hasMore) {
       _loadBills();
     }
   }
 
-  // --- LOAD BILLS WITH WORKING PAGINATION ---
+  // --- API LOADING LOGIC ---
   Future<void> _loadBills({bool reset = false}) async {
     if (reset) {
-      if (mounted) setState(() { _isLoading = true; _bills.clear(); _pageNo = 1; _hasMore = true; });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _bills.clear();
+          _pageNo = 1;
+          _hasMore = true;
+        });
+      }
     }
 
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
-      // Use auth.getDioClient() to get Dio with 401 interceptor
       final dio = auth.getDioClient();
 
-      // _apiFilters is already in the correct format: List<Map<String, dynamic>>
-      // Each map has 'id' (categoryId) and 'items' (list of itemIds)
-      // Extract area ID (category id 2) and route ID (category id 3) from filters
-      int areaId = 0;
-      int routeId = 0;
+      List<int> areaIds = [];
+      List<int> routeIds = [];
 
       for (final filter in _apiFilters) {
         final categoryId = filter['id'] as int;
         final items = filter['items'] as List<dynamic>;
 
         if (categoryId == 2 && items.isNotEmpty) {
-          // Area category - take first selected item
-          areaId = items.first is int ? items.first : int.tryParse(items.first.toString()) ?? 0;
+          areaIds = items
+              .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+              .toList();
         } else if (categoryId == 3 && items.isNotEmpty) {
-          // Route category - take first selected item
-          routeId = items.first is int ? items.first : int.tryParse(items.first.toString()) ?? 0;
+          routeIds = items
+              .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+              .toList();
         }
       }
 
+      // Determine delivery status based on current tab
+      // Tab 0 = Pending (no status filter, empty array)
+      // Tab 1 = Completed (status 1)
+      // Tab 2 = Return (status 0)
+      List<int> deliveryStatus = [];
+      String tabName = 'Pending';
+      if (_tabController.index == 1) {
+        deliveryStatus = [1]; // Completed
+        tabName = 'Completed';
+      } else if (_tabController.index == 2) {
+        deliveryStatus = [0]; // Return
+        tabName = 'Return';
+      }
+      // For Pending (index 0), keep empty array
+
       final payload = jsonEncode({
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
-        'luserid': auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
-        'lPageNo': _pageNo.toString(),
-        'lSize': _pageSize.toString(),
-        'laid': areaId,
-        'lrtid': routeId,
+        'luserid':
+        auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
+        'lPageNo': _pageNo,
+        'lSize': _pageSize,
+        'laid': areaIds,
+        'lrtid': routeIds,
+        'ldeliveryStatus': deliveryStatus,
+        'lSearch': '',
         'lExecuteTotalRows': 1,
-        'filters': _apiFilters,
       });
 
-      debugPrint('[DeliveryBook] Loading page $_pageNo with size $_pageSize, laid: $areaId, lrtid: $routeId, ${_apiFilters.length} filter categories');
+      debugPrint('[DeliveryBook] Tab: $tabName (index: ${_tabController.index})');
+      debugPrint('[DeliveryBook] Status Filter: $deliveryStatus');
+      debugPrint('[DeliveryBook] Payload: $payload');
 
       final headers = {
         'Content-Type': 'application/json',
@@ -104,21 +146,28 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         'package_name': auth.packageNameHeader,
       };
 
-      final response = await dio.post('/getdeleveredbillList', data: payload, options: Options(headers: headers));
+      final response = await dio.post('/getdeleveredbillList',
+          data: payload, options: Options(headers: headers));
 
-      String cleanJson = response.data.toString().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
+      String cleanJson = response.data
+          .toString()
+          .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
+          .trim();
       final decoded = jsonDecode(cleanJson);
-      final Map<String, dynamic> root = decoded is Map<String, dynamic> ? decoded : {};
-      final Map<String, dynamic> container = root['data'] is Map<String, dynamic>
+      final Map<String, dynamic> root =
+      decoded is Map<String, dynamic> ? decoded : {};
+      final Map<String, dynamic> container =
+      root['data'] is Map<String, dynamic>
           ? root['data'] as Map<String, dynamic>
           : root;
 
-      final bool apiSuccess = root['success'] == true || root['Status'] == true || container['Status'] == true;
+      final bool apiSuccess = root['success'] == true ||
+          root['Status'] == true ||
+          container['Status'] == true;
       if (!apiSuccess) {
         throw Exception(root['message'] ?? root['Message'] ?? 'Server failure');
       }
 
-      // Extract the bills list - try multiple keys
       List rawList = [];
       if (container['data'] is List) {
         rawList = container['data'] as List;
@@ -133,14 +182,30 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
       final newBills = rawList.map((e) {
         if (e is Map<String, dynamic>) return DeliveryBill.fromJson(e);
         try {
-          final parsed = (e is String) ? jsonDecode(e) as Map<String, dynamic> : Map<String, dynamic>.from(e);
+          final parsed = (e is String)
+              ? jsonDecode(e) as Map<String, dynamic>
+              : Map<String, dynamic>.from(e);
           return DeliveryBill.fromJson(parsed);
         } catch (_) {
-          return DeliveryBill.fromJson({});
+          return DeliveryBill(
+              acname: 'Unknown',
+              address: 'NA',
+              mobile: 'NA',
+              billno: 'NA',
+              billdate: 'NA',
+              billamt: 0.0,
+              item: 0,
+              qty: 0,
+              station: 'NA',
+              acno: 'NA',
+              remark: 'NA',
+              area: 'NA',
+              route: 'NA',
+              statusName: 'NA',
+              status: 'NA',
+              keyno: 'NA');
         }
       }).toList();
-
-      debugPrint('[DeliveryBook] Loaded ${newBills.length} bills for page $_pageNo');
 
       if (mounted) {
         setState(() {
@@ -151,26 +216,29 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           if (_hasMore) _pageNo++;
           _isLoading = false;
         });
-        debugPrint('[DeliveryBook] Total bills: ${_bills.length}, hasMore: $_hasMore, nextPage: $_pageNo');
       }
     } catch (e) {
-      debugPrint('[DeliveryBook] Error: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         if (_bills.isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("Error: ${e.toString()}")));
         }
       }
     }
   }
 
   TaskStatus _statusFromBill(DeliveryBill bill) {
-    final raw = (bill.statusName != 'NA' ? bill.statusName : bill.status).toLowerCase();
+    final raw =
+    (bill.statusName != 'NA' ? bill.statusName : bill.status).toLowerCase();
     if (raw.contains('return')) return TaskStatus.returnTask;
-    if (raw.contains('deliver') || raw.contains('done') || raw.contains('complete')) return TaskStatus.done;
+    if (raw.contains('deliver') ||
+        raw.contains('done') ||
+        raw.contains('complete')) return TaskStatus.done;
     if (raw == '1') return TaskStatus.done;
     if (raw == '2') return TaskStatus.returnTask;
-    if (raw.contains('pending') || raw == '0' || raw.isEmpty) return TaskStatus.pending;
+    if (raw.contains('pending') || raw == '0' || raw.isEmpty)
+      return TaskStatus.pending;
     return TaskStatus.pending;
   }
 
@@ -187,12 +255,11 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
   }
 
   void _applyStatusFilter() {
+    final selectedStatus = _tabStatuses[_tabController.index];
     setState(() {
-      if (_statusFilter == null) {
-        _filteredBills = List.from(_bills);
-      } else {
-        _filteredBills = _bills.where((bill) => _statusFromBill(bill) == _statusFilter).toList();
-      }
+      _filteredBills = _bills
+          .where((bill) => _statusFromBill(bill) == selectedStatus)
+          .toList();
     });
   }
 
@@ -210,11 +277,11 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
       setState(() {
         _apiFilters = result;
       });
-      _loadBills(reset: true); // Reload with new filters
+      _loadBills(reset: true);
     }
   }
 
-  // --- REDESIGNED BUILD METHOD ---
+  // --- BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -226,462 +293,612 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
       );
     }
 
-    final pendingCount = _bills.where((bill) => _statusFromBill(bill) == TaskStatus.pending).length;
+    final pendingCount = _bills
+        .where((bill) => _statusFromBill(bill) == TaskStatus.pending)
+        .length;
     final totalValue = _bills.fold(0.0, (sum, bill) => sum + bill.billamt);
     final bool hasActiveFilters = _apiFilters.isNotEmpty;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
-      body: CustomScrollView(
-        controller: _scrollController,
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          _buildSliverAppBar(pendingCount, totalValue, colorScheme, hasActiveFilters),
-
-          // Status Filter Pills
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                child: Row(
-                  children: [
-                    _buildStatusChip('All', _statusFilter == null, () {
-                      setState(() {
-                        _statusFilter = null;
-                        _applyStatusFilter();
-                      });
-                    }, colorScheme),
-                    const SizedBox(width: 8),
-                    _buildStatusChip('Pending', _statusFilter == TaskStatus.pending, () {
-                      setState(() {
-                        _statusFilter = TaskStatus.pending;
-                        _applyStatusFilter();
-                      });
-                    }, colorScheme),
-                    const SizedBox(width: 8),
-                    _buildStatusChip('Completed', _statusFilter == TaskStatus.done, () {
-                      setState(() {
-                        _statusFilter = TaskStatus.done;
-                        _applyStatusFilter();
-                      });
-                    }, colorScheme),
-                    const SizedBox(width: 8),
-                    _buildStatusChip('Return', _statusFilter == TaskStatus.returnTask, () {
-                      setState(() {
-                        _statusFilter = TaskStatus.returnTask;
-                        _applyStatusFilter();
-                      });
-                    }, colorScheme),
+      appBar: PreferredSize(
+        // COMPACT HEIGHT: 140 (Toolbar) + 45 (TabBar) = 185
+        preferredSize: const Size.fromHeight(185),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildSliverAppBar(
+                pendingCount, totalValue, colorScheme, hasActiveFilters),
+            // Status Tabs Container
+            SizedBox(
+              height: 45,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surface,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  labelColor: const Color(0xFF1A237E),
+                  unselectedLabelColor: colorScheme.onSurfaceVariant,
+                  indicatorColor: const Color(0xFF1A237E),
+                  indicatorWeight: 3,
+                  overlayColor: WidgetStateProperty.all(Colors.transparent),
+                  labelPadding: EdgeInsets.zero,
+                  indicatorPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  labelStyle: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 14),
+                  unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w500, fontSize: 14),
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  tabs: const [
+                    Tab(text: 'Pending'),
+                    Tab(text: 'Completed'),
+                    Tab(text: 'Return'),
                   ],
                 ),
               ),
             ),
-          ),
-
+          ],
+        ),
+      ),
+      body: CustomScrollView(
+        controller: _scrollController,
+        physics: const BouncingScrollPhysics(),
+        slivers: [
           _filteredBills.isEmpty
               ? SliverFillRemaining(child: _buildEmptyState(colorScheme))
               : SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        if (index == _filteredBills.length) {
-                          return _filteredBills.isNotEmpty && _isLoading && _hasMore
-                              ? const Center(
-                                  child: Padding(
-                                    padding: EdgeInsets.all(24),
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                )
-                              : const SizedBox.shrink();
-                        }
-                        return _buildModernTaskCard(_filteredBills[index], index + 1, colorScheme);
-                      },
-                      childCount: _filteredBills.length + (_hasMore && _filteredBills.isNotEmpty ? 1 : 0),
-                    ),
-                  ),
-                ),
-
+            padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  if (index == _filteredBills.length) {
+                    return _filteredBills.isNotEmpty &&
+                        _isLoading &&
+                        _hasMore
+                        ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2),
+                      ),
+                    )
+                        : const SizedBox.shrink();
+                  }
+                  return _buildModernTaskCard(
+                      _filteredBills[index], index + 1, colorScheme);
+                },
+                childCount: _filteredBills.length +
+                    (_hasMore && _filteredBills.isNotEmpty ? 1 : 0),
+              ),
+            ),
+          ),
           const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
         ],
       ),
     );
   }
 
-  Widget _buildSliverAppBar(int count, double value, ColorScheme colorScheme, bool hasActiveFilters) {
-    final userName = (Provider.of<AuthService>(context, listen: false).currentUser?.fullName ?? '').trim();
+  AppBar _buildSliverAppBar(
+      int count, double value, ColorScheme colorScheme, bool hasActiveFilters) {
+    final userName = (Provider.of<AuthService>(context, listen: false)
+        .currentUser
+        ?.fullName ??
+        '')
+        .trim();
     final displayName = userName.isEmpty ? 'Driver' : userName;
 
-    return SliverAppBar(
-      expandedHeight: 220.0,
-      floating: false,
-      pinned: true,
-      backgroundColor: const Color(0xFF1A237E), // Deep Blue theme color
-      iconTheme: const IconThemeData(color: Colors.white),
+    return AppBar(
+      automaticallyImplyLeading: false,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      // COMPACT TOOLBAR HEIGHT
+      toolbarHeight: 140,
       actions: [
-        // Filter Button with Badge
-        Stack(
-          alignment: Alignment.center,
+        // Forces the filter icon to the Top Right
+        Column(
+          mainAxisAlignment: MainAxisAlignment.start,
           children: [
-            IconButton(
-              icon: const Icon(Icons.filter_list),
-              onPressed: _openFilterPage,
-              tooltip: 'Filters',
-            ),
-            if (hasActiveFilters)
-              Positioned(
-                right: 8,
-                top: 8,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
+            Padding(
+              padding: const EdgeInsets.only(top: 12.0, right: 8.0),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.filter_list, color: Colors.white),
+                    onPressed: _openFilterPage,
+                    tooltip: 'Filters',
+                    constraints: const BoxConstraints(), // Removes default padding
+                    padding: const EdgeInsets.all(8),
                   ),
-                ),
+                  if (hasActiveFilters)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
-        const SizedBox(width: 8),
       ],
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF1A237E), // Deep Blue
-                const Color(0xFFFF6F00), // Orange
-              ],
-            ),
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFE65100), // Dark Orange
+              Color(0xFFFF6F00), // Orange
+              Color(0xFF1976D2), // Blue
+            ],
+            stops: [0.0, 0.5, 1.0],
           ),
-          child: Stack(
+        ),
+        child: Padding(
+          // COMPACT PADDING: Reduced top padding for better header-tab separation
+          padding: const EdgeInsets.fromLTRB(20, 60, 20, 9),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Positioned(
-                top: -50, right: -50,
-                child: Container(
-                  width: 200, height: 200,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onPrimary.withValues(alpha: 0.05),
-                    shape: BoxShape.circle,
+              // User Profile Row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  CircleAvatar(
+                    radius: 20, // Reduced from 24
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    child: Text(
+                      displayName.isEmpty ? 'D' : displayName.substring(0, 1),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontSize: 18,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 20, right: 20, top: 80),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        CircleAvatar(
-                          radius: 26,
-                          backgroundColor: colorScheme.secondaryContainer,
-                          child: Text(
-                            displayName.substring(0, 1),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: colorScheme.onSecondaryContainer,
-                              fontSize: 20,
-                            ),
+                        Text(
+                          'Hello,',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
-                        const SizedBox(width: 15),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("Hello,", style: TextStyle(color: colorScheme.onPrimary.withValues(alpha: 0.7), fontSize: 14)),
-                            Text(
-                              displayName,
-                              style: TextStyle(color: colorScheme.onPrimary, fontSize: 20, fontWeight: FontWeight.bold),
-                            ),
-                          ],
+                        Text(
+                          displayName.isEmpty ? 'Driver' : displayName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 25),
-                    Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: colorScheme.onPrimary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colorScheme.onPrimary.withValues(alpha: 0.1)),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _buildStatItem("Pending", "$count Tasks", Icons.assignment_late, Colors.orange, colorScheme),
-                          Container(width: 1, height: 30, color: colorScheme.onPrimary.withValues(alpha: 0.2)),
-                          _buildStatItem("Total Value", "₹${(value/1000).toStringAsFixed(1)}k", Icons.currency_rupee, Colors.blue.shade400, colorScheme),
-                        ],
-                      ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8), // Reduced gap for better compactness
+              // Stats Cards Row
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildStatCard(
+                      "Pending",
+                      "$count",
+                      Icons.assignment_late_outlined,
+                      const Color(0xFFFF6F00), // Orange to match theme
+                      const Color(0xFFE65100), // Dark Orange
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildStatCard(
+                      "Total",
+                      "₹${(value / 1000).toStringAsFixed(1)}k",
+                      Icons.account_balance_wallet_outlined,
+                      const Color(0xFF42A5F5), // Light Blue to match theme
+                      const Color(0xFF1976D2), // Blue
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ),
-      title: const Text("Delivery Book", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-      centerTitle: true,
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon, Color iconColor, ColorScheme colorScheme) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: iconColor.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, color: iconColor, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: TextStyle(color: colorScheme.onPrimary.withValues(alpha: 0.7), fontSize: 11)),
-            Text(value, style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
-          ],
-        )
-      ],
-    );
-  }
-
-  Widget _buildStatusChip(String label, bool isSelected, VoidCallback onTap, ColorScheme colorScheme) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1A237E) : colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF1A237E) : colorScheme.outlineVariant,
+  Widget _buildStatCard(String label, String value, IconData icon,
+      Color bgColor, Color iconColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: bgColor.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, color: bgColor, size: 16),
           ),
-          boxShadow: isSelected ? [
-            BoxShadow(
-              color: const Color(0xFF1A237E).withValues(alpha: 0.3),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            )
-          ] : [],
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : colorScheme.onSurface,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            fontSize: 13,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-
-  Widget _buildModernTaskCard(DeliveryBill bill, int index, ColorScheme colorScheme) {
+  Widget _buildModernTaskCard(
+      DeliveryBill bill, int index, ColorScheme colorScheme) {
     final bool isDone = _statusFromBill(bill) == TaskStatus.done;
 
     Color statusBgColor;
+    Color statusTextColor;
     String statusText;
     if (_statusFromBill(bill) == TaskStatus.done) {
-      statusBgColor = Colors.green;
+      statusBgColor = const Color(0xFFE8F5E9);
+      statusTextColor = const Color(0xFF2E7D32);
       statusText = "COMPLETED";
     } else if (_statusFromBill(bill) == TaskStatus.returnTask) {
-      statusBgColor = Colors.red;
+      statusBgColor = const Color(0xFFFFEBEE);
+      statusTextColor = const Color(0xFFC62828);
       statusText = "RETURN";
     } else {
-      statusBgColor = Colors.amber.shade700;
+      statusBgColor = const Color(0xFFFFF8E1);
+      statusTextColor = const Color(0xFFEF6C00);
       statusText = "PENDING";
     }
 
-    final typeColor = Colors.blue;
+    final typeColor = const Color(0xFF1976D2);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: colorScheme.shadow.withValues(alpha: 0.05), blurRadius: 15, offset: const Offset(0, 5)),
+          BoxShadow(
+            color: colorScheme.shadow.withOpacity(0.08),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: typeColor.withValues(alpha: 0.05),
-                border: Border(bottom: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.3))),
+      child: Column(
+        children: [
+          // Header Section
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerLowest,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                              color: typeColor.withValues(alpha: 0.1),
-                              shape: BoxShape.circle
-                          ),
-                          child: Icon(
-                            Icons.local_shipping,
-                            size: 16,
-                            color: typeColor.withValues(alpha: 0.8),
-                          ),
+              border: Border(
+                bottom: BorderSide(
+                  color: colorScheme.outlineVariant.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: typeColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        "#$index",
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: typeColor,
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            "DELIVERY #$index",
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      bill.billdate != 'NA' ? bill.billdate : '',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusBgColor,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusTextColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+
+          // Body Section
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  bill.acname,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface,
+                    height: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.location_on_outlined,
+                        size: 16, color: colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Station - Primary info
+                          Text(
+                            bill.station != 'NA' ? bill.station : 'N/A',
                             style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                              color: typeColor.withValues(alpha: 0.9),
+                              fontSize: 13,
+                              color: colorScheme.onSurface,
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
                             ),
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                      ],
+                          // Area and Route - Horizontal layout
+                          if (bill.area != 'NA' || bill.route != 'NA')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4.0),
+                              child: Row(
+                                children: [
+                                  // Area with label
+                                  if (bill.area != 'NA')
+                                    Expanded(
+                                      child: Text(
+                                        'Area: ${bill.area}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: colorScheme.onSurfaceVariant,
+                                          height: 1.2,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  // Divider
+                                  if (bill.area != 'NA' && bill.route != 'NA')
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6.0),
+                                      child: Text(
+                                        '•',
+                                        style: TextStyle(
+                                          color:
+                                              colorScheme.onSurfaceVariant,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  // Route with label
+                                  if (bill.route != 'NA')
+                                    Expanded(
+                                      child: Text(
+                                        'Route: ${bill.route}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: colorScheme.onSurfaceVariant,
+                                          height: 1.2,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colorScheme.surfaceContainerHigh.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: statusBgColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      statusText,
-                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 10),
-                    ),
-                  )
-                ],
-              ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildInfoItem(
+                          "Bill No", bill.billno, colorScheme, false),
+                      Container(
+                          width: 1,
+                          height: 24,
+                          color: colorScheme.outlineVariant),
+                      _buildInfoItem("Amount",
+                          "₹${bill.billamt.toStringAsFixed(0)}", colorScheme, true),
+                      Container(
+                          width: 1,
+                          height: 24,
+                          color: colorScheme.outlineVariant),
+                      _buildInfoItem("Items", "${bill.item}", colorScheme, false),
+                    ],
+                  ),
+                ),
+              ],
             ),
+          ),
 
+          // Actions
+          if (!isDone)
             Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Row(
                 children: [
-                  Text(
-                    bill.acname,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurface,
-                      height: 1.2,
+                  SizedBox(
+                    width: 48,
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: () => _openMapsNavigation(bill),
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        side: BorderSide(color: colorScheme.outlineVariant),
+                      ),
+                      child: Icon(Icons.near_me_outlined,
+                          color: colorScheme.onSurface),
                     ),
                   ),
-                  const SizedBox(height: 6),
-
-                  Row(
-                    children: [
-                      Icon(Icons.location_on_outlined, size: 16, color: colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          '${bill.area} • ${bill.station}',
-                          style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant, height: 1.4),
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Divider(height: 1, color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
-                  ),
-                  Row(
-                    children: [
-                      _buildDetailColumn("BILL NO", bill.billno, colorScheme),
-                      const Spacer(),
-                      _buildDetailColumn("AMOUNT", "₹${bill.billamt.toStringAsFixed(0)}", colorScheme, isHighlight: true),
-                      const Spacer(),
-                      _buildDetailColumn("ITEMS", "${bill.item}", colorScheme),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            if (!isDone)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 1,
-                      child: OutlinedButton(
-                        onPressed: () => _openMapsNavigation(bill),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          side: BorderSide(color: colorScheme.outlineVariant),
-                          foregroundColor: colorScheme.onSurface,
-                        ),
-                        child: const Icon(Icons.near_me, size: 20),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 3,
-                      child: ElevatedButton(
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
                         onPressed: () => _navigateToDetails(bill),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1A237E),
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
-                        child: const Text(
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        label: const Text(
                           "Mark Delivered",
-                          style: TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600, fontSize: 14),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildDetailColumn(String label, String value, ColorScheme colorScheme, {bool isHighlight = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: colorScheme.onSurfaceVariant, letterSpacing: 0.5),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Colors.black,
+  Widget _buildInfoItem(
+      String label, String value, ColorScheme colorScheme, bool isAmount) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
-        ),
-      ],
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: isAmount ? const Color(0xFF1A237E) : colorScheme.onSurface,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
@@ -690,9 +907,25 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.filter_none, size: 60, color: colorScheme.outlineVariant),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.inventory_2_outlined,
+                size: 48, color: colorScheme.outline),
+          ),
           const SizedBox(height: 16),
-          Text("No tasks found", style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+          Text("No tasks found",
+              style: TextStyle(
+                  fontSize: 16,
+                  color: colorScheme.onSurface,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Text("Try adjusting filters or checking back later",
+              style:
+              TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
         ],
       ),
     );
@@ -713,7 +946,6 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
   }
 
   void _navigateToDetails(DeliveryBill bill) {
-    // Logic remains exactly the same
     DateTime billDate = DateTime.now();
     if (bill.billdate != "NA") {
       try {
@@ -722,21 +954,47 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           final day = int.tryParse(parts[0]);
           final monthStr = parts[1].toLowerCase();
           final year = int.tryParse(parts[2]);
-          final monthMap = {'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6, 'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12, 'january': 1, 'february': 2, 'march': 3, 'april': 4, 'june': 6, 'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12};
+          final monthMap = {
+            'jan': 1,
+            'feb': 2,
+            'mar': 3,
+            'apr': 4,
+            'may': 5,
+            'jun': 6,
+            'jul': 7,
+            'aug': 8,
+            'sep': 9,
+            'oct': 10,
+            'nov': 11,
+            'dec': 12,
+            'january': 1,
+            'february': 2,
+            'march': 3,
+            'april': 4,
+            'june': 6,
+            'july': 7,
+            'august': 8,
+            'september': 9,
+            'october': 10,
+            'november': 11,
+            'december': 12
+          };
           final month = monthMap[monthStr];
           if (day != null && month != null && year != null) {
             billDate = DateTime(year, month, day);
           }
         }
       } catch (_) {
-        try { billDate = DateTime.parse(bill.billdate); } catch (_) {}
+        try {
+          billDate = DateTime.parse(bill.billdate);
+        } catch (_) {}
       }
     }
 
     Navigator.of(context).push(MaterialPageRoute(
       builder: (context) => MarkDeliveredPage(
         task: DeliveryTask(
-          id: bill.keyno, // Use full keyno instead of just billno
+          id: bill.keyno,
           type: TaskType.delivery,
           status: _statusFromBill(bill),
           partyName: bill.acname,
@@ -747,7 +1005,9 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           billAmount: bill.billamt,
           itemCount: bill.item,
           area: bill.area == "NA" ? "" : bill.area,
-          latitude: null, longitude: null, paymentType: PaymentType.cash,
+          latitude: null,
+          longitude: null,
+          paymentType: PaymentType.cash,
           mobile: bill.mobile == "NA" ? null : bill.mobile,
         ),
       ),
@@ -755,21 +1015,31 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
   }
 }
 
-// --- DATA MODEL (Kept exactly as provided) ---
+// --- DATA MODEL ---
 
 class DeliveryBill {
   final String acname, billno, billdate, acno, mobile, station;
   final String address, remark, area, route, statusName, status;
-  final String keyno; // Full bill key like "20250401/SALE  /AMPL  /O000001"
+  final String keyno;
   final double billamt;
   final int item, qty;
 
   DeliveryBill({
-    required this.acname, required this.address, required this.mobile,
-    required this.billno, required this.billdate, required this.billamt,
-    required this.item, required this.qty, required this.station,
-    required this.acno, required this.remark, required this.area,
-    required this.route, required this.statusName, required this.status,
+    required this.acname,
+    required this.address,
+    required this.mobile,
+    required this.billno,
+    required this.billdate,
+    required this.billamt,
+    required this.item,
+    required this.qty,
+    required this.station,
+    required this.acno,
+    required this.remark,
+    required this.area,
+    required this.route,
+    required this.statusName,
+    required this.status,
     required this.keyno,
   });
 
@@ -781,10 +1051,12 @@ class DeliveryBill {
       if (s.toLowerCase() == 'null' || s.isEmpty) return 'NA';
       return s;
     }
+
     double dbl(String key) {
       if (json[key] == null) return 0.0;
       return double.tryParse(json[key].toString()) ?? 0.0;
     }
+
     int integer(String key) {
       final v = json[key];
       if (v == null) return 0;
@@ -799,11 +1071,15 @@ class DeliveryBill {
     }
 
     List<String> validAddrParts = [];
-    if (json['address1'] != null) validAddrParts.add(json['address1'].toString());
-    if (json['address2'] != null) validAddrParts.add(json['address2'].toString());
-    if (json['address3'] != null) validAddrParts.add(json['address3'].toString());
+    if (json['address1'] != null)
+      validAddrParts.add(json['address1'].toString());
+    if (json['address2'] != null)
+      validAddrParts.add(json['address2'].toString());
+    if (json['address3'] != null)
+      validAddrParts.add(json['address3'].toString());
 
-    String fullAddress = validAddrParts.where((s) => s.trim().isNotEmpty).join(', ');
+    String fullAddress =
+    validAddrParts.where((s) => s.trim().isNotEmpty).join(', ');
     if (fullAddress.isEmpty) fullAddress = "NA";
 
     return DeliveryBill(
