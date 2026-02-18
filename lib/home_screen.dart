@@ -463,7 +463,9 @@ class _HomeScreenState extends State<HomeScreen> {
       'debtors': const OutstandingPage(),
       'creditors': const OutstandingPage(),
       'payables': const OutstandingPage(),
+      'assigneddelivery': const DeliveryBookPage(), // Assigned Delivery -> DeliveryBookPage
       'pendingdeliveries': const DeliveryBookPage(),
+      'deliverybook': const CompletedDeliveriesPage(), // Delivery Book -> CompletedDeliveriesPage
       'deliverystaus': const CompletedDeliveriesPage(), // Completed Deliveries
       'deliveryperformance': const DeliveryCollectionPage(),
       'deliveryreport': const DeliveryCollectionPage(),
@@ -487,7 +489,6 @@ class _HomeScreenState extends State<HomeScreen> {
       'trialbalance': const TrialBalancePage(),
       'bank': const BankPage(),
       'deliverycollection': const DeliveryCollectionPage(),
-      'deliverybook': const DeliveryBookPage(),
       'closingstock': const ClosingStockPage(),
       'shortage': const ShortagePage(),
       'itemwisesale': const ItemwiseSalePage(),

@@ -29,6 +29,30 @@ class DeliveryDetailPage extends StatelessWidget {
     return int.tryParse(val.toString()) ?? 0;
   }
 
+  /// Format the updatedat timestamp for display
+  /// Input format: "2026-02-18 14:44:45.297"
+  /// Output format: "18 Feb 2:44 PM"
+  String _formatDeliveryTime(String updatedat) {
+    try {
+      if (updatedat.isEmpty || updatedat == 'N/A') return 'N/A';
+
+      // Parse the timestamp
+      final dateTime = DateTime.parse(updatedat.replaceAll(' ', 'T'));
+
+      // Format as "18 Feb 2:44 PM"
+      final day = dateTime.day.toString().padLeft(2, '0');
+      final month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dateTime.month - 1];
+      final hour = dateTime.hour > 12 ? (dateTime.hour - 12) : (dateTime.hour == 0 ? 12 : dateTime.hour);
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+
+      return '$day $month $hour:$minute $period';
+    } catch (e) {
+      return updatedat;
+    }
+  }
+
+
   Future<void> _openMapsNavigation(BuildContext context) async {
     try {
       // Try using coordinates first
@@ -144,11 +168,12 @@ class DeliveryDetailPage extends StatelessWidget {
               delegate: SliverChildListDelegate([
 
                 // Bill Information Card
+                // Delivery Details Card
                 _buildSectionCard(
-                  'Bill Information',
+                  'Delivery Details',
                   [
-                    _buildInfoRow('Bill Number', _getString('billno')),
                     _buildInfoRow('Bill Date', _getString('billdate')),
+                    _buildInfoRow('Delivered At', _formatDeliveryTime(_getString('updatedat'))),
                     _buildInfoRow('Bill Amount', '₹${_getDouble('billamt').toStringAsFixed(2)}'),
                     _buildInfoRow('Items', _getInt('item').toString()),
                     _buildInfoRow('Quantity', _getDouble('qty').toStringAsFixed(2)),
@@ -203,6 +228,8 @@ class DeliveryDetailPage extends StatelessWidget {
                   'Delivery Status',
                   [
                     _buildInfoRow('Status', _getString('status') == '1' ? 'Completed' : 'Pending'),
+                    if (_getString('status') == '1')
+                      _buildInfoRow('Completed At', _formatDeliveryTime(_getString('updatedat'))),
                     _buildInfoRow('Remark', _getString('remark')),
                     _buildInfoRow('Status Name', _getString('stausname')),
                   ],

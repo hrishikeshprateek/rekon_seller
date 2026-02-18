@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../auth_service.dart';
 import 'delivery_detail_page.dart';
@@ -19,7 +18,8 @@ class DeliveryBill {
       area,
       route,
       statusName,
-      status;
+      status,
+      updatedat; // New field for delivery timestamp
   final String address;
   final String keyno;
   final double billamt;
@@ -45,6 +45,7 @@ class DeliveryBill {
     required this.statusName,
     required this.status,
     required this.keyno,
+    required this.updatedat,
     this.latitude,
     this.longitude,
     required this.rawData,
@@ -117,6 +118,7 @@ class DeliveryBill {
       statusName: str('statusname'),
       status: str('status'),
       keyno: str('keyno'),
+      updatedat: str('updatedat'), // Parse updatedat from API
       latitude: strNullable('latitude'),
       longitude: strNullable('longitude'),
       rawData: json, // Store all raw data
@@ -155,6 +157,30 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Format the updatedat timestamp for display
+  /// Input format: "2026-02-18 14:44:45.297"
+  /// Output format: "18 Feb 2:44 PM"
+  String _formatDeliveryTime(String updatedat) {
+    try {
+      if (updatedat.isEmpty || updatedat == 'NA') return 'NA';
+
+      // Parse the timestamp
+      final dateTime = DateTime.parse(updatedat.replaceAll(' ', 'T'));
+
+      // Format as "18 Feb 2:44 PM"
+      final day = dateTime.day.toString().padLeft(2, '0');
+      final month = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][dateTime.month - 1];
+      final hour = dateTime.hour > 12 ? (dateTime.hour - 12) : (dateTime.hour == 0 ? 12 : dateTime.hour);
+      final minute = dateTime.minute.toString().padLeft(2, '0');
+      final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+
+      return '$day $month $hour:$minute $period';
+    } catch (e) {
+      debugPrint('[CompletedDeliveries] Error formatting timestamp: $e');
+      return updatedat;
+    }
   }
 
   void _onScroll() {
@@ -200,7 +226,7 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
         }
       }
 
-      final List<int> deliveryStatus = [1];
+      final List<int> deliveryStatus = [1]; // 1 for completed
 
       final payload = jsonEncode({
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
@@ -215,6 +241,8 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
         'lExecuteTotalRows': 1,
       });
 
+      debugPrint('[CompletedDeliveries] Payload: $payload');
+
       final headers = {
         'Content-Type': 'application/json',
         'Authorization': auth.getAuthHeader() ?? '',
@@ -224,11 +252,16 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
       final response = await dio.post('/getdeleveredbillList',
           data: payload, options: Options(headers: headers));
 
+      debugPrint('[CompletedDeliveries] Response status: ${response.statusCode}');
+      debugPrint('[CompletedDeliveries] Response data: ${response.data}');
+
       String cleanJson = response.data
           .toString()
           .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
           .trim();
       final decoded = jsonDecode(cleanJson);
+      debugPrint('[CompletedDeliveries] Decoded: $decoded');
+
       final Map<String, dynamic> root =
           decoded is Map<String, dynamic> ? decoded : {};
       final Map<String, dynamic> container =
@@ -239,6 +272,11 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
       final bool apiSuccess = root['success'] == true ||
           root['Status'] == true ||
           container['Status'] == true;
+
+      debugPrint('[CompletedDeliveries] API success: $apiSuccess');
+      debugPrint('[CompletedDeliveries] Root keys: ${root.keys}');
+      debugPrint('[CompletedDeliveries] Container keys: ${container.keys}');
+
       if (!apiSuccess) {
         throw Exception(root['message'] ?? root['Message'] ?? 'Server failure');
       }
@@ -246,13 +284,22 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
       List rawList = [];
       if (container['data'] is List) {
         rawList = container['data'] as List;
+        debugPrint('[CompletedDeliveries] Found data in container[data]');
       } else if (container['DBILL'] is List) {
         rawList = container['DBILL'] as List;
+        debugPrint('[CompletedDeliveries] Found data in container[DBILL]');
       } else if (container['DeliverBills'] is List) {
         rawList = container['DeliverBills'] as List;
+        debugPrint('[CompletedDeliveries] Found data in container[DeliverBills]');
       } else if (root['data'] is List) {
         rawList = root['data'] as List;
+        debugPrint('[CompletedDeliveries] Found data in root[data]');
+      } else {
+        debugPrint('[CompletedDeliveries] No data found in expected locations');
+        debugPrint('[CompletedDeliveries] Container: $container');
       }
+
+      debugPrint('[CompletedDeliveries] Raw list length: ${rawList.length}');
 
       final newBills = rawList.map((e) {
         try {
@@ -268,6 +315,7 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
               mobile: 'NA',
               billno: 'NA',
               billdate: 'NA',
+              updatedat: 'NA',
               billamt: 0.0,
               item: 0,
               qty: 0,
@@ -285,15 +333,21 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
         }
       }).toList();
 
+      debugPrint('[CompletedDeliveries] Parsed ${newBills.length} bills');
+
       if (mounted) {
         setState(() {
           _bills.addAll(newBills);
+          _filteredBills = List.from(_bills);
           _hasMore = newBills.length >= _pageSize;
           if (_hasMore) _pageNo++;
-          _applySearch();
+          _isLoading = false; // Set to false after successful load
         });
+        debugPrint('[CompletedDeliveries] State updated: ${_bills.length} bills loaded');
       }
     } catch (e) {
+      debugPrint('[CompletedDeliveries] Error: $e');
+      debugPrint('[CompletedDeliveries] Error stack trace: ${StackTrace.current}');
       if (mounted) {
         setState(() => _isLoading = false);
         if (_bills.isEmpty) {
@@ -630,11 +684,15 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
                         ),
                       ),
                       const SizedBox(width: 10),
+                      // Display "Delivered at" using updatedat timestamp
                       Text(
-                        bill.billdate != 'NA' ? bill.billdate : '',
+                        bill.updatedat != 'NA'
+                            ? 'Delivered at ${_formatDeliveryTime(bill.updatedat)}'
+                            : 'Delivered at ${bill.billdate}',
                         style: TextStyle(
                           fontSize: 12,
                           color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -778,28 +836,6 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton.icon(
-                  onPressed: () => _openMapsNavigation(bill),
-                  style: OutlinedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    side: BorderSide(color: colorScheme.outlineVariant),
-                    foregroundColor: const Color(0xFF1A237E),
-                  ),
-                  icon: const Icon(Icons.near_me_outlined, size: 20),
-                  label: const Text(
-                    "View on Map",
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -864,48 +900,6 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
         ],
       ),
     );
-  }
-
-  Future<void> _openMapsNavigation(DeliveryBill bill) async {
-    try {
-      // Try using coordinates first
-      if (bill.latitude != null && bill.longitude != null) {
-        final googleMapsUrl = Uri.parse(
-            'google.navigation:q=${bill.latitude},${bill.longitude}&mode=d');
-        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-        return;
-      }
-
-      // Fallback to address-based navigation
-      final queryParts = <String>[];
-      if (bill.station != 'NA') queryParts.add(bill.station);
-      if (bill.area != 'NA') queryParts.add(bill.area);
-
-      if (queryParts.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Location not available for this delivery'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-        return;
-      }
-
-      final query = Uri.encodeComponent(queryParts.join(', '));
-      final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open Google Maps. Please make sure it is installed.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    }
   }
 }
 

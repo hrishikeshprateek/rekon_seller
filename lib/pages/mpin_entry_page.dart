@@ -51,44 +51,23 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
     });
 
     try {
+      debugPrint('[MpinEntryPage] Validating MPIN: $mpin');
       var result = await auth.validateMpin(mobile: widget.mobile, mpin: mpin);
 
-      // If we get 401 (token expired), try to refresh token and retry once
-      if (result['statusCode'] == 401) {
-        debugPrint('[MpinEntryPage] Got 401, attempting token refresh');
-
-        final refreshResult = await auth.refreshAccessToken();
-
-        if (refreshResult['success'] == true) {
-          debugPrint('[MpinEntryPage] Token refreshed successfully, retrying MPIN validation');
-          // Retry MPIN validation with new token
-          result = await auth.validateMpin(mobile: widget.mobile, mpin: mpin);
-        } else {
-          // Refresh failed, logout
-          debugPrint('[MpinEntryPage] Token refresh failed: ${refreshResult['message']}');
-          await auth.logout();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Session expired: ${refreshResult['message']}')),
-            );
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (route) => false,
-            );
-          }
-          return;
-        }
-      }
+      debugPrint('[MpinEntryPage] MPIN validation result: ${result['success']}');
 
       if (result['success'] == true) {
-        // Return both success and the validated MPIN so caller can use it to generate fresh tokens if needed
+        // Return success and the validated MPIN
+        debugPrint('[MpinEntryPage] MPIN valid, returning success');
         if (mounted) Navigator.of(context).pop({'success': true, 'mpin': mpin});
         return;
       }
 
       // MPIN validation failed (wrong MPIN)
+      debugPrint('[MpinEntryPage] MPIN validation failed, attempts left: ${_attemptsLeft - 1}');
       _attemptsLeft -= 1;
       if (_attemptsLeft <= 0) {
+        debugPrint('[MpinEntryPage] No attempts left, logging out');
         await auth.logout();
         if (mounted) {
           Navigator.of(context).pushAndRemoveUntil(

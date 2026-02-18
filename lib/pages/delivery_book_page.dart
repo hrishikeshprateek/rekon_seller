@@ -17,8 +17,7 @@ class DeliveryBookPage extends StatefulWidget {
   State<DeliveryBookPage> createState() => _DeliveryBookPageState();
 }
 
-class _DeliveryBookPageState extends State<DeliveryBookPage>
-    with TickerProviderStateMixin {
+class _DeliveryBookPageState extends State<DeliveryBookPage> {
   static const int _pageSize = 10;
 
   final ScrollController _scrollController = ScrollController();
@@ -33,21 +32,9 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
   List<Map<String, dynamic>> _apiFilters = [];
   bool _sortByLocation = true;
 
-  // Tab Controller
-  late TabController _tabController;
-
-  // Status mapping: 0=Pending, 1=Completed, 2=Return
-  final List<TaskStatus> _tabStatuses = [
-    TaskStatus.pending,
-    TaskStatus.done,
-    TaskStatus.returnTask
-  ];
-
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(_onTabChanged);
     _scrollController.addListener(_onScroll);
     _loadBills(reset: true);
   }
@@ -55,13 +42,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
   @override
   void dispose() {
     _scrollController.dispose();
-    _tabController.dispose();
     super.dispose();
-  }
-
-  void _onTabChanged() {
-    debugPrint('[DeliveryBook] Tab changed to index: ${_tabController.index}');
-    _loadBills(reset: true);
   }
 
   void _onScroll() {
@@ -80,6 +61,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
         setState(() {
           _isLoading = true;
           _bills.clear();
+          _filteredBills.clear();
           _pageNo = 1;
           _hasMore = true;
         });
@@ -108,21 +90,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
         }
       }
 
-      // Determine delivery status based on current tab
-      // Tab 0 = Pending (no status filter, empty array)
-      // Tab 1 = Completed (status 1)
-      // Tab 2 = Return (status 0)
-      List<int> deliveryStatus = [];
-      String tabName = 'Pending';
-      if (_tabController.index == 1) {
-        deliveryStatus = [1]; // Completed
-        tabName = 'Completed';
-      } else if (_tabController.index == 2) {
-        deliveryStatus = [0]; // Return
-        tabName = 'Return';
-      }
-      // For Pending (index 0), keep empty array
-
+      // Payload (Keeping deliveryStatus empty as per original logic for Pending)
       final payload = jsonEncode({
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'luserid':
@@ -131,14 +99,10 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
         'lSize': _pageSize,
         'laid': areaIds,
         'lrtid': routeIds,
-        'ldeliveryStatus': deliveryStatus,
+        'ldeliveryStatus': [],
         'lSearch': '',
         'lExecuteTotalRows': 1,
       });
-
-      debugPrint('[DeliveryBook] Tab: $tabName (index: ${_tabController.index})');
-      debugPrint('[DeliveryBook] Status Filter: $deliveryStatus');
-      debugPrint('[DeliveryBook] Payload: $payload');
 
       final headers = {
         'Content-Type': 'application/json',
@@ -180,12 +144,18 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
       }
 
       final newBills = rawList.map((e) {
-        if (e is Map<String, dynamic>) return DeliveryBill.fromJson(e);
+        if (e is Map<String, dynamic>) {
+          final bill = DeliveryBill.fromJson(e);
+          debugPrint('[DeliveryBook] Bill: ${bill.acname}, Lat: ${bill.latitude}, Lng: ${bill.longitude}');
+          return bill;
+        }
         try {
           final parsed = (e is String)
               ? jsonDecode(e) as Map<String, dynamic>
               : Map<String, dynamic>.from(e);
-          return DeliveryBill.fromJson(parsed);
+          final bill = DeliveryBill.fromJson(parsed);
+          debugPrint('[DeliveryBook] Bill: ${bill.acname}, Lat: ${bill.latitude}, Lng: ${bill.longitude}');
+          return bill;
         } catch (_) {
           return DeliveryBill(
               acname: 'Unknown',
@@ -203,15 +173,32 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
               route: 'NA',
               statusName: 'NA',
               status: 'NA',
-              keyno: 'NA');
+              keyno: 'NA',
+              latitude: null,
+              longitude: null);
         }
       }).toList();
 
       if (mounted) {
         setState(() {
           _bills.addAll(newBills);
-          _sortTasks();
-          _applyStatusFilter();
+
+          // SORTING
+          if (_sortByLocation) {
+            _bills.sort((a, b) {
+              final areaCompare = a.area.compareTo(b.area);
+              if (areaCompare != 0) return areaCompare;
+              return a.acname.compareTo(b.acname);
+            });
+          } else {
+            _bills.sort((a, b) => a.acname.compareTo(b.acname));
+          }
+
+          // FILTER: STRICTLY PENDING ONLY
+          _filteredBills = _bills
+              .where((bill) => _statusFromBill(bill) == TaskStatus.pending)
+              .toList();
+
           _hasMore = newBills.length >= _pageSize;
           if (_hasMore) _pageNo++;
           _isLoading = false;
@@ -237,30 +224,8 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
         raw.contains('complete')) return TaskStatus.done;
     if (raw == '1') return TaskStatus.done;
     if (raw == '2') return TaskStatus.returnTask;
-    if (raw.contains('pending') || raw == '0' || raw.isEmpty)
-      return TaskStatus.pending;
+    // Anything else is Pending
     return TaskStatus.pending;
-  }
-
-  void _sortTasks() {
-    if (_sortByLocation) {
-      _bills.sort((a, b) {
-        final areaCompare = a.area.compareTo(b.area);
-        if (areaCompare != 0) return areaCompare;
-        return a.acname.compareTo(b.acname);
-      });
-    } else {
-      _bills.sort((a, b) => a.acname.compareTo(b.acname));
-    }
-  }
-
-  void _applyStatusFilter() {
-    final selectedStatus = _tabStatuses[_tabController.index];
-    setState(() {
-      _filteredBills = _bills
-          .where((bill) => _statusFromBill(bill) == selectedStatus)
-          .toList();
-    });
   }
 
   Future<void> _openFilterPage() async {
@@ -281,7 +246,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
     }
   }
 
-  // --- BUILD METHOD ---
+  // --- SIMPLE BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -293,99 +258,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
       );
     }
 
-    final pendingCount = _bills
-        .where((bill) => _statusFromBill(bill) == TaskStatus.pending)
-        .length;
-    final totalValue = _bills.fold(0.0, (sum, bill) => sum + bill.billamt);
     final bool hasActiveFilters = _apiFilters.isNotEmpty;
-
-    return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: PreferredSize(
-        // COMPACT HEIGHT: 140 (Toolbar) + 45 (TabBar) = 185
-        preferredSize: const Size.fromHeight(185),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildSliverAppBar(
-                pendingCount, totalValue, colorScheme, hasActiveFilters),
-            // Status Tabs Container
-            SizedBox(
-              height: 45,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(24),
-                    topRight: Radius.circular(24),
-                  ),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  labelColor: const Color(0xFF1A237E),
-                  unselectedLabelColor: colorScheme.onSurfaceVariant,
-                  indicatorColor: const Color(0xFF1A237E),
-                  indicatorWeight: 3,
-                  overlayColor: WidgetStateProperty.all(Colors.transparent),
-                  labelPadding: EdgeInsets.zero,
-                  indicatorPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  labelStyle: const TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 14),
-                  unselectedLabelStyle: const TextStyle(
-                      fontWeight: FontWeight.w500, fontSize: 14),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  tabs: const [
-                    Tab(text: 'Pending'),
-                    Tab(text: 'Completed'),
-                    Tab(text: 'Return'),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-      body: CustomScrollView(
-        controller: _scrollController,
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          _filteredBills.isEmpty
-              ? SliverFillRemaining(child: _buildEmptyState(colorScheme))
-              : SliverPadding(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                  if (index == _filteredBills.length) {
-                    return _filteredBills.isNotEmpty &&
-                        _isLoading &&
-                        _hasMore
-                        ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2),
-                      ),
-                    )
-                        : const SizedBox.shrink();
-                  }
-                  return _buildModernTaskCard(
-                      _filteredBills[index], index + 1, colorScheme);
-                },
-                childCount: _filteredBills.length +
-                    (_hasMore && _filteredBills.isNotEmpty ? 1 : 0),
-              ),
-            ),
-          ),
-          const SliverPadding(padding: EdgeInsets.only(bottom: 80)),
-        ],
-      ),
-    );
-  }
-
-  AppBar _buildSliverAppBar(
-      int count, double value, ColorScheme colorScheme, bool hasActiveFilters) {
     final userName = (Provider.of<AuthService>(context, listen: false)
         .currentUser
         ?.fullName ??
@@ -393,252 +266,110 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
         .trim();
     final displayName = userName.isEmpty ? 'Driver' : userName;
 
-    return AppBar(
-      automaticallyImplyLeading: false,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      // COMPACT TOOLBAR HEIGHT
-      toolbarHeight: 140,
-      actions: [
-        // Forces the filter icon to the Top Right
-        Column(
-          mainAxisAlignment: MainAxisAlignment.start,
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1A237E), // Navy Blue
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 12.0, right: 8.0),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.filter_list, color: Colors.white),
-                    onPressed: _openFilterPage,
-                    tooltip: 'Filters',
-                    constraints: const BoxConstraints(), // Removes default padding
-                    padding: const EdgeInsets.all(8),
-                  ),
-                  if (hasActiveFilters)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
+            Text(
+              displayName,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              '${_filteredBills.length} Pending Tasks',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
             ),
           ],
         ),
-      ],
-      flexibleSpace: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFE65100), // Dark Orange
-              Color(0xFFFF6F00), // Orange
-              Color(0xFF1976D2), // Blue
-            ],
-            stops: [0.0, 0.5, 1.0],
-          ),
-        ),
-        child: Padding(
-          // COMPACT PADDING: Reduced top padding for better header-tab separation
-          padding: const EdgeInsets.fromLTRB(20, 60, 20, 9),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+        actions: [
+          Stack(
+            alignment: Alignment.center,
             children: [
-              // User Profile Row
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  CircleAvatar(
-                    radius: 20, // Reduced from 24
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    child: Text(
-                      displayName.isEmpty ? 'D' : displayName.substring(0, 1),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 18,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Hello,',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                        Text(
-                          displayName.isEmpty ? 'Driver' : displayName,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.3,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+              IconButton(
+                icon: const Icon(Icons.tune),
+                onPressed: _openFilterPage,
+                tooltip: 'Filters',
               ),
-              const SizedBox(height: 8), // Reduced gap for better compactness
-              // Stats Cards Row
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatCard(
-                      "Pending",
-                      "$count",
-                      Icons.assignment_late_outlined,
-                      const Color(0xFFFF6F00), // Orange to match theme
-                      const Color(0xFFE65100), // Dark Orange
+              if (hasActiveFilters)
+                Positioned(
+                  right: 12,
+                  top: 12,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildStatCard(
-                      "Total",
-                      "₹${(value / 1000).toStringAsFixed(1)}k",
-                      Icons.account_balance_wallet_outlined,
-                      const Color(0xFF42A5F5), // Light Blue to match theme
-                      const Color(0xFF1976D2), // Blue
-                    ),
-                  ),
-                ],
-              ),
+                ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String label, String value, IconData icon,
-      Color bgColor, Color iconColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(5),
-            decoration: BoxDecoration(
-              color: bgColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(icon, color: bgColor, size: 16),
           ),
           const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.7),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
         ],
+      ),
+      body: _filteredBills.isEmpty
+          ? _buildEmptyState(colorScheme)
+          : ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16),
+        itemCount: _filteredBills.length +
+            (_hasMore && _filteredBills.isNotEmpty ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == _filteredBills.length) {
+            return _filteredBills.isNotEmpty && _isLoading && _hasMore
+                ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+                : const SizedBox.shrink();
+          }
+          return _buildModernTaskCard(
+              _filteredBills[index], index + 1, colorScheme);
+        },
       ),
     );
   }
 
   Widget _buildModernTaskCard(
       DeliveryBill bill, int index, ColorScheme colorScheme) {
-    final bool isDone = _statusFromBill(bill) == TaskStatus.done;
-
-    Color statusBgColor;
-    Color statusTextColor;
-    String statusText;
-    if (_statusFromBill(bill) == TaskStatus.done) {
-      statusBgColor = const Color(0xFFE8F5E9);
-      statusTextColor = const Color(0xFF2E7D32);
-      statusText = "COMPLETED";
-    } else if (_statusFromBill(bill) == TaskStatus.returnTask) {
-      statusBgColor = const Color(0xFFFFEBEE);
-      statusTextColor = const Color(0xFFC62828);
-      statusText = "RETURN";
-    } else {
-      statusBgColor = const Color(0xFFFFF8E1);
-      statusTextColor = const Color(0xFFEF6C00);
-      statusText = "PENDING";
-    }
-
-    final typeColor = const Color(0xFF1976D2);
+    // Styling constants
+    final statusBgColor = const Color(0xFFFFF8E1); // Light Amber
+    final statusTextColor = const Color(0xFFEF6C00); // Dark Orange
+    final typeColor = const Color(0xFF1A237E);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withOpacity(0.08),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         children: [
-          // Header Section
+          // Card Header
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerLowest,
+              color: const Color(0xFFFAFAFA),
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+                topLeft: Radius.circular(12),
+                topRight: Radius.circular(12),
               ),
               border: Border(
-                bottom: BorderSide(
-                  color: colorScheme.outlineVariant.withOpacity(0.3),
-                  width: 1,
-                ),
+                bottom: BorderSide(color: Colors.grey.shade200),
               ),
             ),
             child: Row(
@@ -677,10 +408,10 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: statusBgColor,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    statusText,
+                    "PENDING",
                     style: TextStyle(
                       color: statusTextColor,
                       fontWeight: FontWeight.bold,
@@ -693,7 +424,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
             ),
           ),
 
-          // Body Section
+          // Card Body
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -701,90 +432,82 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
               children: [
                 Text(
                   bill.acname,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
-                    height: 1.2,
+                    color: Color(0xFF212121),
                   ),
                 ),
                 const SizedBox(height: 8),
-
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.location_on_outlined,
-                        size: 16, color: colorScheme.onSurfaceVariant),
+                    const Icon(Icons.location_on_outlined,
+                        size: 16, color: Color(0xFF757575)),
                     const SizedBox(width: 4),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // Station - Primary info
-                          Text(
-                            bill.station != 'NA' ? bill.station : 'N/A',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: colorScheme.onSurface,
-                              fontWeight: FontWeight.w600,
-                              height: 1.3,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          // Area and Route - Horizontal layout
-                          if (bill.area != 'NA' || bill.route != 'NA')
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4.0),
-                              child: Row(
-                                children: [
-                                  // Area with label
-                                  if (bill.area != 'NA')
-                                    Expanded(
-                                      child: Text(
-                                        'Area: ${bill.area}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: colorScheme.onSurfaceVariant,
-                                          height: 1.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  // Divider
-                                  if (bill.area != 'NA' && bill.route != 'NA')
-                                    Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6.0),
-                                      child: Text(
-                                        '•',
-                                        style: TextStyle(
-                                          color:
-                                              colorScheme.onSurfaceVariant,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                    ),
-                                  // Route with label
-                                  if (bill.route != 'NA')
-                                    Expanded(
-                                      child: Text(
-                                        'Route: ${bill.route}',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: colorScheme.onSurfaceVariant,
-                                          height: 1.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                ],
+                      child: Text(
+                        '${bill.area != 'NA' ? bill.area : ''} ${bill.area != 'NA' && bill.station != 'NA' ? '•' : ''} ${bill.station != 'NA' ? bill.station : ''}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF616161),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // Area and Route information
+                Row(
+                  children: [
+                    // Area
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            const TextSpan(
+                              text: 'Area: ',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF757575),
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
-                        ],
+                            TextSpan(
+                              text: bill.area != 'NA' ? bill.area : 'N/A',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF212121),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Route
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            const TextSpan(
+                              text: 'Route: ',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF757575),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            TextSpan(
+                              text: bill.route != 'NA' ? bill.route : 'N/A',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF212121),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -793,25 +516,18 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: colorScheme.surfaceContainerHigh.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFFF5F7FA),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _buildInfoItem(
-                          "Bill No", bill.billno, colorScheme, false),
-                      Container(
-                          width: 1,
-                          height: 24,
-                          color: colorScheme.outlineVariant),
+                      _buildInfoItem("Bill No", bill.billno, false),
+                      Container(width: 1, height: 24, color: Colors.grey[300]),
                       _buildInfoItem("Amount",
-                          "₹${bill.billamt.toStringAsFixed(0)}", colorScheme, true),
-                      Container(
-                          width: 1,
-                          height: 24,
-                          color: colorScheme.outlineVariant),
-                      _buildInfoItem("Items", "${bill.item}", colorScheme, false),
+                          "₹${bill.billamt.toStringAsFixed(0)}", true),
+                      Container(width: 1, height: 24, color: Colors.grey[300]),
+                      _buildInfoItem("Items", "${bill.item}", false),
                     ],
                   ),
                 ),
@@ -820,70 +536,80 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
           ),
 
           // Actions
-          if (!isDone)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 48,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: (bill.latitude != null && bill.longitude != null &&
+                                 bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
+                        ? () => _openMapsNavigation(bill)
+                        : null, // Disable if no coordinates
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      side: BorderSide(
+                          color: (bill.latitude != null && bill.longitude != null &&
+                                  bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
+                              ? Colors.grey.shade300
+                              : Colors.grey.shade200,
+                          width: 1.5),
+                      foregroundColor: (bill.latitude != null && bill.longitude != null &&
+                                       bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
+                          ? Colors.black
+                          : Colors.grey.shade400, // Grey out when disabled
+                    ),
+                    child: const Icon(Icons.near_me_outlined),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
                     height: 48,
-                    child: OutlinedButton(
-                      onPressed: () => _openMapsNavigation(bill),
-                      style: OutlinedButton.styleFrom(
-                        padding: EdgeInsets.zero,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _navigateToDetails(bill),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1A237E),
+                        foregroundColor: Colors.white,
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        side: BorderSide(color: colorScheme.outlineVariant),
                       ),
-                      child: Icon(Icons.near_me_outlined,
-                          color: colorScheme.onSurface),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: SizedBox(
-                      height: 48,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _navigateToDetails(bill),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1A237E),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        icon: const Icon(Icons.check_circle_outline, size: 20),
-                        label: const Text(
-                          "Mark Delivered",
-                          style: TextStyle(
-                              fontWeight: FontWeight.w600, fontSize: 14),
-                        ),
+                      icon: const Icon(Icons.check_circle_outline, size: 20),
+                      label: const Text(
+                        "Mark Delivered",
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoItem(
-      String label, String value, ColorScheme colorScheme, bool isAmount) {
+  Widget _buildInfoItem(String label, String value, bool isAmount) {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
-            label,
+            label.toUpperCase(),
             style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: colorScheme.onSurfaceVariant,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[600],
+              letterSpacing: 0.5,
             ),
           ),
           const SizedBox(height: 2),
@@ -891,8 +617,8 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
             value,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: isAmount ? const Color(0xFF1A237E) : colorScheme.onSurface,
+              fontWeight: FontWeight.w800,
+              color: isAmount ? const Color(0xFF1A237E) : Colors.black87,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -907,25 +633,17 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.inventory_2_outlined,
-                size: 48, color: colorScheme.outline),
-          ),
+          Icon(Icons.assignment_turned_in_outlined,
+              size: 56, color: Colors.grey[400]),
           const SizedBox(height: 16),
-          Text("No tasks found",
+          Text("No pending tasks",
               style: TextStyle(
-                  fontSize: 16,
-                  color: colorScheme.onSurface,
-                  fontWeight: FontWeight.w600)),
+                  fontSize: 18,
+                  color: Colors.grey[800],
+                  fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          Text("Try adjusting filters or checking back later",
-              style:
-              TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
+          Text("You're all caught up!",
+              style: TextStyle(fontSize: 14, color: Colors.grey[600])),
         ],
       ),
     );
@@ -933,40 +651,81 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
 
   Future<void> _openMapsNavigation(DeliveryBill bill) async {
     try {
-      // Try using coordinates first
-      if (bill.latitude != null && bill.longitude != null) {
-        final googleMapsUrl = Uri.parse(
-            'google.navigation:q=${bill.latitude},${bill.longitude}&mode=d');
-        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-        return;
-      }
+      debugPrint('[DeliveryBook] _openMapsNavigation called for: ${bill.acname}');
+      debugPrint('[DeliveryBook] Latitude: ${bill.latitude}, Longitude: ${bill.longitude}');
 
-      // Fallback to address-based navigation
-      final queryParts = <String>[];
-      if (bill.station != 'NA') queryParts.add(bill.station);
-      if (bill.area != 'NA') queryParts.add(bill.area);
-
-      if (queryParts.isEmpty) {
+      // Check if coordinates are available
+      if (bill.latitude == null || bill.longitude == null) {
+        debugPrint('[DeliveryBook] Latitude or longitude is null');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Location not available for this delivery'),
-              duration: Duration(seconds: 2),
+              content: Text('Location coordinates not available'),
+              backgroundColor: Colors.red,
             ),
           );
         }
         return;
       }
 
-      final query = Uri.encodeComponent(queryParts.join(', '));
-      final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-    } catch (e) {
+      final lat = bill.latitude!.trim();
+      final lng = bill.longitude!.trim();
+
+      debugPrint('[DeliveryBook] Trimmed Latitude: "$lat", Longitude: "$lng"');
+
+      if (lat.isEmpty || lng.isEmpty) {
+        debugPrint('[DeliveryBook] Latitude or longitude is empty after trim');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location coordinates not available'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      debugPrint('[DeliveryBook] Opening Google Maps with coordinates: $lat, $lng');
+
+      // Try multiple URL schemes for Google Maps
+      final urlSchemes = [
+        'google.navigation:q=$lat,$lng&mode=d',  // Google Maps navigation
+        'geo:$lat,$lng',                          // Geo URI
+        'https://www.google.com/maps/@$lat,$lng,17z', // Web fallback
+      ];
+
+      for (final urlScheme in urlSchemes) {
+        try {
+          debugPrint('[DeliveryBook] Attempting to launch: $urlScheme');
+          final uri = Uri.parse(urlScheme);
+          debugPrint('[DeliveryBook] Parsed URI: ${uri.toString()}');
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          debugPrint('[DeliveryBook] Successfully launched maps');
+          return;
+        } catch (e) {
+          debugPrint('[DeliveryBook] Failed with scheme: $urlScheme, error: $e');
+          continue;
+        }
+      }
+
+      // All schemes failed
+      debugPrint('[DeliveryBook] All URL schemes failed for coordinates');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not open Google Maps. Please make sure it is installed.'),
-            duration: Duration(seconds: 3),
+            content: Text('Could not open Google Maps. Please check if it is installed.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('[DeliveryBook] Unexpected error opening maps: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
           ),
         );
       }
@@ -983,29 +742,11 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
           final monthStr = parts[1].toLowerCase();
           final year = int.tryParse(parts[2]);
           final monthMap = {
-            'jan': 1,
-            'feb': 2,
-            'mar': 3,
-            'apr': 4,
-            'may': 5,
-            'jun': 6,
-            'jul': 7,
-            'aug': 8,
-            'sep': 9,
-            'oct': 10,
-            'nov': 11,
-            'dec': 12,
-            'january': 1,
-            'february': 2,
-            'march': 3,
-            'april': 4,
-            'june': 6,
-            'july': 7,
-            'august': 8,
-            'september': 9,
-            'october': 10,
-            'november': 11,
-            'december': 12
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+            'january': 1, 'february': 2, 'march': 3, 'april': 4,
+            'june': 6, 'july': 7, 'august': 8, 'september': 9,
+            'october': 10, 'november': 11, 'december': 12
           };
           final month = monthMap[monthStr];
           if (day != null && month != null && year != null) {
@@ -1033,18 +774,24 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
           billAmount: bill.billamt,
           itemCount: bill.item,
           area: bill.area == "NA" ? "" : bill.area,
-          latitude: null,
-          longitude: null,
+          latitude: bill.latitude != null ? double.tryParse(bill.latitude!) : null,
+          longitude: bill.longitude != null ? double.tryParse(bill.longitude!) : null,
           paymentType: PaymentType.cash,
           mobile: bill.mobile == "NA" ? null : bill.mobile,
         ),
       ),
-    ));
+    )).then((result) {
+      // When MarkDeliveredPage returns true (delivery was marked successfully),
+      // refresh the delivery list
+      if (result == true) {
+        debugPrint('[DeliveryBook] Delivery marked successfully, refreshing list...');
+        _loadBills(reset: true);
+      }
+    });
   }
 }
 
-// --- DATA MODEL ---
-
+// --- DATA MODEL (Unchanged) ---
 class DeliveryBill {
   final String acname, billno, billdate, acno, mobile, station;
   final String address, remark, area, route, statusName, status;
@@ -1144,5 +891,3 @@ class DeliveryBill {
     );
   }
 }
-
-

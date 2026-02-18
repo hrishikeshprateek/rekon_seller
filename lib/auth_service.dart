@@ -24,6 +24,8 @@ class AuthService with ChangeNotifier {
 
 
   Completer<void>? _autoLoginCompleter;
+  bool _isMpinDialogShowing = false; // Guard to prevent multiple MPIN dialogs
+  DateTime? _lastMpinDialogTime; // Prevent rapid re-showing of MPIN dialog
 
   String? _accessToken;
   String? _jwtToken;
@@ -62,11 +64,27 @@ class AuthService with ChangeNotifier {
                                   path.contains('refresh') ||
                                   error.requestOptions.extra['skipAuth'] == true;
 
+          debugPrint('[Interceptor] Error detected: status=${error.response?.statusCode}, path=$path, skipInterceptor=$skipInterceptor');
+
           if (error.response?.statusCode == 401 && !skipInterceptor) {
-            debugPrint('[AuthService] 401 detected, attempting MPIN validation and token refresh');
+            debugPrint('[Interceptor] 🔴 401 UNAUTHORIZED detected for: $path');
+
+            // Guard: Don't show MPIN dialog if one is already showing
+            if (_isMpinDialogShowing) {
+              debugPrint('[Interceptor] ⏸️ MPIN dialog already showing, skipping this 401');
+              return handler.next(error);
+            }
+
+            // Guard: Don't show MPIN dialog if it was shown very recently (within 2 seconds)
+            if (_lastMpinDialogTime != null && DateTime.now().difference(_lastMpinDialogTime!).inSeconds < 2) {
+              debugPrint('[Interceptor] ⏸️ MPIN dialog shown recently (${DateTime.now().difference(_lastMpinDialogTime!).inSeconds}s ago), skipping this 401');
+              return handler.next(error);
+            }
 
             // Try to refresh token via MPIN
+            debugPrint('[Interceptor] Calling _handleUnauthorized...');
             final success = await _handleUnauthorized();
+            debugPrint('[Interceptor] _handleUnauthorized returned: $success');
 
             if (success && error.requestOptions.extra['retry'] != true) {
               // Mark this request as retried to avoid infinite loops
@@ -78,12 +96,27 @@ class AuthService with ChangeNotifier {
               }
 
               try {
-                // Retry the original request with new token
-                final response = await _dio.fetch(error.requestOptions);
+                debugPrint('[AuthService] ✅ Interceptor: Refreshed successfully! Retrying original request');
+                debugPrint('[AuthService] Retry request path: ${error.requestOptions.path}');
+                debugPrint('[AuthService] Retry request method: ${error.requestOptions.method}');
+
+                // Use a new Dio instance WITHOUT interceptors for the retry to avoid re-triggering 401 handling
+                final retryDio = Dio(BaseOptions(
+                  baseUrl: baseUrl,
+                  connectTimeout: const Duration(seconds: 30),
+                  receiveTimeout: const Duration(seconds: 30),
+                  responseType: ResponseType.plain,
+                ));
+
+                final response = await retryDio.fetch(error.requestOptions);
+                debugPrint('[AuthService] ✅ Retry succeeded! Response status: ${response.statusCode}');
                 return handler.resolve(response);
               } catch (e) {
+                debugPrint('[AuthService] ❌ Retry failed: $e');
                 return handler.next(error);
               }
+            } else {
+              debugPrint('[AuthService] ❌ Token refresh unsuccessful or already retried, not retrying again');
             }
           }
           return handler.next(error);
@@ -95,9 +128,35 @@ class AuthService with ChangeNotifier {
   /// Handle 401 unauthorized by showing MPIN entry and refreshing token
   Future<bool> _handleUnauthorized() async {
     final navigator = appNavigatorKey.currentState;
-    if (navigator == null || _currentUser == null) return false;
+    if (navigator == null || _currentUser == null) {
+      debugPrint('[AuthService] Cannot handle 401: navigator or currentUser is null');
+      return false;
+    }
+
+    // Prevent showing MPIN dialog multiple times in quick succession (within 1 second)
+    final now = DateTime.now();
+    if (_lastMpinDialogTime != null && now.difference(_lastMpinDialogTime!).inSeconds < 1) {
+      debugPrint('[AuthService] MPIN dialog shown too recently, skipping to prevent spam');
+      return false;
+    }
+
+    // Guard: Don't show MPIN dialog if one is already showing
+    if (_isMpinDialogShowing) {
+      debugPrint('[AuthService] MPIN dialog already showing, skipping');
+      return false;
+    }
 
     try {
+      debugPrint('[AuthService] ====== STARTING UNAUTHORIZED HANDLER ======');
+      debugPrint('[AuthService] Showing MPIN entry dialog for 401 unauthorized');
+      debugPrint('[AuthService] Current tokens before MPIN:');
+      debugPrint('[AuthService]   _accessToken: ${_accessToken?.substring(0, 20)}...');
+      debugPrint('[AuthService]   _refreshToken: $_refreshToken');
+
+      // Set guard flags
+      _isMpinDialogShowing = true;
+      _lastMpinDialogTime = DateTime.now();
+
       // Show MPIN entry page
       final result = await navigator.push<dynamic>(
         MaterialPageRoute(
@@ -108,23 +167,44 @@ class AuthService with ChangeNotifier {
         ),
       );
 
+      // Clear dialog showing flag FIRST
+      _isMpinDialogShowing = false;
+
+      debugPrint('[AuthService] MPIN dialog closed, result: $result');
+
       // Check if MPIN was validated
       if (result is Map && result['success'] == true) {
+        debugPrint('[AuthService] ✅ MPIN validated successfully, now refreshing access token');
+
         // Now refresh the token
         final refreshResult = await refreshAccessToken();
 
+        debugPrint('[AuthService] Refresh result: ${refreshResult['success']}');
+        debugPrint('[AuthService] Refresh message: ${refreshResult['message']}');
+
         if (refreshResult['success'] == true) {
-          debugPrint('[AuthService] Token refreshed successfully after MPIN validation');
+          debugPrint('[AuthService] ✅✅ Token refreshed successfully! Returning true to retry request');
+          debugPrint('[AuthService] New tokens after refresh:');
+          debugPrint('[AuthService]   _accessToken: ${_accessToken?.substring(0, 20)}...');
+          debugPrint('[AuthService]   _refreshToken: $_refreshToken');
+          debugPrint('[AuthService] ====== UNAUTHORIZED HANDLER COMPLETE ======');
           return true;
         } else {
-          debugPrint('[AuthService] Token refresh failed: ${refreshResult['message']}');
+          debugPrint('[AuthService] ❌ Token refresh failed: ${refreshResult['message']}');
+          debugPrint('[AuthService] ====== UNAUTHORIZED HANDLER FAILED (REFRESH) ======');
+          return false;
         }
+      } else {
+        debugPrint('[AuthService] ❌ MPIN validation failed or cancelled');
+        debugPrint('[AuthService] ====== UNAUTHORIZED HANDLER FAILED (MPIN) ======');
+        return false;
       }
     } catch (e) {
-      debugPrint('[AuthService] Error handling 401: $e');
+      debugPrint('[AuthService] ❌ Error handling 401: $e');
+      debugPrint('[AuthService] ====== UNAUTHORIZED HANDLER EXCEPTION ======');
+      _isMpinDialogShowing = false; // Ensure flag is cleared on error
+      return false;
     }
-
-    return false;
   }
 
   // Helper to ensure response data is a Map<String, dynamic>
@@ -734,11 +814,20 @@ class AuthService with ChangeNotifier {
     String countryCode = '91',
   }) async {
     try {
+      // Normalize mobile number: strip non-digits and take last 10 digits
+      String normalizedMobile = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+      if (normalizedMobile.length > 10) {
+        normalizedMobile = normalizedMobile.substring(normalizedMobile.length - 10);
+      }
+
       final payload = {
-        'mobileNo': mobile,
+        'mobileNo': normalizedMobile,
         'countryCode': countryCode,
         'mpin': mpin,
       };
+
+      debugPrint('[AuthService] Validating MPIN for mobile: $mobile (normalized: $normalizedMobile)');
+      debugPrint('[AuthService] MPIN validation payload: $payload');
 
       final response = await _dio.post('/validateMpin',
         data: payload,
@@ -746,14 +835,28 @@ class AuthService with ChangeNotifier {
           headers: {
             'Content-Type': 'application/json',
             'package_name': packageNameHeader,
-            if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
+            // Don't include Authorization header - validateMpin doesn't need authentication
+            // This prevents 401 errors during MPIN validation
           },
           extra: {'skipAuth': true}, // Skip 401 interceptor to avoid infinite loops
         ),
       );
 
       final data = _normalizeResponse(response.data);
-      final success = data['Status'] == true || (data['Status']?.toString().toLowerCase() == 'true');
+
+      debugPrint('[AuthService] MPIN validation raw response: $data');
+      debugPrint('[AuthService] Response keys: ${data.keys.toList()}');
+
+      // Check multiple possible success indicators
+      final success = data['Status'] == true ||
+                     data['status'] == true ||
+                     data['success'] == true ||
+                     data['Message']?.toString().toLowerCase().contains('success') == true ||
+                     data['message']?.toString().toLowerCase().contains('success') == true ||
+                     (data['Status']?.toString().toLowerCase() == 'true') ||
+                     (data['status']?.toString().toLowerCase() == 'true');
+
+      debugPrint('[AuthService] MPIN validation parsed success: $success');
 
       return {
         'success': success,
@@ -762,12 +865,15 @@ class AuthService with ChangeNotifier {
         'raw': response.data,
       };
     } on DioException catch (e) {
+      debugPrint('[AuthService] MPIN validation error: ${e.message}');
+      debugPrint('[AuthService] MPIN validation error response: ${e.response?.data}');
       return {
         'success': false,
         'message': e.response?.data?.toString() ?? e.message ?? 'Network error',
         'data': null,
       };
     } catch (e) {
+      debugPrint('[AuthService] MPIN validation unexpected error: $e');
       return {
         'success': false,
         'message': 'An unexpected error occurred: ${e.toString()}',
@@ -778,12 +884,18 @@ class AuthService with ChangeNotifier {
 
   /// Refresh Access Token using stored refresh token. Calls the absolute /refresh endpoint.
   Future<Map<String, dynamic>> refreshAccessToken() async {
+    debugPrint('[AuthService] Starting refreshAccessToken...');
+    debugPrint('[AuthService] Current refresh token: $_refreshToken');
+
     if (_refreshToken == null || _refreshToken!.isEmpty) {
+      debugPrint('[AuthService] No refresh token available');
       return {'success': false, 'message': 'No refresh token available'};
     }
     try {
       final refreshUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/refresh';
       final payload = {'refresh_token': _refreshToken};
+      debugPrint('[AuthService] Refresh payload: $payload');
+
       // Use a new Dio instance so baseUrl doesn't interfere
       final d = Dio();
       d.options.connectTimeout = const Duration(seconds: 30);
@@ -796,7 +908,12 @@ class AuthService with ChangeNotifier {
         if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
       };
 
+      debugPrint('[AuthService] Refresh request headers: ${headers..remove('Authorization')} (Authorization hidden)');
+
       final response = await d.post(refreshUrl, data: payload, options: Options(headers: headers));
+      debugPrint('[AuthService] Refresh response status: ${response.statusCode}');
+      debugPrint('[AuthService] Refresh response: ${response.data}');
+
       final raw = response.data;
       final data = _normalizeResponse(raw);
 
@@ -804,23 +921,45 @@ class AuthService with ChangeNotifier {
       final newAccess = data['access_token'] ?? data['AccessToken'] ?? data['accessToken'];
       final newRefresh = data['refresh_token'] ?? data['RefreshToken'] ?? data['refreshToken'];
 
+      debugPrint('[AuthService] New access token received: ${newAccess != null ? 'YES' : 'NO'}');
+      debugPrint('[AuthService] New refresh token received: ${newRefresh != null ? 'YES' : 'NO'}');
+
       if (newAccess != null && newAccess.toString().isNotEmpty) {
+        final oldToken = _accessToken;
         _accessToken = newAccess.toString();
         _jwtToken = _accessToken;
         if (newRefresh != null) _refreshToken = newRefresh.toString();
 
-        await _storage.write(key: 'access_token', value: _accessToken);
-        await _storage.write(key: 'jwt_token', value: _jwtToken);
-        if (_refreshToken != null) await _storage.write(key: 'refresh_token', value: _refreshToken);
+        debugPrint('[AuthService] Token updated:');
+        debugPrint('[AuthService] Old access token: $oldToken');
+        debugPrint('[AuthService] New access token: $_accessToken');
+        debugPrint('[AuthService] New refresh token: $_refreshToken');
+
+        await _storage.write(key: 'access_token', value: _accessToken!);
+        await _storage.write(key: 'jwt_token', value: _jwtToken!);
+        if (_refreshToken != null) {
+          await _storage.write(key: 'refresh_token', value: _refreshToken!);
+        }
+
+        debugPrint('[AuthService] Tokens written to secure storage');
 
         notifyListeners();
+        debugPrint('[AuthService] Listeners notified');
+
+        debugPrint('[AuthService] Token refresh SUCCESSFUL - response data: $data');
         return {'success': true, 'data': data, 'message': data['message'] ?? 'Refreshed'};
       }
 
+      debugPrint('[AuthService] Failed to get new access token from response');
+      debugPrint('[AuthService] Response data was: $data');
       return {'success': false, 'message': data['message'] ?? 'Failed to refresh token', 'data': data};
     } on DioException catch (e) {
+      debugPrint('[AuthService] DioException during refresh: ${e.message}');
+      debugPrint('[AuthService] Response status: ${e.response?.statusCode}');
+      debugPrint('[AuthService] Response data: ${e.response?.data}');
       return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null};
     } catch (e) {
+      debugPrint('[AuthService] Unexpected error during refresh: $e');
       return {'success': false, 'message': 'Unexpected: ${e.toString()}', 'data': null};
     }
   }
@@ -965,6 +1104,8 @@ class AuthService with ChangeNotifier {
     _jwtToken = null;
     _refreshToken = null;
     _currentUser = null;
+    _isMpinDialogShowing = false; // Reset guard flag
+    // ...existing code...
     // Delete only authentication/session related keys, keep saved license/mobile for autofill
     final keysToRemove = ['access_token', 'jwt_token', 'refresh_token', 'user_data'];
     for (final k in keysToRemove) {
@@ -1056,6 +1197,12 @@ class AuthService with ChangeNotifier {
           if (error.response?.statusCode == 401 && !skipInterceptor) {
             debugPrint('[DioClient] 401 detected, attempting MPIN validation and token refresh');
 
+            // Guard: Don't show MPIN dialog if one is already showing
+            if (_isMpinDialogShowing) {
+              debugPrint('[DioClient] MPIN dialog already showing, skipping retry');
+              return handler.next(error);
+            }
+
             // Try to refresh token via MPIN
             final success = await _handleUnauthorized();
 
@@ -1069,12 +1216,15 @@ class AuthService with ChangeNotifier {
               }
 
               try {
-                // Retry the original request with new token
+                debugPrint('[DioClient] Retrying original request with new token');
                 final response = await dio.fetch(error.requestOptions);
                 return handler.resolve(response);
               } catch (e) {
+                debugPrint('[DioClient] Retry failed: $e');
                 return handler.next(error);
               }
+            } else {
+              debugPrint('[DioClient] Token refresh unsuccessful, not retrying');
             }
           }
           return handler.next(error);
