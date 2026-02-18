@@ -932,16 +932,44 @@ class _DeliveryBookPageState extends State<DeliveryBookPage>
   }
 
   Future<void> _openMapsNavigation(DeliveryBill bill) async {
-    final queryParts = <String>[];
-    if (bill.address != 'NA') queryParts.add(bill.address);
-    if (bill.area != 'NA') queryParts.add(bill.area);
-    if (bill.station != 'NA') queryParts.add(bill.station);
-    if (queryParts.isEmpty) return;
+    try {
+      // Try using coordinates first
+      if (bill.latitude != null && bill.longitude != null) {
+        final googleMapsUrl = Uri.parse(
+            'google.navigation:q=${bill.latitude},${bill.longitude}&mode=d');
+        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+        return;
+      }
 
-    final query = Uri.encodeComponent(queryParts.join(', '));
-    final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
-    if (await canLaunchUrl(googleMapsUrl)) {
+      // Fallback to address-based navigation
+      final queryParts = <String>[];
+      if (bill.station != 'NA') queryParts.add(bill.station);
+      if (bill.area != 'NA') queryParts.add(bill.area);
+
+      if (queryParts.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location not available for this delivery'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      final query = Uri.encodeComponent(queryParts.join(', '));
+      final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
       await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not open Google Maps. Please make sure it is installed.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -1023,6 +1051,8 @@ class DeliveryBill {
   final String keyno;
   final double billamt;
   final int item, qty;
+  final String? latitude;
+  final String? longitude;
 
   DeliveryBill({
     required this.acname,
@@ -1041,6 +1071,8 @@ class DeliveryBill {
     required this.statusName,
     required this.status,
     required this.keyno,
+    this.latitude,
+    this.longitude,
   });
 
   factory DeliveryBill.fromJson(Map<String, dynamic> json) {
@@ -1082,6 +1114,14 @@ class DeliveryBill {
     validAddrParts.where((s) => s.trim().isNotEmpty).join(', ');
     if (fullAddress.isEmpty) fullAddress = "NA";
 
+    String? strNullable(String key) {
+      final val = json[key];
+      if (val == null) return null;
+      final s = val.toString().trim();
+      if (s.isEmpty || s.toLowerCase() == 'null') return null;
+      return s;
+    }
+
     return DeliveryBill(
       acname: str('acname'),
       address: fullAddress,
@@ -1099,6 +1139,10 @@ class DeliveryBill {
       statusName: str('stausname'),
       status: str('status'),
       keyno: str('keyno'),
+      latitude: strNullable('latitude'),
+      longitude: strNullable('longitude'),
     );
   }
 }
+
+

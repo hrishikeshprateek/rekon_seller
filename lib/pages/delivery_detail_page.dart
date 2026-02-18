@@ -30,23 +30,47 @@ class DeliveryDetailPage extends StatelessWidget {
   }
 
   Future<void> _openMapsNavigation(BuildContext context) async {
-    final lat = _getString('latitude');
-    final lng = _getString('longitude');
+    try {
+      // Try using coordinates first
+      final lat = _getString('latitude');
+      final lng = _getString('longitude');
 
-    if (lat == 'N/A' || lng == 'N/A') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Location not available')),
-      );
-      return;
-    }
+      if (lat != 'N/A' && lng != 'N/A') {
+        final googleMapsUrl = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
+        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+        return;
+      }
 
-    final googleMapsUrl = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
-    if (await canLaunchUrl(googleMapsUrl)) {
+      // Fallback to address-based navigation
+      final queryParts = <String>[];
+      final station = _getString('station');
+      final area = _getString('area');
+
+      if (station != 'N/A') queryParts.add(station);
+      if (area != 'N/A') queryParts.add(area);
+
+      if (queryParts.isEmpty) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location not available for this delivery'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      final query = Uri.encodeComponent(queryParts.join(', '));
+      final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
       await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-    } else {
+    } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open maps')),
+          const SnackBar(
+            content: Text('Could not open Google Maps. Please make sure it is installed.'),
+            duration: Duration(seconds: 3),
+          ),
         );
       }
     }

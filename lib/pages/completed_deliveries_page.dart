@@ -867,32 +867,44 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
   }
 
   Future<void> _openMapsNavigation(DeliveryBill bill) async {
-    // Try to use lat/long if available
-    if (bill.latitude != null && bill.longitude != null) {
-      final googleMapsUrl = Uri.parse(
-          'google.navigation:q=${bill.latitude},${bill.longitude}&mode=d');
-      if (await canLaunchUrl(googleMapsUrl)) {
+    try {
+      // Try using coordinates first
+      if (bill.latitude != null && bill.longitude != null) {
+        final googleMapsUrl = Uri.parse(
+            'google.navigation:q=${bill.latitude},${bill.longitude}&mode=d');
         await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
         return;
       }
-    }
 
-    // Fallback to station name search
-    final queryParts = <String>[];
-    if (bill.station != 'NA') queryParts.add(bill.station);
-    if (queryParts.isEmpty) {
+      // Fallback to address-based navigation
+      final queryParts = <String>[];
+      if (bill.station != 'NA') queryParts.add(bill.station);
+      if (bill.area != 'NA') queryParts.add(bill.area);
+
+      if (queryParts.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Location not available for this delivery'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      final query = Uri.encodeComponent(queryParts.join(', '));
+      final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
+      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location not available')),
+          const SnackBar(
+            content: Text('Could not open Google Maps. Please make sure it is installed.'),
+            duration: Duration(seconds: 3),
+          ),
         );
       }
-      return;
-    }
-
-    final query = Uri.encodeComponent(queryParts.join(', '));
-    final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
-    if (await canLaunchUrl(googleMapsUrl)) {
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
     }
   }
 }
