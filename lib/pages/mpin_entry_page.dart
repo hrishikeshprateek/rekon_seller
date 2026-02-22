@@ -57,6 +57,12 @@ class _MpinEntryPageState extends State<MpinEntryPage> {
       debugPrint('[MpinEntryPage] MPIN validation result: ${result['success']}');
 
       if (result['success'] == true) {
+        debugPrint('[MpinEntryPage] MPIN valid, refreshing token');
+        final refreshResult = await auth.refreshAccessToken();
+        debugPrint('[MpinEntryPage] refreshAccessToken success: ${refreshResult['success']}');
+        debugPrint('[MpinEntryPage] refreshAccessToken message: ${refreshResult['message']}');
+        debugPrint('[MpinEntryPage] refreshAccessToken data keys: ${(refreshResult['data'] is Map) ? (refreshResult['data'] as Map).keys.toList() : refreshResult['data']?.runtimeType}');
+
         // Return success and the validated MPIN
         debugPrint('[MpinEntryPage] MPIN valid, returning success');
         if (mounted) Navigator.of(context).pop({'success': true, 'mpin': mpin});

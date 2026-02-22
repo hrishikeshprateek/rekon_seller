@@ -64,6 +64,11 @@ class AuthService with ChangeNotifier {
                                   path.contains('refresh') ||
                                   error.requestOptions.extra['skipAuth'] == true;
 
+          // If this request was already retried, do not prompt again
+          if (error.requestOptions.extra['retry'] == true) {
+            return handler.next(error);
+          }
+
           debugPrint('[Interceptor] Error detected: status=${error.response?.statusCode}, path=$path, skipInterceptor=$skipInterceptor');
 
           if (error.response?.statusCode == 401 && !skipInterceptor) {
@@ -176,8 +181,37 @@ class AuthService with ChangeNotifier {
       if (result is Map && result['success'] == true) {
         debugPrint('[AuthService] ✅ MPIN validated successfully, now refreshing access token');
 
-        // Now refresh the token
+        final validatedMpin = result['mpin']?.toString();
+        final licNo = _currentUser?.licenseNumber;
+        debugPrint('[AuthService] MPIN provided: ${validatedMpin != null && validatedMpin.isNotEmpty}');
+        debugPrint('[AuthService] License available: ${licNo != null && licNo.isNotEmpty}');
+
+        if (validatedMpin != null && validatedMpin.isNotEmpty && licNo != null) {
+          debugPrint('[AuthService] Attempting loginWithMpinOnly to refresh tokens');
+          debugPrint('[AuthService] loginWithMpinOnly payload: {mobileNo: ${_currentUser!.mobileNumber}, licNo: $licNo, mpin: ***}');
+          // Prefer MPIN login to get a fresh access/refresh token pair
+          final loginResult = await loginWithMpinOnly(
+            mobile: _currentUser!.mobileNumber,
+            licenseNumber: licNo,
+            mpin: validatedMpin,
+          );
+
+          debugPrint('[AuthService] loginWithMpinOnly result: ${loginResult['success']}');
+          if (loginResult['success'] == true) {
+            debugPrint('[AuthService] ✅✅ MPIN login refreshed tokens successfully');
+            debugPrint('[AuthService] ====== UNAUTHORIZED HANDLER COMPLETE ======');
+            return true;
+          }
+          debugPrint('[AuthService] ⚠️ MPIN login failed, falling back to refresh token');
+        }
+
+        // Fallback to refresh token
+        debugPrint('[AuthService] Calling refreshAccessToken fallback');
         final refreshResult = await refreshAccessToken();
+        debugPrint('[AuthService] refreshAccessToken completed');
+        debugPrint('[AuthService] refreshAccessToken success: ${refreshResult['success']}');
+        debugPrint('[AuthService] refreshAccessToken message: ${refreshResult['message']}');
+        debugPrint('[AuthService] refreshAccessToken data keys: ${(refreshResult['data'] is Map) ? (refreshResult['data'] as Map).keys.toList() : refreshResult['data']?.runtimeType}');
 
         debugPrint('[AuthService] Refresh result: ${refreshResult['success']}');
         debugPrint('[AuthService] Refresh message: ${refreshResult['message']}');
@@ -408,6 +442,7 @@ class AuthService with ChangeNotifier {
           _accessToken = data['AccessToken']?.toString();
           // Some APIs return only AccessToken - use it as jwt token for Authorization header
           _jwtToken = _accessToken;
+          _refreshToken = data['RefreshToken']?.toString() ?? data['refresh_token']?.toString();
 
           // Map profile to our UserModel (Profile may be null)
           final profileRaw = data['Profile'];
@@ -426,9 +461,22 @@ class AuthService with ChangeNotifier {
           }
 
           // Persist
-          if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
-          if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
-          if (_currentUser != null) await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+          if (_accessToken != null) {
+            await _storage.write(key: 'access_token', value: _accessToken);
+            debugPrint('[AuthService] Access token saved to secure storage');
+          }
+          if (_jwtToken != null) {
+            await _storage.write(key: 'jwt_token', value: _jwtToken);
+            debugPrint('[AuthService] JWT token saved to secure storage');
+          }
+          if (_refreshToken != null) {
+            await _storage.write(key: 'refresh_token', value: _refreshToken);
+            debugPrint('[AuthService] Refresh token saved to secure storage: $_refreshToken');
+          }
+          if (_currentUser != null) {
+            await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+            debugPrint('[AuthService] User data saved to secure storage');
+          }
 
           notifyListeners();
         }
@@ -885,37 +933,50 @@ class AuthService with ChangeNotifier {
   /// Refresh Access Token using stored refresh token. Calls the absolute /refresh endpoint.
   Future<Map<String, dynamic>> refreshAccessToken() async {
     debugPrint('[AuthService] Starting refreshAccessToken...');
-    debugPrint('[AuthService] Current refresh token: $_refreshToken');
+
+    // Retrieve refresh token from secure storage if not in memory
+    if (_refreshToken == null || _refreshToken!.isEmpty) {
+      debugPrint('[AuthService] Refresh token in memory is NULL or empty. Attempting to retrieve from secure storage.');
+      _refreshToken = await _storage.read(key: 'refresh_token');
+      debugPrint('[AuthService] Retrieved refresh token from secure storage: ${_refreshToken != null ? 'SET' : 'NULL'}');
+    }
 
     if (_refreshToken == null || _refreshToken!.isEmpty) {
       debugPrint('[AuthService] No refresh token available');
       return {'success': false, 'message': 'No refresh token available'};
     }
+
     try {
       final refreshUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/refresh';
       final payload = {'refresh_token': _refreshToken};
-      debugPrint('[AuthService] Refresh payload: $payload');
+      debugPrint('[AuthService] Refresh URL: $refreshUrl');
+      debugPrint('[AuthService] Refresh payload: {refresh_token: ***}');
 
       // Use a new Dio instance so baseUrl doesn't interfere
       final d = Dio();
       d.options.connectTimeout = const Duration(seconds: 30);
       d.options.receiveTimeout = const Duration(seconds: 30);
 
-      // Attach current JWT if available
+      // Refresh API expects refresh token in Authorization header
       final headers = {
         'Content-Type': 'application/json',
         'package_name': packageNameHeader,
-        if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
+        'Authorization': 'Bearer $_refreshToken',
       };
 
-      debugPrint('[AuthService] Refresh request headers: ${headers..remove('Authorization')} (Authorization hidden)');
+      final logHeaders = Map<String, dynamic>.from(headers);
+      logHeaders.remove('Authorization');
+      debugPrint('[AuthService] Refresh request headers: $logHeaders (Authorization hidden)');
 
       final response = await d.post(refreshUrl, data: payload, options: Options(headers: headers));
       debugPrint('[AuthService] Refresh response status: ${response.statusCode}');
-      debugPrint('[AuthService] Refresh response: ${response.data}');
+      debugPrint('[AuthService] Refresh response type: ${response.data.runtimeType}');
+      debugPrint('[AuthService] Refresh response raw: ${response.data}');
 
       final raw = response.data;
       final data = _normalizeResponse(raw);
+      debugPrint('[AuthService] Refresh response parsed: $data');
+      debugPrint('[AuthService] Refresh response parsed keys: ${data.keys.toList()}');
 
       // API returns access_token and refresh_token keys (snake_case)
       final newAccess = data['access_token'] ?? data['AccessToken'] ?? data['accessToken'];
@@ -1031,18 +1092,27 @@ class AuthService with ChangeNotifier {
         'mpin': mpin,
       };
 
+      debugPrint('[AuthService] loginWithMpinOnly POST /loginWithMpin');
+      debugPrint('[AuthService] loginWithMpinOnly payload: {mobileNo: $mobile, countryCode: $countryCode, licNo: $licenseNumber, mpin: ***}');
+
       final response = await _dio.post('/loginWithMpin', data: payload, options: Options(headers: {
         'Content-Type': 'application/json',
         'package_name': packageNameHeader,
       }));
 
+      debugPrint('[AuthService] loginWithMpinOnly response status: ${response.statusCode}');
+      debugPrint('[AuthService] loginWithMpinOnly response raw: ${response.data}');
+
       final data = _normalizeResponse(response.data);
+      debugPrint('[AuthService] loginWithMpinOnly parsed: $data');
 
       if (data['Status'] == true || data['status']?.toString() == 'true' || data['success'] == true) {
         // Extract tokens
         _accessToken = data['access_token'] ?? data['accessToken'];
         _jwtToken = data['jwt_token'] ?? data['jwtToken'] ?? data['access_token'];
         _refreshToken = data['refresh_token'] ?? data['refreshToken'];
+
+        debugPrint('[AuthService] loginWithMpinOnly tokens: access=${_accessToken != null}, refresh=${_refreshToken != null}');
 
         // Save tokens
         if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
@@ -1193,6 +1263,11 @@ class AuthService with ChangeNotifier {
           final skipInterceptor = path.contains('validateMpin') ||
                                   path.contains('refresh') ||
                                   error.requestOptions.extra['skipAuth'] == true;
+
+          // If this request was already retried, do not prompt again
+          if (error.requestOptions.extra['retry'] == true) {
+            return handler.next(error);
+          }
 
           if (error.response?.statusCode == 401 && !skipInterceptor) {
             debugPrint('[DioClient] 401 detected, attempting MPIN validation and token refresh');
