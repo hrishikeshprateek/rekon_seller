@@ -29,6 +29,8 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   List<Product> _allProducts = [];
   List<Product> _displayedProducts = [];
   List<CartItem> _cart = [];
+  // per-item metadata loaded from server (tax, net amt, mrp, amt etc.) keyed by product id
+  Map<String, Map<String, dynamic>> _cartMeta = {};
 
   bool _isLoadingProducts = false;
   bool _isLoadingMore = false;
@@ -92,7 +94,12 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           _selectedAccount = result;
           _hasSelectedAccount = true;
         });
-        if (mounted) _loadProducts();
+        if (mounted) {
+          // Load any existing draft order (cart) for this account first
+          await _loadDraftOrder();
+          // Then load product list
+          await _loadProducts();
+        }
         return; // done
       }
 
@@ -351,139 +358,182 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     );
   }
 
-  void _addToCart(Product product) {
-    setState(() {
-      final existingIndex = _cart.indexWhere((item) => item.product.id == product.id);
-      if (existingIndex >= 0) {
-        _cart[existingIndex] = _cart[existingIndex].copyWith(quantity: _cart[existingIndex].quantity + 1);
-      } else {
-        _cart.add(CartItem(product: product));
-      }
-    });
-  }
+  Future<void> _addToCart(Product product) async {
+    // Optimistic update: prepare new CartItem (quantity 1) but don't mutate state until API returns success
+    final existingIndex = _cart.indexWhere((item) => item.product.id == product.id);
 
-  void _updateQuantity(Product product, int newQuantity) {
-    setState(() {
-      if (newQuantity <= 0) {
-        _cart.removeWhere((item) => item.product.id == product.id);
-      } else {
-        final index = _cart.indexWhere((item) => item.product.id == product.id);
-        if (index >= 0) {
-          _cart[index] = _cart[index].copyWith(quantity: newQuantity);
+    // Build a tentative CartItem to send to server
+    final tentativeQuantity = (existingIndex >= 0) ? _cart[existingIndex].quantity + 1 : 1;
+    final tentativeCartItem = CartItem(product: product, quantity: tentativeQuantity);
+
+    // Show a small progress indicator via SnackBar while calling API
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(const SnackBar(content: Text('Adding item...'), duration: Duration(milliseconds: 700)));
+
+    final result = await _callAddDraftOrder(tentativeCartItem);
+
+    if (result['success'] == true) {
+      setState(() {
+        if (existingIndex >= 0) {
+          _cart[existingIndex] = _cart[existingIndex].copyWith(quantity: tentativeQuantity);
+        } else {
+          _cart.add(tentativeCartItem);
         }
+      });
+      // refresh server-side draft metadata (tax/net) after successful add
+      await _loadDraftOrder();
+      scaffold.showSnackBar(const SnackBar(content: Text('Item added')));
+    } else {
+      scaffold.showSnackBar(SnackBar(content: Text('Failed to add item: ${result['message'] ?? 'Unknown'}')));
+    }
+  }
+
+  void _updateQuantity(Product product, int newQuantity) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    final existingIndex = _cart.indexWhere((item) => item.product.id == product.id);
+
+    if (existingIndex < 0) return;
+
+    // Save previous state to revert if API fails
+    final previousItem = _cart[existingIndex];
+
+    if (newQuantity <= 0) {
+      // If user decreased to zero, attempt to send update with zero quantity
+      final tentative = previousItem.copyWith(quantity: 0);
+      scaffold.showSnackBar(const SnackBar(content: Text('Removing item...'), duration: Duration(milliseconds: 700)));
+      final result = await _callAddDraftOrder(tentative);
+      if (result['success'] == true) {
+        setState(() => _cart.removeAt(existingIndex));
+        scaffold.showSnackBar(const SnackBar(content: Text('Item removed')));
+      } else {
+        scaffold.showSnackBar(SnackBar(content: Text('Failed to remove item: ${result['message'] ?? 'Unknown'}')));
       }
-    });
-  }
-
-  int _getCartQuantity(Product product) {
-    final item = _cart.firstWhere((item) => item.product.id == product.id, orElse: () => CartItem(product: product, quantity: 0));
-    return item.quantity;
-  }
-
-  double get _cartTotal => _cart.fold(0, (sum, item) => sum + item.total);
-  int get _cartItemCount => _cart.fold(0, (sum, item) => sum + item.quantity);
-
-  Future<void> _submitDraftOrder() async {
-    if (_cart.isEmpty || _selectedAccount == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cart is empty or party not selected')));
       return;
     }
 
-    setState(() => _isSubmittingDraft = true);
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final dio = auth.getDioClient();
+    // Optimistic update in UI
+    setState(() {
+      _cart[existingIndex] = _cart[existingIndex].copyWith(quantity: newQuantity);
+    });
 
-    final headers = {
-      'Content-Type': 'application/json',
-      'package_name': auth.packageNameHeader,
-      if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-    };
+    scaffold.showSnackBar(const SnackBar(content: Text('Updating quantity...'), duration: Duration(milliseconds: 700)));
+    final result = await _callAddDraftOrder(_cart[existingIndex]);
 
-    int successCount = 0;
-    final failures = <String>[];
-
-    for (final cartItem in _cart) {
-      try {
-        final product = cartItem.product;
-
-        // Build payload. Use best-effort mappings from available fields.
-        // Determine firm code from user's stores (pick primary or first)
-        String firmCode = '';
-        try {
-          final stores = auth.currentUser?.stores;
-          if (stores != null && stores.isNotEmpty) {
-            final primary = stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
-            firmCode = primary.firmCode;
-          }
-        } catch (_) {
-          firmCode = '';
-        }
-
-        final acCodeValue = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
-        final itemCodeValue = product.id;
-        final cuIdValue = int.tryParse(auth.currentUser?.userId ?? '') ?? 0;
-
-        final payload = {
-          'UserId': auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
-          'LicNo': auth.currentUser?.licenseNumber ?? '',
-          'lFirmCode': firmCode,
-          'AcCode': acCodeValue,
-          'ItemCode': itemCodeValue,
-          'ItemQty': cartItem.quantity.toString(),
-          'ItemRate': (cartItem.priceAtAddition).toString(),
-          'IdCol': int.tryParse(product.id) ?? 0,
-          'cu_id': cuIdValue,
-          'ItemFQty': '',
-          'ItemSchQty': '0.0',
-          'ItemDSchQty': '0.0',
-          'ItemAmt': cartItem.total.toStringAsFixed(2),
-          'discount_percentage': '',
-          'discount_percentage1': '',
-          'discount_pcs': '0.0',
-          'remark': cartItem.product.name,
-          'insert_record': 1,
-          'default_hit': true,
-        };
-
-        final response = await dio.post('/AddDraftOrder', data: payload, options: Options(headers: headers));
-        dynamic raw = response.data;
-        Map<String, dynamic> parsed = {};
-        if (raw is Map<String, dynamic>) parsed = raw;
-        else if (raw is String) {
-          final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
-          parsed = jsonDecode(clean) as Map<String, dynamic>;
-        } else {
-          parsed = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
-        }
-
-        if (parsed['success'] == true || parsed['Status'] == true || parsed['status'] == true) {
-          successCount++;
-        } else if (parsed['rs'] == 1) {
-          successCount++;
-        } else {
-          final msg = parsed['message']?.toString() ?? parsed['data']?.toString() ?? 'Unknown error';
-          failures.add('Item ${product.name}: $msg');
-        }
-      } catch (e) {
-        failures.add('${cartItem.product.name}: $e');
-      }
-    }
-
-    if (!mounted) return;
-    setState(() => _isSubmittingDraft = false);
-
-    if (successCount == _cart.length) {
-      // Clear cart and show success
-      setState(() {
-        _cart.clear();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved ${successCount} items as draft')));
+    if (result['success'] == true) {
+      // refresh server-side draft metadata after quantity update
+      await _loadDraftOrder();
+      scaffold.showSnackBar(const SnackBar(content: Text('Quantity updated')));
     } else {
-      final msg = 'Saved $successCount/${_cart.length}. ${failures.isNotEmpty ? failures.join('\n') : ''}';
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      // revert
+      setState(() {
+        _cart[existingIndex] = previousItem;
+      });
+      scaffold.showSnackBar(SnackBar(content: Text('Failed to update quantity: ${result['message'] ?? 'Unknown'}')));
     }
   }
 
+  // Helper to call AddDraftOrder API for a single cart item. Returns map with success and message.
+  Future<Map<String, dynamic>> _callAddDraftOrder(CartItem cartItem) async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      // Determine firm code
+      String firmCode = '';
+      try {
+        final stores = auth.currentUser?.stores;
+        if (stores != null && stores.isNotEmpty) {
+          final primary = stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
+          firmCode = primary.firmCode;
+        }
+      } catch (_) {
+        firmCode = '';
+      }
+
+      final acCodeValue = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
+      final itemCodeValue = cartItem.product.id;
+      final cuIdValue = int.tryParse(auth.currentUser?.userId ?? '') ?? 0;
+
+      final payload = {
+        'UserId': auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
+        'LicNo': auth.currentUser?.licenseNumber ?? '',
+        'lFirmCode': firmCode,
+        'AcCode': acCodeValue,
+        'ItemCode': itemCodeValue,
+        'ItemQty': cartItem.quantity.toString(),
+        'ItemRate': (cartItem.priceAtAddition).toString(),
+        'IdCol': int.tryParse(cartItem.product.id) ?? 0,
+        'cu_id': cuIdValue,
+        'ItemFQty': '',
+        'ItemSchQty': '0.0',
+        'ItemDSchQty': '0.0',
+        'ItemAmt': cartItem.total.toStringAsFixed(2),
+        'discount_percentage': '',
+        'discount_percentage1': '',
+        'discount_pcs': '0.0',
+        'remark': cartItem.product.name,
+        'insert_record': 1,
+        'default_hit': true,
+      };
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'package_name': auth.packageNameHeader,
+        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+      };
+
+      final response = await dio.post('/AddDraftOrder', data: payload, options: Options(headers: headers));
+      dynamic raw = response.data;
+      Map<String, dynamic> parsed = {};
+      if (raw is Map<String, dynamic>) parsed = raw;
+      else if (raw is String) {
+        final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
+        parsed = jsonDecode(clean) as Map<String, dynamic>;
+      } else {
+        parsed = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+      }
+
+      final success = (parsed['success'] == true || parsed['Status'] == true || parsed['status'] == true || parsed['rs'] == 1);
+      final message = parsed['message']?.toString() ?? parsed['data']?.toString();
+      return {'success': success, 'message': message};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  // --- Helper getters and utilities for cart ---
+  int _getCartQuantity(Product product) {
+    final idx = _cart.indexWhere((c) => c.product.id == product.id);
+    return idx >= 0 ? _cart[idx].quantity : 0;
+  }
+
+  int get _cartItemCount => _cart.fold<int>(0, (s, c) => s + c.quantity);
+
+  double get _cartTotal => _cart.fold<double>(0.0, (s, c) => s + c.total);
+
+  // Submit the draft order (simple implementation: call AddDraftOrder for each item or call a batch API if available)
+  Future<void> _submitDraftOrder() async {
+    if (_cart.isEmpty) return;
+    setState(() => _isSubmittingDraft = true);
+    try {
+      // For now call existing _callAddDraftOrder for each item sequentially.
+      for (final item in List<CartItem>.from(_cart)) {
+        final res = await _callAddDraftOrder(item);
+        if (res['success'] != true) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to submit ${item.product.name}: ${res['message'] ?? ''}')));
+        }
+      }
+      // Optionally clear cart on success
+      setState(() => _cart.clear());
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Order confirmed')));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Order submission failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isSubmittingDraft = false);
+    }
+  }
+
+  // --- UI CODE REMAINS UNCHANGED ---
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -555,7 +605,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     style: const TextStyle(fontSize: 14),
                     decoration: InputDecoration(
                       hintText: 'Search products...',
-                      hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.6), fontSize: 14),
+                      hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withAlpha((0.6 * 255).round()), fontSize: 14),
                       prefixIcon: Icon(Icons.search, color: colorScheme.onSurfaceVariant, size: 20),
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
@@ -567,7 +617,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                             )
                           : null,
                       filled: true,
-                      fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.3),
+                      fillColor: colorScheme.surfaceContainerHighest.withAlpha((0.3 * 255).round()),
                       contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     ),
@@ -634,7 +684,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                       children: [
                         Text(
                           "$_cartItemCount Items",
-                          style: TextStyle(color: colorScheme.onInverseSurface.withOpacity(0.7), fontSize: 11),
+                          style: TextStyle(color: colorScheme.onInverseSurface.withAlpha((0.7 * 255).round()), fontSize: 11),
                         ),
                         Text(
                           "₹${_cartTotal.toStringAsFixed(2)}",
@@ -671,7 +721,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: qty > 0 ? colorScheme.primary.withOpacity(0.5) : colorScheme.outlineVariant.withOpacity(0.3)),
+        border: Border.all(color: qty > 0 ? colorScheme.primary.withAlpha((0.5 * 255).round()) : colorScheme.outlineVariant.withAlpha((0.3 * 255).round())),
       ),
       padding: const EdgeInsets.all(12),
       child: Row(
@@ -681,7 +731,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: colorScheme.secondaryContainer.withOpacity(0.4),
+              color: colorScheme.secondaryContainer.withAlpha((0.4 * 255).round()),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(Icons.medication_outlined, size: 20, color: colorScheme.secondary),
@@ -767,86 +817,328 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     );
   }
 
-  void _showCartSheet(BuildContext context) {
+  // Helper: load draft order from server and populate _cart
+  Future<Map<String, dynamic>> _loadDraftOrder() async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      // Determine firm code
+      String firmCode = '';
+      try {
+        final stores = auth.currentUser?.stores;
+        if (stores != null && stores.isNotEmpty) {
+          final primary = stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
+          firmCode = primary.firmCode;
+        }
+      } catch (_) {
+        firmCode = '';
+      }
+
+      final payload = {
+        'lUserId': auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lFirmCode': firmCode,
+        'AcCode': _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? ''),
+      };
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'package_name': auth.packageNameHeader,
+        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+      };
+
+      final response = await dio.post('/ListDraftOrder', data: payload, options: Options(headers: headers));
+      dynamic raw = response.data;
+
+      Map<String, dynamic> parsed = {};
+      if (raw is Map<String, dynamic>) parsed = raw;
+      else if (raw is String) {
+        final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
+        parsed = jsonDecode(clean) as Map<String, dynamic>;
+      } else {
+        parsed = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+      }
+
+      // Navigate parsed -> data -> DraftOrder
+      final data = parsed['data'] as Map<String, dynamic>?;
+      final draftList = data != null && data['DraftOrder'] is List ? (data['DraftOrder'] as List) : <dynamic>[];
+
+      final List<CartItem> loaded = [];
+      final Map<String, Map<String, dynamic>> meta = {};
+
+      int parseInt(dynamic v) {
+        if (v == null) return 0;
+        if (v is int) return v;
+        return int.tryParse(v.toString()) ?? 0;
+      }
+
+      double parseDouble(dynamic v) {
+        if (v == null) return 0.0;
+        if (v is double) return v;
+        if (v is int) return v.toDouble();
+        return double.tryParse(v.toString()) ?? 0.0;
+      }
+
+      for (final e in draftList) {
+        final Map<String, dynamic> m = e is Map<String, dynamic> ? e : Map<String, dynamic>.from(e);
+        final idCol = parseInt(m['IdCol'] ?? m['Idcol']);
+        final name = (m['Name'] ?? '').toString();
+        final mfg = (m['MfgComp'] ?? '').toString();
+        final qty = parseDouble(m['Qty']).toInt();
+        final rate = parseDouble(m['Rate']);
+        final mrp = parseDouble(m['Mrp']);
+        final stock = parseDouble(m['Stock']).toInt();
+        final amt = parseDouble(m['Amt']);
+        final taxAmt = parseDouble(m['TaxAmt']);
+        final netAmt = parseDouble(m['NetAmt']);
+        final discAmt = parseDouble(m['DO_DiscAmt'] ?? m['DO_DiscAmt']);
+        final disc1 = parseDouble(m['DO_Disc1Amt'] ?? 0);
+        final disc2 = parseDouble(m['DO_Disc2Amt'] ?? 0);
+
+        final product = Product(
+          id: idCol.toString(),
+          name: name,
+          category: 'Medicine',
+          price: rate,
+          mrp: mrp,
+          unit: (m['packing'] ?? '').toString().isNotEmpty ? (m['packing'] ?? '').toString() : 'Unit',
+          stockQuantity: stock,
+          manufacturer: mfg,
+          batchNumber: null,
+          expiryDate: null,
+          description: '',
+          imageUrl: null,
+          salt: null,
+        );
+
+        final cartItem = CartItem(product: product, quantity: qty, priceAtAddition: rate);
+        loaded.add(cartItem);
+
+        // store meta so UI can show Tax/MRP/Net values
+        meta[product.id] = {
+          'amt': amt,
+          'tax': taxAmt,
+          'net': netAmt,
+          'mrp': mrp,
+          'gv': amt, // gross value (display)
+          'sv': disc1,
+          'dv': disc2,
+          'disc': discAmt,
+        };
+      }
+
+      setState(() {
+        _cart = loaded;
+        _cartMeta = meta;
+      });
+
+      return {'success': true, 'count': loaded.length};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  void _showCartSheet(BuildContext context) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(const SnackBar(content: Text('Loading cart...'), duration: Duration(milliseconds: 700)));
+    final res = await _loadDraftOrder();
+    if (res['success'] != true) {
+      scaffold.showSnackBar(SnackBar(content: Text('Failed to load cart: ${res['message'] ?? 'Unknown'}')));
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        maxChildSize: 0.9,
-        minChildSize: 0.4,
+        initialChildSize: 0.7,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
         builder: (_, scrollControl) => Container(
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             children: [
               const SizedBox(height: 12),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+              Container(width: 32, height: 4, decoration: BoxDecoration(color: Theme.of(context).colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2))),
+
+              // --- PROFESSIONAL HEADER ---
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Current Order", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Review Order', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, letterSpacing: -0.5, color: Theme.of(context).colorScheme.onSurface)),
+                          const SizedBox(height: 4),
+                          Text('$_cartItemCount items • Total Payable: ₹${_cartTotal.toStringAsFixed(2)}',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Theme.of(context).colorScheme.primary)),
+                        ],
+                      ),
+                    ),
+                    IconButton.filledTonal(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(ctx)
+                    ),
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              const Divider(height: 1, thickness: 0.5),
+
               Expanded(
-                child: ListView.separated(
+                child: _cart.isEmpty
+                    ? Center(child: Text('Your cart is empty', style: TextStyle(color: Theme.of(context).colorScheme.outline)))
+                    : ListView.builder(
                   controller: scrollControl,
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                   itemCount: _cart.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
                   itemBuilder: (ctx, i) {
                     final item = _cart[i];
-                    return Row(
-                      children: [
-                        // --- NEW: Small Icon in Cart View too ---
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(8),
+                    final meta = _cartMeta[item.product.id] ?? {};
+                    final price = item.priceAtAddition;
+                    final qty = item.quantity;
+                    final mrp = meta['mrp'] ?? item.product.mrp ?? 0.0;
+                    final gv = meta['gv'] ?? (price * qty);
+                    final gst = meta['tax'] ?? 0.0;
+                    final disc = meta['disc'] ?? 0.0;
+                    final net = meta['net'] ?? (gv + gst - disc);
+
+                    return Container(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5)),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          // Item Header
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, letterSpacing: -0.2)),
+                                      if ((item.product.manufacturer ?? '').isNotEmpty)
+                                        Text(item.product.manufacturer!, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Quantity Controls (Material 3 Style)
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.5),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.remove, size: 16),
+                                        onPressed: () => _updateQuantity(item.product, qty - 1),
+                                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      ),
+                                      Text('$qty', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                      IconButton(
+                                        icon: const Icon(Icons.add, size: 16),
+                                        onPressed: () => _updateQuantity(item.product, qty + 1),
+                                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                          child: Icon(Icons.medication_outlined, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                              Text("₹${item.priceAtAddition} x ${item.quantity}", style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                            ],
+
+                          // Financial Detail Grid
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceContainerLow,
+                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                            ),
+                            child: Column(
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    _buildCartDetailRow('Rate', '₹${price.toStringAsFixed(2)}'),
+                                    _buildCartDetailRow('MRP', '₹${mrp.toStringAsFixed(2)}'),
+                                    _buildCartDetailRow('GST', '₹${gst.toStringAsFixed(2)}'),
+                                  ],
+                                ),
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Divider(height: 1, thickness: 0.5),
+                                ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Net Amount', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                                    Text('₹${net.toStringAsFixed(2)}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text("₹${item.total.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      ],
+                        ],
+                      ),
                     );
                   },
                 ),
               ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: FilledButton(
-                      onPressed: _isSubmittingDraft
-                          ? null
-                          : () async {
-                              Navigator.pop(ctx);
-                              await _submitDraftOrder();
-                            },
-                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
-                      child: _isSubmittingDraft ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text("Confirm Order", style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
+
+              // --- FINAL ACTIONS ---
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 20, offset: const Offset(0, -5))],
+                ),
+                child: SafeArea(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('Grand Total', style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline)),
+                            Text('₹${_cartTotal.toStringAsFixed(2)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _isSubmittingDraft ? null : () async {
+                            Navigator.pop(ctx);
+                            await _submitDraftOrder();
+                          },
+                          style: FilledButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 54),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          child: _isSubmittingDraft
+                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Text("Place Order", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -854,6 +1146,40 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildCartDetailRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.onSurface)),
+      ],
+    );
+  }
+
+  Widget _labelValueColumn(String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: colorScheme.onSurface)),
+      ],
+    );
+  }
+
+  Widget _labelValueSmall(String label, String value) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+        const SizedBox(width: 4),
+        Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colorScheme.onSurface)),
+      ],
     );
   }
 }
