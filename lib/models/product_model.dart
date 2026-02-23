@@ -12,6 +12,7 @@ class Product {
   final DateTime? expiryDate;
   final String? description;
   final String? imageUrl;
+  final String? salt;
 
   Product({
     required this.id,
@@ -26,6 +27,7 @@ class Product {
     this.expiryDate,
     this.description,
     this.imageUrl,
+    this.salt,
   });
 
   // Discount percentage
@@ -55,6 +57,7 @@ class Product {
     'expiryDate': expiryDate?.toIso8601String(),
     'description': description,
     'imageUrl': imageUrl,
+    'salt': salt,
   };
 
   // Create from JSON
@@ -73,9 +76,9 @@ class Product {
         : null,
     description: json['description'] as String?,
     imageUrl: json['imageUrl'] as String?,
+    salt: json['salt'] as String?,
   );
 
   @override
   String toString() => name;
 }
-
