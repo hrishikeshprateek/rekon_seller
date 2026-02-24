@@ -9,6 +9,7 @@ import '../models/cart_item_model.dart';
 import '../models/item_model.dart';
 import 'select_account_page.dart';
 import 'item_filter_page.dart';
+import 'cart_page.dart';
 
 class OrderEntryPage extends StatefulWidget {
   const OrderEntryPage({super.key});
@@ -693,7 +694,12 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                       ],
                     ),
                     ElevatedButton.icon(
-                      onPressed: () => _showCartSheet(context),
+                      onPressed: () {
+                        final auth = Provider.of<AuthService>(context, listen: false);
+                        final user = auth.currentUser;
+                        final acCode = _selectedAccount?.code ?? (user != null && user.stores.isNotEmpty ? user.stores.first.firmCode : '');
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => CartPage(acCode: acCode)));
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colorScheme.primaryContainer,
                         foregroundColor: colorScheme.onPrimaryContainer,

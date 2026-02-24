@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/account_model.dart';
 import '../models/product_model.dart';
 import '../models/cart_item_model.dart';
+import 'cart_page.dart';
+import '../auth_service.dart';
 
 class ProductListPage extends StatefulWidget {
   final Account selectedAccount;
@@ -194,7 +197,13 @@ class _ProductListPageState extends State<ProductListPage> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.shopping_cart),
-                  onPressed: () => _showCartSummary(),
+                  // navigate to CartPage instead of showing bottom sheet
+                  onPressed: () {
+                    final auth = Provider.of<AuthService>(context, listen: false);
+                    final user = auth.currentUser;
+                    final acCode = (user != null && user.stores.isNotEmpty) ? user.stores.first.firmCode : widget.selectedAccount.code ?? '';
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => CartPage(acCode: acCode, selectedAccount: widget.selectedAccount)));
+                  },
                 ),
                 Positioned(
                   right: 8,
@@ -529,7 +538,12 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
             ),
             ElevatedButton.icon(
-              onPressed: () => _showCartSummary(),
+              onPressed: () {
+                final auth = Provider.of<AuthService>(context, listen: false);
+                final user = auth.currentUser;
+                final acCode = (user != null && user.stores.isNotEmpty) ? user.stores.first.firmCode : '';
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => CartPage(acCode: acCode, selectedAccount: widget.selectedAccount)));
+              },
               icon: const Icon(Icons.shopping_cart),
               label: const Text('View Cart'),
               style: ElevatedButton.styleFrom(
@@ -544,117 +558,6 @@ class _ProductListPageState extends State<ProductListPage> {
     );
   }
 
-  void _showCartSummary() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        maxChildSize: 0.9,
-        minChildSize: 0.5,
-        builder: (_, controller) => Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              // Handle
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 12),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-
-              // Header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Cart Summary',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-              ),
-
-              const Divider(),
-
-              // Cart Items
-              Expanded(
-                child: ListView.builder(
-                  controller: controller,
-                  padding: const EdgeInsets.all(20),
-                  itemCount: _cart.length,
-                  itemBuilder: (context, index) {
-                    final item = _cart[index];
-                    return _buildCartItemCard(item);
-                  },
-                ),
-              ),
-
-              // Total & Checkout
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Total:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text(
-                            '₹${_cartTotal.toStringAsFixed(2)}',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.pop(ctx);
-                            _proceedToCheckout();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                          ),
-                          child: const Text('Proceed to Checkout', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildCartItemCard(CartItem item) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -768,4 +671,3 @@ class _ProductListPageState extends State<ProductListPage> {
     });
   }
 }
-
