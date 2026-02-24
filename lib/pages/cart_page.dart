@@ -9,7 +9,9 @@ import 'select_account_page.dart';
 class CartPage extends StatefulWidget {
   final String acCode;
   final models.Account? selectedAccount;
-  const CartPage({Key? key, required this.acCode, this.selectedAccount}) : super(key: key);
+
+  const CartPage({Key? key, required this.acCode, this.selectedAccount})
+    : super(key: key);
 
   @override
   State<CartPage> createState() => _CartPageState();
@@ -38,7 +40,9 @@ class _CartPageState extends State<CartPage> {
         title: 'Select Party',
         accountType: 'Party',
         showBalance: true,
-        selectedAccount: (widget.selectedAccount is models.Account) ? widget.selectedAccount as models.Account : null,
+        selectedAccount: (widget.selectedAccount is models.Account)
+            ? widget.selectedAccount as models.Account
+            : null,
       );
 
       if (account == null) return;
@@ -65,7 +69,10 @@ class _CartPageState extends State<CartPage> {
   }
 
   Future<void> _loadCart() async {
-    setState(() { _isLoading = true; _error = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
       final dio = auth.getDioClient();
@@ -75,7 +82,10 @@ class _CartPageState extends State<CartPage> {
       String firmCode = '';
       try {
         if (user != null && user.stores.isNotEmpty) {
-          final primary = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first);
+          final primary = user.stores.firstWhere(
+            (s) => s.primary,
+            orElse: () => user.stores.first,
+          );
           firmCode = primary.firmCode;
         }
       } catch (_) {}
@@ -87,18 +97,27 @@ class _CartPageState extends State<CartPage> {
         'AcCode': _currentAcCode,
       });
 
-      final response = await dio.post('/ListDraftOrder', data: payload, options: Options(headers: {
-        'Content-Type': 'application/json',
-        'package_name': auth.packageNameHeader,
-        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-      }));
+      final response = await dio.post(
+        '/ListDraftOrder',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
 
       dynamic raw = response.data;
       Map<String, dynamic> parsed = _parseJson(raw);
 
       if (parsed['success'] == true && parsed['data'] != null) {
         final list = (parsed['data']['DraftOrder'] as List<dynamic>?) ?? [];
-        _items = list.map((e) => DraftOrderItem.fromJson(e as Map<String, dynamic>)).toList();
+        _items = list
+            .map((e) => DraftOrderItem.fromJson(e as Map<String, dynamic>))
+            .toList();
       } else {
         _error = parsed['message']?.toString() ?? 'Failed to load cart';
       }
@@ -126,24 +145,50 @@ class _CartPageState extends State<CartPage> {
       final user = auth.currentUser;
       final cuId = int.tryParse(user?.userId ?? '') ?? 0;
       String firmCode = '';
-      try { if (user != null && user.stores.isNotEmpty) { firmCode = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first).firmCode; } } catch (_) {}
+      try {
+        if (user != null && user.stores.isNotEmpty) {
+          firmCode = user.stores
+              .firstWhere((s) => s.primary, orElse: () => user.stores.first)
+              .firmCode;
+        }
+      } catch (_) {}
 
       final payload = jsonEncode({
-        'UserId': user?.mobileNumber ?? '', 'LicNo': user?.licenseNumber ?? '',
-        'lFirmCode': firmCode, 'AcCode': _currentAcCode, 'ItemCode': item.code,
-        'ItemQty': newQty.toString(), 'ItemRate': item.rate?.toString() ?? '',
-        'IdCol': item.idCol, 'cu_id': cuId, 'ItemAmt': item.amt?.toString() ?? '0.0',
-        'insert_record': 1, 'default_hit': true,
+        'UserId': user?.mobileNumber ?? '',
+        'LicNo': user?.licenseNumber ?? '',
+        'lFirmCode': firmCode,
+        'AcCode': _currentAcCode,
+        'ItemCode': item.code, //DoITEM
+        'ItemQty': newQty.toString(),
+        'ItemRate': item.rate?.toString() ?? '',
+        'IdCol': item.idCol, //iid
+        'cu_id': cuId,
+        'ItemAmt': item.amt?.toString() ?? '0.0',
+        'insert_record': 1,
+        'default_hit': true,
       });
 
-      final response = await auth.getDioClient().post('/AddDraftOrder', data: payload, options: Options(headers: {
-        'Content-Type': 'application/json', 'package_name': auth.packageNameHeader,
-        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-      }));
+      final response = await auth.getDioClient().post(
+        '/AddDraftOrder',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
 
-      if (_parseJson(response.data)['success'] == true) { await _loadCart(); }
-      else { setState(() => item.qty = oldQty); }
-    } catch (e) { setState(() => item.qty = oldQty); }
+      if (_parseJson(response.data)['success'] == true) {
+        await _loadCart();
+      } else {
+        setState(() => item.qty = oldQty);
+      }
+    } catch (e) {
+      setState(() => item.qty = oldQty);
+    }
   }
 
   Future<void> _removeItem(DraftOrderItem item) async {
@@ -155,8 +200,14 @@ class _CartPageState extends State<CartPage> {
         title: const Text('Remove item?'),
         content: Text('"${item.name}" will be removed from your order.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton.tonal(onPressed: () => Navigator.pop(context, true), child: const Text('Remove')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
@@ -173,8 +224,14 @@ class _CartPageState extends State<CartPage> {
         title: const Text('Empty Cart?'),
         content: const Text('This will remove all items for this account.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear All')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear All'),
+          ),
         ],
       ),
     );
@@ -188,20 +245,41 @@ class _CartPageState extends State<CartPage> {
       final auth = Provider.of<AuthService>(context, listen: false);
       final user = auth.currentUser;
       String firmCode = '';
-      try { if (user != null && user.stores.isNotEmpty) { firmCode = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first).firmCode; } } catch (_) {}
+      try {
+        if (user != null && user.stores.isNotEmpty) {
+          firmCode = user.stores
+              .firstWhere((s) => s.primary, orElse: () => user.stores.first)
+              .firmCode;
+        }
+      } catch (_) {}
 
       final payload = jsonEncode({
-        'lUserId': user?.mobileNumber ?? '', 'lLicNo': user?.licenseNumber ?? '',
-        'lFirmCode': firmCode, 'AcCode': _currentAcCode, 'lIdCol': idCol,
+        'lUserId': user?.mobileNumber ?? '',
+        'lLicNo': user?.licenseNumber ?? '',
+        'lFirmCode': firmCode,
+        'AcCode': _currentAcCode,
+        'lIdCol': idCol,
       });
 
-      final resp = await auth.getDioClient().post('/RemoveDraftOrder', data: payload, options: Options(headers: {
-        'Content-Type': 'application/json', 'package_name': auth.packageNameHeader,
-        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-      }));
+      final resp = await auth.getDioClient().post(
+        '/RemoveDraftOrder',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
 
-      if (_parseJson(resp.data)['success'] == true) { await _loadCart(); }
-    } finally { if (mounted) setState(() => _isLoading = false); }
+      if (_parseJson(resp.data)['success'] == true) {
+        await _loadCart();
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -215,29 +293,89 @@ class _CartPageState extends State<CartPage> {
         elevation: 0,
         title: GestureDetector(
           onTap: _openSelectAccount,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('Review Order', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: cs.onSurface)),
-                  Icon(Icons.arrow_drop_down, color: cs.primary),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Review Order',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.arrow_drop_down, color: cs.primary),
+                        const SizedBox(width: 8),
+                        // Show account name as a chip if available
+                        if (_selectedAccountName != null && _selectedAccountName!.isNotEmpty)
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: cs.primary.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: cs.primary.withOpacity(0.12)),
+                              ),
+                              child: Text(
+                                _selectedAccountName!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      // show account name when available, otherwise show account code
+                      _selectedAccountName != null && _selectedAccountName!.isNotEmpty
+                          ? _selectedAccountName!
+                          : 'A/C: $_currentAcCode',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-              Text(_selectedAccountName ?? 'A/C: $_currentAcCode',
-                  style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w500, overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
         actions: [
-          IconButton(onPressed: _loadCart, icon: const Icon(Icons.refresh_rounded)),
-          IconButton(onPressed: _clearCart, icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent)),
+          IconButton(
+            onPressed: _loadCart,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
+            onPressed: _clearCart,
+            icon: const Icon(
+              Icons.delete_sweep_outlined,
+              color: Colors.redAccent,
+            ),
+          ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _items.isEmpty ? _buildEmptyState(cs) : _buildItemList(cs),
+          : _items.isEmpty
+          ? _buildEmptyState(cs)
+          : _buildItemList(cs),
       bottomNavigationBar: _items.isEmpty ? null : _buildCheckoutFooter(cs),
     );
   }
@@ -247,13 +385,30 @@ class _CartPageState extends State<CartPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.shopping_basket_outlined, size: 80, color: cs.outlineVariant),
+          Icon(
+            Icons.shopping_basket_outlined,
+            size: 80,
+            color: cs.outlineVariant,
+          ),
           const SizedBox(height: 16),
-          Text('Your cart is empty', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface)),
+          Text(
+            'Your cart is empty',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: cs.onSurface,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('Change account or add items to start.', style: TextStyle(color: cs.onSurfaceVariant)),
+          Text(
+            'Change account or add items to start.',
+            style: TextStyle(color: cs.onSurfaceVariant),
+          ),
           const SizedBox(height: 24),
-          FilledButton.tonal(onPressed: _openSelectAccount, child: const Text('Switch Account')),
+          FilledButton.tonal(
+            onPressed: _openSelectAccount,
+            child: const Text('Switch Account'),
+          ),
         ],
       ),
     );
@@ -283,9 +438,22 @@ class _CartPageState extends State<CartPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(it.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: -0.2)),
+                          Text(
+                            it.name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
                           const SizedBox(height: 4),
-                          Text(it.mfg ?? 'No Mfr Info', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                          Text(
+                            it.mfg ?? 'No Mfr Info',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -294,11 +462,18 @@ class _CartPageState extends State<CartPage> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.3))),
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                  border: Border(
+                    top: BorderSide(color: cs.outlineVariant.withOpacity(0.3)),
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    bottom: Radius.circular(16),
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -308,11 +483,16 @@ class _CartPageState extends State<CartPage> {
                         _metric('Rate', '₹${it.rate?.toStringAsFixed(2)}', cs),
                         _metric('MRP', '₹${it.mrp?.toStringAsFixed(2)}', cs),
                         _metric('Value', '₹${it.amt?.toStringAsFixed(2)}', cs),
-                        IconButton(
-                          onPressed: () => _removeItem(it),
-                          icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                          visualDensity: VisualDensity.compact,
-                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _metric('GV', '₹${(it.rate ?? 0) * (it.qty)}', cs),
+                        _metric('SV', '₹${it.discAmt?.toStringAsFixed(2)}', cs),
+                        _metric('DV', '₹${it.taxAmt?.toStringAsFixed(2)}', cs),
+                        _metric('GST', '₹${it.netAmt?.toStringAsFixed(2)}', cs),
                       ],
                     ),
                   ],
@@ -341,7 +521,10 @@ class _CartPageState extends State<CartPage> {
             constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
             color: cs.primary,
           ),
-          Text(it.qty.toString(), style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface)),
+          Text(
+            it.qty.toString(),
+            style: TextStyle(fontWeight: FontWeight.bold, color: cs.onSurface),
+          ),
           IconButton(
             onPressed: () => _updateQuantity(it, it.qty + 1),
             icon: const Icon(Icons.add, size: 16),
@@ -357,8 +540,18 @@ class _CartPageState extends State<CartPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant, fontWeight: FontWeight.bold)),
-        Text(val, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        Text(
+          val,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
       ],
     );
   }
@@ -369,8 +562,16 @@ class _CartPageState extends State<CartPage> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.3))),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, -4))],
+        border: Border(
+          top: BorderSide(color: cs.outlineVariant.withOpacity(0.3)),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       child: SafeArea(
         child: Row(
@@ -380,23 +581,40 @@ class _CartPageState extends State<CartPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('Payable Amount', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-                  Text('₹${total.toStringAsFixed(2)}', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs.primary)),
+                  Text(
+                    'Payable Amount',
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
+                  Text(
+                    '₹${total.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      color: cs.primary,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: 16),
             Expanded(
               child: FilledButton(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Processing Order...'))),
+                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Processing Order...')),
+                ),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 54),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   elevation: 0,
                 ),
-                child: const Text('Place Order', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                child: const Text(
+                  'Place Order',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
               ),
-            )
+            ),
           ],
         ),
       ),
@@ -405,30 +623,68 @@ class _CartPageState extends State<CartPage> {
 }
 
 class DraftOrderItem {
-  final String code; final String name; final String? mfg; int qty;
-  final double? rate; final double? mrp; final double? amt; final double? taxAmt;
-  final double? netAmt; final double? discAmt; final double? stock;
-  final int idCol; final String? remark;
+  final String code;
+  final String name;
+  final String? mfg;
+  int qty;
+  final double? rate;
+  final double? mrp;
+  final double? amt;
+  final double? taxAmt;
+  final double? netAmt;
+  final double? discAmt;
+  final double? disc1Amt;
+  final double? disc2Amt;
+  final double? stock;
+  final int idCol;
+  final String? remark;
 
   DraftOrderItem({
-    required this.code, required this.name, this.mfg, required this.qty,
-    this.rate, this.mrp, this.amt, this.taxAmt, this.netAmt,
-    this.discAmt, this.stock, required this.idCol, this.remark,
+    required this.code,
+    required this.name,
+    this.mfg,
+    required this.qty,
+    this.rate,
+    this.mrp,
+    this.amt,
+    this.taxAmt,
+    this.netAmt,
+    this.discAmt,
+    this.disc1Amt,
+    this.disc2Amt,
+    this.stock,
+    required this.idCol,
+    this.remark,
   });
 
   factory DraftOrderItem.fromJson(Map<String, dynamic> json) {
-    double? parseDouble(dynamic v) { return (v is num) ? v.toDouble() : double.tryParse(v?.toString() ?? ''); }
-    int parseInt(dynamic v) { return (v is int) ? v : int.tryParse(v?.toString() ?? '') ?? 0; }
+    double? parseDouble(dynamic v) {
+      return (v is num) ? v.toDouble() : double.tryParse(v?.toString() ?? '');
+    }
+
+    int parseInt(dynamic v) {
+      return (v is int) ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+    }
+
+
     return DraftOrderItem(
-      code: (json['Icode'] ?? json['I_CODE'] ?? json['ItemCode'] ?? '').toString(),
+      code: (json['Icode'] ?? json['I_CODE'] ?? json['ItemCode'] ?? '')
+          .toString(),
       name: (json['Name'] ?? json['IName'] ?? '').toString(),
       mfg: (json['MfgComp'] ?? '').toString(),
-      qty: (json['Qty'] is num) ? (json['Qty'] as num).toInt() : parseInt(json['Qty']),
-      rate: parseDouble(json['Rate']), mrp: parseDouble(json['Mrp']),
+      qty: (json['Qty'] is num)
+          ? (json['Qty'] as num).toInt()
+          : parseInt(json['Qty']),
+      rate: parseDouble(json['Rate']),
+      mrp: parseDouble(json['Mrp']),
       amt: parseDouble(json['Amt'] ?? json['NetAmt']),
-      taxAmt: parseDouble(json['TaxAmt']), netAmt: parseDouble(json['NetAmt']),
-      discAmt: parseDouble(json['DO_DiscAmt']), stock: parseDouble(json['Stock']),
-      idCol: parseInt(json['IdCol'] ?? json['Idcol'] ?? json['i_id_col']),
+      taxAmt: parseDouble(json['TaxAmt']),
+      netAmt: parseDouble(json['NetAmt']),
+      discAmt: parseDouble(json['DO_DiscAmt']),
+      disc1Amt: parseDouble(json['DO_Disc1Amt'] ?? json['DO_Disc1Amt']),
+      disc2Amt: parseDouble(json['DO_Disc2Amt'] ?? json['DO_Disc2Amt']),
+      stock: parseDouble(json['Stock']),
+      idCol: parseInt(json['i_id_col'] ?? json['IdCol'] ?? json['Idcol']),
       remark: (json['DO_Remark'] ?? '').toString(),
     );
   }

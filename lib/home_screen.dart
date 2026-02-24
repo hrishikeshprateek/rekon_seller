@@ -3,6 +3,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:reckon_seller_2_0/pages/account_statement_wrapper.dart';
+import 'package:reckon_seller_2_0/pages/cart_page.dart';
 import 'package:reckon_seller_2_0/pages/completed_deliveries_page.dart';
 import 'package:reckon_seller_2_0/pages/outstanding_details_page.dart';
 import 'package:reckon_seller_2_0/pages/account_outstanding_list_page.dart';
@@ -37,6 +38,7 @@ import 'pages/contact_support_page.dart';
 import 'widgets/spotlight_search.dart';
 import 'models/dashboard_config_model.dart';
 import 'pages/settings_page.dart';
+import 'pages/select_account_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -453,7 +455,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final routeMap = <String, Widget>{
       'orderentry': const OrderEntryPage(),
-      'draftorder': const OrderEntryPage(), // Map to OrderEntryPage for now
+      'draftorder': DraftOrderHandler(), // Updated to handle account selection and cart opening
       'orderbook': const OrderBookPage(),
       'orderstatus': const OrderStatusPage(),
       'receiptentry': const CreateReceiptScreen(),
@@ -967,3 +969,82 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class DraftOrderHandler extends StatelessWidget {
+  const DraftOrderHandler({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Draft Order Handler'),
+      ),
+      body: FutureBuilder<List<DraftOrder>>(
+        future: _fetchDraftOrderData(), // Fetch draft order data
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          } else if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+            final draftOrders = snapshot.data!;
+            return ListView.builder(
+              itemCount: draftOrders.length,
+              itemBuilder: (context, index) {
+                final order = draftOrders[index];
+                return ListTile(
+                  title: Text(order.name),
+                  subtitle: Text(order.details),
+                  onTap: () async {
+                    await _handleAccountSelection(context);
+                  },
+                );
+              },
+            );
+          } else {
+            return const Center(child: Text('No draft orders available.'));
+          }
+        },
+      ),
+    );
+  }
+
+  Future<List<DraftOrder>> _fetchDraftOrderData() async {
+    // Simulated API call for fetching draft orders
+    await Future.delayed(const Duration(seconds: 2)); // Simulate network delay
+    return [
+      DraftOrder(name: 'Order 1', details: 'Details for Order 1', accountId: 'ACC123'),
+      DraftOrder(name: 'Order 2', details: 'Details for Order 2', accountId: 'ACC456'),
+    ];
+  }
+
+  Future<void> _handleAccountSelection(BuildContext context) async {
+    // Open SelectAccountPage to let user pick the account
+    final selectedAccount = await SelectAccountPage.show(
+      context,
+      title: 'Select Party',
+      accountType: 'Party',
+      showBalance: true,
+    );
+
+    if (selectedAccount != null) {
+      // Push CartPage with required acCode and selectedAccount
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CartPage(
+            acCode: selectedAccount.id,
+            selectedAccount: selectedAccount,
+          ),
+        ),
+      );
+    }
+  }
+}
+
+class DraftOrder {
+  final String name;
+  final String details;
+  final String accountId;
+
+  DraftOrder({required this.name, required this.details, required this.accountId});
+}
