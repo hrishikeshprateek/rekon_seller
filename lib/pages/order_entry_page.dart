@@ -697,8 +697,15 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                       onPressed: () {
                         final auth = Provider.of<AuthService>(context, listen: false);
                         final user = auth.currentUser;
-                        final acCode = _selectedAccount?.code ?? (user != null && user.stores.isNotEmpty ? user.stores.first.firmCode : '');
-                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => CartPage(acCode: acCode)));
+                        final acCode = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CartPage(
+                              acCode: acCode,
+                              selectedAccount: _selectedAccount, // Pass the full account object
+                            ),
+                          ),
+                        );
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colorScheme.primaryContainer,

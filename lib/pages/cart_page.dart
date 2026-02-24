@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
+import '../services/account_selection_service.dart';
 import 'select_account_page.dart';
+import 'place_order_page.dart';
 
 class CartPage extends StatefulWidget {
   final String acCode;
@@ -47,8 +49,8 @@ class _CartPageState extends State<CartPage> {
 
       if (account == null) return;
 
-      final acno = account.id?.toString() ?? '';
-      final name = account.name?.toString();
+      final acno = account.id.toString();
+      final name = account.name.toString();
 
       if (acno.isNotEmpty && acno != _currentAcCode) {
         if (!mounted) return;
@@ -319,9 +321,9 @@ class _CartPageState extends State<CartPage> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: cs.primary.withOpacity(0.08),
+                                color: cs.primary.withAlpha((0.08 * 255).toInt()),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: cs.primary.withOpacity(0.12)),
+                                border: Border.all(color: cs.primary.withAlpha((0.12 * 255).toInt())),
                               ),
                               child: Text(
                                 _selectedAccountName!,
@@ -425,7 +427,7 @@ class _CartPageState extends State<CartPage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+            border: Border.all(color: cs.outlineVariant.withAlpha((0.5 * 255).toInt())),
           ),
           child: Column(
             children: [
@@ -457,6 +459,12 @@ class _CartPageState extends State<CartPage> {
                         ],
                       ),
                     ),
+                    // delete icon for single item removal
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      tooltip: 'Remove item',
+                      onPressed: () => _removeItem(it),
+                    ),
                     _buildQtyPicker(it, cs),
                   ],
                 ),
@@ -469,7 +477,7 @@ class _CartPageState extends State<CartPage> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border(
-                    top: BorderSide(color: cs.outlineVariant.withOpacity(0.3)),
+                    top: BorderSide(color: cs.outlineVariant.withAlpha((0.3 * 255).toInt())),
                   ),
                   borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(16),
@@ -508,9 +516,9 @@ class _CartPageState extends State<CartPage> {
   Widget _buildQtyPicker(DraftOrderItem it, ColorScheme cs) {
     return Container(
       decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.15),
+        color: cs.primaryContainer.withAlpha((0.15 * 255).toInt()),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.primary.withOpacity(0.1)),
+        border: Border.all(color: cs.primary.withAlpha((0.1 * 255).toInt())),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -563,11 +571,11 @@ class _CartPageState extends State<CartPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
-          top: BorderSide(color: cs.outlineVariant.withOpacity(0.3)),
+          top: BorderSide(color: cs.outlineVariant.withAlpha((0.3 * 255).toInt())),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withAlpha((0.04 * 255).toInt()),
             blurRadius: 10,
             offset: const Offset(0, -4),
           ),
@@ -599,9 +607,30 @@ class _CartPageState extends State<CartPage> {
             const SizedBox(width: 16),
             Expanded(
               child: FilledButton(
-                onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Processing Order...')),
-                ),
+                onPressed: () async {
+                  models.Account? account = widget.selectedAccount;
+                  if (account == null) {
+                    // Try to get the account from AccountSelectionService via Provider
+                    final accountService = Provider.of<AccountSelectionService>(context, listen: false);
+                    account = accountService.selectedAccount;
+                  }
+                  if (account == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No account selected.')),
+                    );
+                    return;
+                  }
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => PlaceOrderPage(
+                        account: account!, // non-null
+                        cartItems: _items,
+                        totalAmount: total,
+                      ),
+                    ),
+                  );
+                },
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 54),
                   shape: RoundedRectangleBorder(
