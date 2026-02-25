@@ -34,7 +34,8 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
   @override
   void initState() {
     super.initState();
-    _deliveryDate = DateTime.now().add(const Duration(days: 4));
+    // Set initial delivery date to today
+    _deliveryDate = DateTime.now();
     _fetchDraftOrderValue();
   }
 
@@ -297,11 +298,28 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
                 // Date Picker Tile
                 InkWell(
                   onTap: () async {
+                    final today = DateTime.now();
+                    final allowedDates = List.generate(4, (i) => DateTime(today.year, today.month, today.day).add(Duration(days: i)));
                     final picked = await showDatePicker(
                       context: context,
                       initialDate: _deliveryDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 30)),
+                      firstDate: allowedDates.first,
+                      lastDate: allowedDates.last,
+                      selectableDayPredicate: (date) {
+                        // Only allow exactly 4 days from today
+                        return allowedDates.any((d) => d.year == date.year && d.month == date.month && d.day == date.day);
+                      },
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: Theme.of(context).colorScheme.copyWith(
+                              surface: Colors.white,
+                              background: Colors.white,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
                     );
                     if (picked != null) setState(() => _deliveryDate = picked);
                   },

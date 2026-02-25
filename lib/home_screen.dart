@@ -974,47 +974,16 @@ class DraftOrderHandler extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Directly open account selection when this page is opened
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _handleAccountSelection(context);
+    });
     return Scaffold(
       appBar: AppBar(
         title: const Text('Draft Order Handler'),
       ),
-      body: FutureBuilder<List<DraftOrder>>(
-        future: _fetchDraftOrderData(), // Fetch draft order data
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          } else if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            final draftOrders = snapshot.data!;
-            return ListView.builder(
-              itemCount: draftOrders.length,
-              itemBuilder: (context, index) {
-                final order = draftOrders[index];
-                return ListTile(
-                  title: Text(order.name),
-                  subtitle: Text(order.details),
-                  onTap: () async {
-                    await _handleAccountSelection(context);
-                  },
-                );
-              },
-            );
-          } else {
-            return const Center(child: Text('No draft orders available.'));
-          }
-        },
-      ),
+      body: const Center(child: CircularProgressIndicator()), // Show loading while selecting account
     );
-  }
-
-  Future<List<DraftOrder>> _fetchDraftOrderData() async {
-    // Simulated API call for fetching draft orders
-    await Future.delayed(const Duration(seconds: 2)); // Simulate network delay
-    return [
-      DraftOrder(name: 'Order 1', details: 'Details for Order 1', accountId: 'ACC123'),
-      DraftOrder(name: 'Order 2', details: 'Details for Order 2', accountId: 'ACC456'),
-    ];
   }
 
   Future<void> _handleAccountSelection(BuildContext context) async {
@@ -1037,6 +1006,9 @@ class DraftOrderHandler extends StatelessWidget {
           ),
         ),
       );
+    } else {
+      // If user pressed back, exit to home (pop to root)
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 }
