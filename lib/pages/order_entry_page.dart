@@ -10,6 +10,7 @@ import '../models/item_model.dart';
 import 'select_account_page.dart';
 import 'item_filter_page.dart';
 import 'cart_page.dart';
+import 'product_detail_page.dart';
 
 class OrderEntryPage extends StatefulWidget {
   const OrderEntryPage({super.key});
@@ -830,102 +831,115 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     final qty = _getCartQuantity(product);
     final bool hasStock = product.stockQuantity > 0;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: qty > 0 ? colorScheme.primary.withAlpha((0.5 * 255).round()) : colorScheme.outlineVariant.withAlpha((0.3 * 255).round())),
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          // --- NEW: Medicine Icon Container ---
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: colorScheme.secondaryContainer.withAlpha((0.4 * 255).round()),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.medication_outlined, size: 20, color: colorScheme.secondary),
+    return GestureDetector(
+      onTap: () {
+        // Log the product and its id before navigation
+        debugPrint('[OrderEntryPage] Navigating to ProductDetailPage with product: ' + product.toString() + ', iidcol: ' + (product.iidcol?.toString() ?? 'null'));
+        // Navigate to ProductDetailPage on tap
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ProductDetailPage(product: product),
           ),
-          const SizedBox(width: 12),
-
-          // Info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                const SizedBox(height: 6),
-                if ((product.manufacturer ?? '').isNotEmpty)
-                  Text(product.manufacturer ?? '', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-                if ((product.salt ?? '').isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Text(product.salt!, style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-                  ),
-              ],
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: qty > 0 ? colorScheme.primary.withAlpha((0.5 * 255).round()) : colorScheme.outlineVariant.withAlpha((0.3 * 255).round())),
+        ),
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // --- NEW: Medicine Icon Container ---
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: colorScheme.secondaryContainer.withAlpha((0.4 * 255).round()),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(Icons.medication_outlined, size: 20, color: colorScheme.secondary),
             ),
-          ),
+            const SizedBox(width: 12),
 
-          // Action + Stock shown below the action (Add or qty control)
-          if (qty == 0)
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(
-                  height: 32,
-                  child: OutlinedButton(
-                    onPressed: hasStock ? () => _showBulkAddBottomSheet(product) : null,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      side: BorderSide(color: hasStock ? colorScheme.primary : colorScheme.outlineVariant),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  const SizedBox(height: 6),
+                  if ((product.manufacturer ?? '').isNotEmpty)
+                    Text(product.manufacturer ?? '', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                  if ((product.salt ?? '').isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(product.salt!, style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
                     ),
-                    child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-              ],
-            )
-          else
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove, size: 16),
-                        onPressed: () => _updateQuantity(product, qty - 1),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                      Text("$qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: colorScheme.onPrimaryContainer)),
-                      IconButton(
-                        icon: const Icon(Icons.add, size: 16),
-                        onPressed: () => _updateQuantity(product, qty + 1),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-              ],
+                ],
+              ),
             ),
-        ],
+
+            // Action + Stock shown below the action (Add or qty control)
+            if (qty == 0)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    height: 32,
+                    child: OutlinedButton(
+                      onPressed: hasStock ? () => _showBulkAddBottomSheet(product) : null,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        side: BorderSide(color: hasStock ? colorScheme.primary : colorScheme.outlineVariant),
+                      ),
+                      child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                ],
+              )
+            else
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.remove, size: 16),
+                          onPressed: () => _updateQuantity(product, qty - 1),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                        Text("$qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: colorScheme.onPrimaryContainer)),
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 16),
+                          onPressed: () => _updateQuantity(product, qty + 1),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                ],
+              ),
+          ],
+        ),
       ),
     );
   }
