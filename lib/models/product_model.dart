@@ -13,6 +13,8 @@ class Product {
   final String? description;
   final String? imageUrl;
   final String? salt;
+  final String? code; // Icode
+  final int? iidcol; // i_id_col
 
   Product({
     required this.id,
@@ -28,6 +30,8 @@ class Product {
     this.description,
     this.imageUrl,
     this.salt,
+    this.code,
+    this.iidcol,
   });
 
   // Discount percentage
@@ -58,6 +62,8 @@ class Product {
     'description': description,
     'imageUrl': imageUrl,
     'salt': salt,
+    'code': code,
+    'iidcol': iidcol,
   };
 
   // Create from JSON
@@ -77,6 +83,8 @@ class Product {
     description: json['description'] as String?,
     imageUrl: json['imageUrl'] as String?,
     salt: json['salt'] as String?,
+    code: json['code'] as String?,
+    iidcol: json['iidcol'] as int?,
   );
 
   @override

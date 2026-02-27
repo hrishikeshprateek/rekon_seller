@@ -356,6 +356,8 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       expiryDate: null,
       description: '',
       imageUrl: null,
+      code: item.code, // <-- set Icode
+      iidcol: item.iidcol, // <-- set i_id_col
     );
   }
 
@@ -371,7 +373,15 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     final scaffold = ScaffoldMessenger.of(context);
     scaffold.showSnackBar(const SnackBar(content: Text('Adding item...'), duration: Duration(milliseconds: 700)));
 
-    final result = await _callAddDraftOrder(tentativeCartItem);
+    final result = await addToCartApiCall(
+      context: context,
+      cartItem: tentativeCartItem,
+      acCode: _selectedAccount?.code,
+      cuId: int.tryParse(Provider.of<AuthService>(context, listen: false).currentUser?.userId ?? ''),
+      firmCode: _selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : '',
+      licNo: Provider.of<AuthService>(context, listen: false).currentUser?.licenseNumber,
+      userId: Provider.of<AuthService>(context, listen: false).currentUser?.mobileNumber ?? Provider.of<AuthService>(context, listen: false).currentUser?.userId,
+    );
 
     if (result['success'] == true) {
       setState(() {
@@ -402,7 +412,15 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       // If user decreased to zero, attempt to send update with zero quantity
       final tentative = previousItem.copyWith(quantity: 0);
       scaffold.showSnackBar(const SnackBar(content: Text('Removing item...'), duration: Duration(milliseconds: 700)));
-      final result = await _callAddDraftOrder(tentative);
+      final result = await addToCartApiCall(
+        context: context,
+        cartItem: tentative,
+        acCode: _selectedAccount?.code,
+        cuId: int.tryParse(Provider.of<AuthService>(context, listen: false).currentUser?.userId ?? ''),
+        firmCode: _selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : '',
+        licNo: Provider.of<AuthService>(context, listen: false).currentUser?.licenseNumber,
+        userId: Provider.of<AuthService>(context, listen: false).currentUser?.mobileNumber ?? Provider.of<AuthService>(context, listen: false).currentUser?.userId,
+      );
       if (result['success'] == true) {
         setState(() => _cart.removeAt(existingIndex));
         scaffold.showSnackBar(const SnackBar(content: Text('Item removed')));
@@ -418,7 +436,15 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     });
 
     scaffold.showSnackBar(const SnackBar(content: Text('Updating quantity...'), duration: Duration(milliseconds: 700)));
-    final result = await _callAddDraftOrder(_cart[existingIndex]);
+    final result = await addToCartApiCall(
+      context: context,
+      cartItem: _cart[existingIndex],
+      acCode: _selectedAccount?.code,
+      cuId: int.tryParse(Provider.of<AuthService>(context, listen: false).currentUser?.userId ?? ''),
+      firmCode: _selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : '',
+      licNo: Provider.of<AuthService>(context, listen: false).currentUser?.licenseNumber,
+      userId: Provider.of<AuthService>(context, listen: false).currentUser?.mobileNumber ?? Provider.of<AuthService>(context, listen: false).currentUser?.userId,
+    );
 
     if (result['success'] == true) {
       // refresh server-side draft metadata after quantity update
@@ -430,6 +456,74 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         _cart[existingIndex] = previousItem;
       });
       scaffold.showSnackBar(SnackBar(content: Text('Failed to update quantity: ${result['message'] ?? 'Unknown'}')));
+    }
+  }
+
+  /// Reusable function for AddDraftOrder API call
+  Future<Map<String, dynamic>> addToCartApiCall({
+    required BuildContext context,
+    required CartItem cartItem,
+    required String? acCode,
+    required int? cuId,
+    required String? firmCode,
+    required String? licNo,
+    required String? userId,
+    bool fromBottomSheet = false,
+    Map<String, dynamic>? extraFields,
+  }) async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+      // Map ItemCode to Icode (from product.code)
+      final itemCode = cartItem.product.code ?? cartItem.product.id;
+      final idCol = cartItem.product.iidcol ?? int.tryParse(cartItem.product.id) ?? 0;
+      final payload = {
+        'UserId': userId ?? '',
+        'LicNo': licNo ?? '',
+        'lFirmCode': firmCode ?? '',
+        'AcCode': acCode ?? '',
+        'ItemCode': itemCode, // This is the Icode from ItemList
+        'ItemQty': cartItem.quantity,
+        'ItemRate': cartItem.product.price,
+        'IdCol': idCol, // i_id_col from ItemList
+        'cu_id': cuId ?? 0,
+        // Always use default values for these fields as per requirements
+        'ItemFQty': '',
+        'ItemSchQty': '0.0',
+        'ItemDSchQty': '0.0',
+        'ItemAmt': cartItem.total.toStringAsFixed(2),
+        'discount_percentage': '',
+        'discount_percentage1': '',
+        'discount_pcs': '0.0',
+        'remark': cartItem.product.name,
+        'insert_record': 1,
+        'default_hit': true,
+        if (extraFields != null) ...extraFields,
+      };
+      // Log the payload
+      debugPrint('AddDraftOrder payload:');
+      debugPrint(payload.toString());
+      final headers = {
+        'Content-Type': 'application/json',
+        'package_name': auth.packageNameHeader,
+        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+      };
+      final response = await dio.post('/AddDraftOrder', data: payload, options: Options(headers: headers));
+      dynamic raw = response.data;
+      Map<String, dynamic> parsed = {};
+      if (raw is Map<String, dynamic>) parsed = raw;
+      else if (raw is String) {
+        final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '');
+        parsed = jsonDecode(clean) as Map<String, dynamic>;
+      } else {
+        parsed = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+      }
+      final success = (parsed['success'] == true || parsed['Status'] == true || parsed['status'] == true || parsed['rs'] == 1);
+      final message = parsed['message']?.toString() ?? parsed['data']?.toString();
+      return {'success': success, 'message': message};
+    } catch (e) {
+      debugPrint('AddDraftOrder error: $e');
+      return {'success': false, 'message': e.toString()};
     }
   }
 
@@ -452,18 +546,21 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       }
 
       final acCodeValue = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
-      final itemCodeValue = cartItem.product.id;
+      // Use correct mapping for ItemCode and IdCol
+      final itemCodeValue = cartItem.product.code ?? cartItem.product.id; // Prefer code (Icode), fallback to id
+      final idColValue = cartItem.product.iidcol ?? int.tryParse(cartItem.product.id) ?? 0; // Prefer iidcol, fallback to id
       final cuIdValue = int.tryParse(auth.currentUser?.userId ?? '') ?? 0;
 
-      final payload = {
+      // When building the AddDraftOrder payload, ensure correct mapping:
+      final addDraftOrderPayload = {
         'UserId': auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
         'LicNo': auth.currentUser?.licenseNumber ?? '',
         'lFirmCode': firmCode,
         'AcCode': acCodeValue,
-        'ItemCode': itemCodeValue,
-        'ItemQty': cartItem.quantity.toString(),
-        'ItemRate': (cartItem.priceAtAddition).toString(),
-        'IdCol': int.tryParse(cartItem.product.id) ?? 0,
+        'ItemCode': itemCodeValue, // Use product.code (string)
+        'ItemQty': cartItem.quantity,
+        'ItemRate': cartItem.product.price,
+        'IdCol': idColValue, // Use product.iidcol (int)
         'cu_id': cuIdValue,
         'ItemFQty': '',
         'ItemSchQty': '0.0',
@@ -483,7 +580,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
       };
 
-      final response = await dio.post('/AddDraftOrder', data: payload, options: Options(headers: headers));
+      print('AddDraftOrder payload:');
+      print(addDraftOrderPayload);
+
+      final response = await dio.post('/AddDraftOrder', data: addDraftOrderPayload, options: Options(headers: headers));
       dynamic raw = response.data;
       Map<String, dynamic> parsed = {};
       if (raw is Map<String, dynamic>) parsed = raw;
@@ -777,7 +877,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                 SizedBox(
                   height: 32,
                   child: OutlinedButton(
-                    onPressed: hasStock ? () => _addToCart(product) : null,
+                    onPressed: hasStock ? () => _showBulkAddBottomSheet(product) : null,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1194,5 +1294,310 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         Text(value, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: colorScheme.onSurface)),
       ],
     );
+  }
+
+  // Bulk Add Bottom Sheet UI
+  void _showBulkAddBottomSheet(Product product) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent, // Allow custom background
+      builder: (ctx) {
+        final colorScheme = Theme.of(context).colorScheme;
+        final textTheme = Theme.of(context).textTheme;
+
+        final TextEditingController qtyController = TextEditingController(text: '1');
+        final TextEditingController freeQtyController = TextEditingController(text: '0');
+        final TextEditingController schemeController = TextEditingController(text: '0');
+        final TextEditingController discPcsController = TextEditingController(text: '0.0');
+        final TextEditingController discPerController = TextEditingController(text: '0.0');
+        final TextEditingController addDiscPerController = TextEditingController(text: '0.0');
+        final TextEditingController remarkController = TextEditingController();
+
+        double price = product.price;
+        int available = product.stockQuantity;
+
+        // Values for calculation
+        double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
+
+        void recalc() {
+          int qty = int.tryParse(qtyController.text) ?? 1;
+          int scheme = int.tryParse(schemeController.text) ?? 0;
+          double discPcs = double.tryParse(discPcsController.text) ?? 0.0;
+          double discPer = double.tryParse(discPerController.text) ?? 0.0;
+          double addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
+
+          goodsValue = price * qty;
+          schemeValue = scheme * price;
+          discountValue = discPcs + (goodsValue * (discPer + addDiscPer) / 100);
+          gst = (goodsValue - discountValue) * 0.18;
+          netValue = goodsValue - discountValue + gst;
+        }
+
+        recalc();
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            void updateFields() => setModalState(() => recalc());
+
+            // Custom Input Decoration for small fields
+            InputDecoration _inputDeco(String label, {IconData? icon, String? suffix}) => InputDecoration(
+              labelText: label,
+              suffixText: suffix,
+              isDense: true,
+              filled: true,
+              fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              prefixIcon: icon != null ? Icon(icon, size: 18) : null,
+            );
+
+            return Container(
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+              ),
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle bar
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        decoration: BoxDecoration(color: colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
+                      ),
+                    ),
+
+                    // Header Section
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(product.name, style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                              Text("${product.manufacturer ?? ''} • ${product.unit}", style: textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                        IconButton.filledTonal(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Quick Info Banner
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: colorScheme.primaryContainer.withOpacity(0.4), borderRadius: BorderRadius.circular(16)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildHeaderStat("Price", "₹${price.toStringAsFixed(2)}", colorScheme),
+                          _buildHeaderStat("Stock", "$available", colorScheme),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Input Grid
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: qtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Quantity', icon: Icons.shopping_basket))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextField(controller: schemeController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Scheme', icon: Icons.card_giftcard))),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: discPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc %', icon: Icons.percent))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextField(controller: addDiscPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Add %', icon: Icons.add_circle_outline))),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: TextField(controller: discPcsController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc Cash', icon: Icons.money))),
+                        const SizedBox(width: 12),
+                        Expanded(child: TextField(controller: freeQtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Free Qty', icon: Icons.inventory_2))),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(controller: remarkController, decoration: _inputDeco('Add Remark', icon: Icons.notes)),
+
+                    const SizedBox(height: 24),
+
+                    // Valuation Summary Card
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceVariant.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: colorScheme.outlineVariant),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildSummaryRow("Goods Value", "₹${goodsValue.toStringAsFixed(2)}", textTheme),
+                          _buildSummaryRow("Total Discount", "-₹${discountValue.toStringAsFixed(2)}", textTheme, isNegative: true),
+                          _buildSummaryRow("GST (18%)", "+₹${gst.toStringAsFixed(2)}", textTheme),
+                          const Divider(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text('Net Payable', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                              Text('₹${netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Action Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 1,
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('CANCEL'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: colorScheme.primary,
+                              foregroundColor: colorScheme.onPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () async {
+                              int qty = int.tryParse(qtyController.text) ?? 1;
+                              if (qty > available) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Cannot add more than available stock ($available)')),
+                                );
+                                return;
+                              }
+                              _submitOrder(context, product, qtyController, price, freeQtyController, schemeController, goodsValue, discPerController, addDiscPerController, discPcsController, remarkController);
+                            },
+                            child: _isSubmittingDraft
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Text("ADD TO CART", style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              )
+              );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildHeaderStat(String label, String value, ColorScheme colorScheme) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, color: colorScheme.primary)),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildSummaryRow(String label, String value, TextTheme textTheme, {bool isNegative = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: textTheme.bodyMedium),
+          Text(value, style: textTheme.bodyMedium?.copyWith(
+            color: isNegative ? Colors.red : null,
+            fontWeight: FontWeight.w500,
+          )),
+        ],
+      ),
+    );
+  }
+
+  // Helper: submit order with all details from bulk add sheet
+  Future<void> _submitOrder(
+      BuildContext context,
+      Product product,
+      TextEditingController qtyController,
+      double price,
+      TextEditingController freeQtyController,
+      TextEditingController schemeController,
+      double goodsValue,
+      TextEditingController discPerController,
+      TextEditingController addDiscPerController,
+      TextEditingController discPcsController,
+      TextEditingController remarkController,
+      ) async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = auth.getDioClient();
+    final user = auth.currentUser;
+    final acCode = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
+    final cuId = int.tryParse(user?.userId ?? '') ?? 0;
+    final firmCode = user?.stores.isNotEmpty == true ? user!.stores.first.firmCode : '';
+    final payload = {
+      'UserId': user?.mobileNumber ?? user?.userId ?? '',
+      'LicNo': user?.licenseNumber ?? '',
+      'lFirmCode': firmCode,
+      'AcCode': acCode,
+      'ItemCode': product.code ?? product.id,
+      'Icode': product.code ?? product.id,
+      'IdCol': product.iidcol ?? int.tryParse(product.id) ?? 0,
+      'ItemQty': qtyController.text,
+      'ItemRate': price.toStringAsFixed(2),
+      'cu_id': cuId,
+      'ItemFQty': freeQtyController.text,
+      'ItemSchQty': schemeController.text,
+      'ItemDSchQty': '0.0',
+      'ItemAmt': goodsValue.toStringAsFixed(2),
+      'discount_percentage': discPerController.text,
+      'discount_percentage1': addDiscPerController.text,
+      'discount_pcs': discPcsController.text,
+      'remark': remarkController.text,
+      'insert_record': 1,
+      'default_hit': true,
+    };
+    print('AddDraftOrder payload (bottom sheet):');
+    print(payload);
+    final headers = {
+      'Content-Type': 'application/json',
+      'package_name': auth.packageNameHeader,
+      if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+    };
+    try {
+      await dio.post('/AddDraftOrder', data: payload, options: Options(headers: headers));
+      if (mounted) {
+        Navigator.pop(context);
+        await _loadDraftOrder();
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Item added to cart')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e')));
+      }
+    }
   }
 }
