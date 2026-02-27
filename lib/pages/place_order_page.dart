@@ -4,6 +4,7 @@ import '../auth_service.dart';
 import '../models/account_model.dart' as models;
 import 'dart:convert';
 import 'package:dio/dio.dart';
+import 'order_confirmation_page.dart';
 
 class PlaceOrderPage extends StatefulWidget {
   final models.Account account;
@@ -55,7 +56,8 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
           firmCode = primary.firmCode;
         }
       } catch (_) {}
-      final acCode = widget.account.code ?? (widget.account.acIdCol?.toString() ?? widget.account.id ?? '');
+      // Use only code, fallback to id if code is null
+      final acCode = widget.account.code ?? widget.account.id;
       final payload = {
         'lUserId': user?.mobileNumber ?? user?.userId ?? '',
         'lLicNo': user?.licenseNumber ?? '',
@@ -119,25 +121,16 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
           firmCode = primary.firmCode;
         }
       } catch (_) {}
-      final acCode = widget.account.code ?? (widget.account.acIdCol?.toString() ?? widget.account.id ?? '');
-      final deliveryAddress = [
-        widget.account.address,
-        widget.account.address2,
-        widget.account.address3,
-        widget.account.pincode
-      ].where((e) => (e ?? '').isNotEmpty).join(' ');
-      final deliveryDateStr =
-          "${_deliveryDate.day.toString().padLeft(2, '0')}-${_deliveryDate.month.toString().padLeft(2, '0')}-${_deliveryDate.year}";
       final payload = {
         'lUserId': user?.mobileNumber ?? user?.userId ?? '',
         'lLicNo': user?.licenseNumber ?? '',
         'lFirmCode': firmCode,
-        'AcCode': acCode,
+        'AcCode': widget.account.code ?? widget.account.id,
         'lDelMode': 0,
-        'lNote': _commentController.text.trim().isNotEmpty ? _commentController.text.trim() : 'Order placed via app',
-        'lSlotTime': deliveryDateStr,
-        'lDelAdd': deliveryAddress,
-        'app_role': 'SalesMan',
+        'lNote': _commentController.text.trim(),
+        'lSlotTime': _deliveryDate.toIso8601String().substring(0, 10),
+        'lDelAdd': widget.account.address,
+        'app_role': user?.userType ?? '',
       };
       final headers = {
         'Content-Type': 'application/json',
@@ -155,13 +148,22 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
       } else {
         parsed = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
       }
+      // Print the API response in log
+      print('SubmitOrder API response:');
+      print(parsed);
       final success = (parsed['success'] == true || parsed['Status'] == true || parsed['status'] == true || parsed['rs'] == 1);
       if (!success) {
         throw Exception(parsed['message']?.toString() ?? parsed['data']?.toString() ?? 'Order submission failed');
       }
       if (mounted) {
-        scaffold.showSnackBar(const SnackBar(content: Text('Order submitted successfully!')));
-        Navigator.of(context).popUntil((route) => route.isFirst);
+        // Navigate to confirmation page with response
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => OrderConfirmationPage(
+              orderData: parsed['data'], // Pass orderData as required
+            ),
+          ),
+        );
       }
     } catch (e) {
       scaffold.showSnackBar(SnackBar(content: Text('Order submission failed: $e')));
@@ -314,7 +316,7 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
                           data: Theme.of(context).copyWith(
                             colorScheme: Theme.of(context).colorScheme.copyWith(
                               surface: Colors.white,
-                              background: Colors.white,
+                              background: Colors.white, // deprecated, but kept for now
                             ),
                           ),
                           child: child!,

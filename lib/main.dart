@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'dashboard_service.dart';
 import 'services/account_selection_service.dart';
+import 'pages/order_book_page.dart'; // Import the new OrderBookPage
 
 void main() {
   runApp(const MyApp());
@@ -199,3 +200,6 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     );
   }
 }
+
+// Add a route for OrderBookPage (if using named routes, otherwise just use Navigator.push)
+// Example usage: Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderBookPage()));
