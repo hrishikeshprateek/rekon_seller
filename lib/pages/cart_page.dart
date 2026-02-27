@@ -160,10 +160,10 @@ class _CartPageState extends State<CartPage> {
         'LicNo': user?.licenseNumber ?? '',
         'lFirmCode': firmCode,
         'AcCode': _currentAcCode,
-        'ItemCode': item.code, //DoITEM
+        'ItemCode': item.code, // Icode from ItemList
         'ItemQty': newQty.toString(),
         'ItemRate': item.rate?.toString() ?? '',
-        'IdCol': item.idCol, //iid
+        'IdCol': item.idCol, // IdCol from ItemList
         'cu_id': cuId,
         'ItemAmt': item.amt?.toString() ?? '0.0',
         'insert_record': 1,
