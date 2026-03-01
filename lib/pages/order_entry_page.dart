@@ -796,17 +796,21 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     ),
                     ElevatedButton.icon(
                       onPressed: () {
-                        final auth = Provider.of<AuthService>(context, listen: false);
-                        final user = auth.currentUser;
-                        final acCode = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => CartPage(
-                              acCode: acCode,
-                              selectedAccount: _selectedAccount, // Pass the full account object
+                        if (_selectedAccount != null) {
+                          final acCode = _selectedAccount!.code ?? (_selectedAccount!.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount!.id);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => CartPage(
+                                acCode: acCode,
+                                selectedAccount: _selectedAccount!, // Pass full account details
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('No account selected.')),
+                          );
+                        }
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colorScheme.primaryContainer,
@@ -833,15 +837,18 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
     return GestureDetector(
       onTap: () {
-        // Log the product and its id before navigation
-        debugPrint('[OrderEntryPage] Navigating to ProductDetailPage with product: ' + product.toString() + ', iidcol: ' + (product.iidcol?.toString() ?? 'null'));
-        // Navigate to ProductDetailPage on tap
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ProductDetailPage(product: product),
-          ),
-        );
+        if (_selectedAccount != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProductDetailPage(product: product, selectedAccount: _selectedAccount!),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No account selected.')),
+          );
+        }
       },
       child: Container(
         decoration: BoxDecoration(
@@ -882,62 +889,36 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               ),
             ),
 
-            // Action + Stock shown below the action (Add or qty control)
-            if (qty == 0)
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    height: 32,
-                    child: OutlinedButton(
-                      onPressed: hasStock ? () => _showBulkAddBottomSheet(product) : null,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        side: BorderSide(color: hasStock ? colorScheme.primary : colorScheme.outlineVariant),
-                      ),
-                      child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-                ],
-              )
-            else
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.remove, size: 16),
-                          onPressed: () => _updateQuantity(product, qty - 1),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                          color: colorScheme.onPrimaryContainer,
+            // Action + Stock shown below the action (Add or Update button)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  height: 32,
+                  child: qty == 0
+                      ? OutlinedButton(
+                          onPressed: hasStock ? () => _showBulkAddBottomSheet(product, null) : null,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            side: BorderSide(color: hasStock ? colorScheme.primary : colorScheme.outlineVariant),
+                          ),
+                          child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
+                        )
+                      : FilledButton(
+                          onPressed: () => _showBulkAddBottomSheet(product, qty),
+                          style: FilledButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            backgroundColor: colorScheme.primary,
+                          ),
+                          child: Text("UPDATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colorScheme.onPrimary)),
                         ),
-                        Text("$qty", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: colorScheme.onPrimaryContainer)),
-                        IconButton(
-                          icon: const Icon(Icons.add, size: 16),
-                          onPressed: () => _updateQuantity(product, qty + 1),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-                ],
-              ),
+                ),
+                const SizedBox(height: 6),
+                Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+              ],
+            ),
           ],
         ),
       ),
@@ -1311,7 +1292,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   }
 
   // Bulk Add Bottom Sheet UI
-  void _showBulkAddBottomSheet(Product product) {
+  void _showBulkAddBottomSheet(Product product, int? currentQuantity) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1320,7 +1301,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         final colorScheme = Theme.of(context).colorScheme;
         final textTheme = Theme.of(context).textTheme;
 
-        final TextEditingController qtyController = TextEditingController(text: '1');
+        final TextEditingController qtyController = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '1');
         final TextEditingController freeQtyController = TextEditingController(text: '0');
         final TextEditingController schemeController = TextEditingController(text: '0');
         final TextEditingController discPcsController = TextEditingController(text: '0.0');
@@ -1511,7 +1492,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                             },
                             child: _isSubmittingDraft
                                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : const Text("ADD TO CART", style: TextStyle(fontWeight: FontWeight.bold)),
+                                : Text(currentQuantity != null ? "UPDATE CART" : "ADD TO CART", style: const TextStyle(fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],
