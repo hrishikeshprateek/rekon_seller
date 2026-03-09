@@ -21,11 +21,11 @@ class CartItem {
   // Discount amount
   double get discountAmount => totalMrp - total;
 
-  // Copy with new quantity
-  CartItem copyWith({int? quantity}) => CartItem(
+  // Copy with new quantity and/or price
+  CartItem copyWith({int? quantity, double? priceAtAddition}) => CartItem(
     product: product,
     quantity: quantity ?? this.quantity,
-    priceAtAddition: priceAtAddition,
+    priceAtAddition: priceAtAddition ?? this.priceAtAddition,
   );
 
   // Convert to JSON
@@ -42,4 +42,3 @@ class CartItem {
     priceAtAddition: (json['priceAtAddition'] as num).toDouble(),
   );
 }
-

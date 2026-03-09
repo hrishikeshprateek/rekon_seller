@@ -3,14 +3,18 @@ import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
 import 'dart:convert';
-import '../models/product_model.dart';
 import '../models/account_model.dart' as models;
+import '../models/product_model.dart';
 import 'cart_page.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final dynamic product;
   final models.Account selectedAccount;
-  const ProductDetailPage({Key? key, required this.product, required this.selectedAccount}) : super(key: key);
+
+  const ProductDetailPage({
+    required this.product,
+    required this.selectedAccount,
+  });
 
   @override
   State<ProductDetailPage> createState() => _ProductDetailPageState();
@@ -23,15 +27,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   bool loadingSimilar = false;
   List<dynamic> similarProducts = [];
   int receivedId = 0;
-
-  int cartQty = 1; // Default to 1 if not in cart
+  int cartQty = 0;
 
   @override
   void initState() {
     super.initState();
     product = widget.product;
-    // Use robust id extraction logic as in the reference
-    if (product is Map) {
+    debugPrint('[ProductDetailPage] Product data: $product');
+    _extractProductId();
+    qty = _getInt(product, ['qty', 'Qty'], fallback: 1);
+    qtyController = TextEditingController(text: qty.toString());
+    fetchCartAndSetQty();
+    fetchSimilarProducts();
+  }
+
+  void _extractProductId() {
+    if (product is Product) {
+      receivedId = product.iidcol ?? 0;
+    } else if (product is Map) {
       var rawId = product['i_id_col'] ?? product['IdCol'] ?? product['iidcol'] ?? 0;
       if (rawId is int) {
         receivedId = rawId;
@@ -43,14 +56,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         receivedId = product.iidcol ?? 0;
       } catch (_) {}
     }
-    qty = _getInt(product, ['qty', 'Qty'], fallback: 1);
-    qtyController = TextEditingController(text: qty.toString());
-    fetchCartAndSetQty();
-    fetchSimilarProducts();
+  }
+
+  @override
+  void dispose() {
+    qtyController.dispose();
+    super.dispose();
   }
 
   Future<void> fetchCartAndSetQty() async {
-    setState(() {});
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
       final dio = auth.getDioClient();
@@ -58,20 +72,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final mobile = user?.mobileNumber ?? '';
       final licNo = user?.licenseNumber ?? '';
       String firmCode = '';
+
       try {
         if (user != null && user.stores.isNotEmpty) {
-          final primary = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first);
+          final primary = user.stores.firstWhere(
+            (s) => s.primary,
+            orElse: () => user.stores.first,
+          );
           firmCode = primary.firmCode;
         }
       } catch (_) {}
-      // ✅ FIXED: Use selectedAccount.code instead of firmCode
-      final acCode = widget.selectedAccount.code ?? '';
-      final payload = jsonEncode({
+
+      // Use same acCode logic as order_entry_page
+      final acCode = widget.selectedAccount.code ??
+          (widget.selectedAccount.acIdCol != null
+              ? widget.selectedAccount.acIdCol.toString()
+              : widget.selectedAccount.id);
+
+      final payload = {
         'lUserId': mobile,
         'lLicNo': licNo,
         'lFirmCode': firmCode,
         'AcCode': acCode,
-      });
+      };
+
       final response = await dio.post(
         '/ListDraftOrder',
         data: payload,
@@ -79,73 +103,77 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           headers: {
             'Content-Type': 'application/json',
             'package_name': auth.packageNameHeader,
-            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
           },
         ),
       );
-      dynamic raw = response.data;
-      Map<String, dynamic> parsed = _parseJson(raw);
-      int foundQty = 1;
+
+      final parsed = _parseJson(response.data);
+      int foundQty = 0;
+
       if (parsed['success'] == true && parsed['data'] != null) {
         final list = (parsed['data']['DraftOrder'] as List<dynamic>?) ?? [];
-        debugPrint('[fetchCartAndSetQty] Found ${list.length} items in cart');
 
-        // Get product identifiers
-        final productCode = product['Code']?.toString() ?? product['code']?.toString() ?? product['ItemCode']?.toString() ?? '';
-        final productIdCol = product['i_id_col']?.toString() ?? product['iidcol']?.toString() ?? product['IdCol']?.toString() ?? '';
-        final productId = product['id']?.toString() ?? '';
+        // Extract product identifiers - handle both Product objects and Maps
+        String productCode = '';
+        int productIdCol = 0;
 
-        debugPrint('[fetchCartAndSetQty] Looking for - Code: $productCode, IdCol: $productIdCol, Id: $productId');
+        if (product is Product) {
+          productCode = product.code ?? '';
+          productIdCol = product.iidcol ?? 0;
+        } else if (product is Map) {
+          productCode = product['Code']?.toString() ??
+              product['code']?.toString() ??
+              product['Icode']?.toString() ??
+              product['ItemCode']?.toString() ??
+              '';
+          productIdCol = int.tryParse(product['i_id_col']?.toString() ??
+                  product['iidcol']?.toString() ??
+                  product['IdCol']?.toString() ??
+                  '') ??
+              0;
+        } else {
+          try {
+            productCode = product.code ?? '';
+            productIdCol = product.iidcol ?? 0;
+          } catch (_) {}
+        }
 
         for (final e in list) {
-          final code = e['Code']?.toString() ?? e['ItemCode']?.toString() ?? '';
-          final idCol = e['i_id_col']?.toString() ?? e['IdCol']?.toString() ?? '';
-          final itemId = e['id']?.toString() ?? '';
-
-          debugPrint('[fetchCartAndSetQty] Checking - Code: $code, IdCol: $idCol, Id: $itemId');
+          final idCol = int.tryParse(
+                  e['IdCol']?.toString() ?? e['Idcol']?.toString() ?? '') ??
+              0;
+          final code = e['Icode']?.toString() ??
+              e['Code']?.toString() ??
+              e['ItemCode']?.toString() ??
+              '';
 
           bool matches = false;
-
-          // Match by IdCol first (most reliable)
-          if (productIdCol.isNotEmpty && idCol.isNotEmpty) {
+          if (productIdCol > 0 && idCol > 0) {
             matches = productIdCol == idCol;
-            if (matches) debugPrint('[fetchCartAndSetQty] Matched by IdCol');
           }
-
-          // Then by code
           if (!matches && productCode.isNotEmpty && code.isNotEmpty) {
             matches = productCode == code;
-            if (matches) debugPrint('[fetchCartAndSetQty] Matched by Code');
-          }
-
-          // Then by id
-          if (!matches && productId.isNotEmpty && itemId.isNotEmpty) {
-            matches = productId == itemId;
-            if (matches) debugPrint('[fetchCartAndSetQty] Matched by Id');
           }
 
           if (matches) {
-            foundQty = int.tryParse(e['Qty']?.toString() ?? e['qty']?.toString() ?? '1') ?? 1;
-            debugPrint('[fetchCartAndSetQty] Found matching item with qty: $foundQty');
+            foundQty = int.tryParse(e['Qty']?.toString() ?? '0') ?? 0;
             break;
           }
         }
       }
-      
-      debugPrint('[fetchCartAndSetQty] Final foundQty: $foundQty');
-      setState(() {
-        cartQty = foundQty;
-        qty = cartQty;
-        qtyController.text = cartQty.toString();
-      });
+
+      if (mounted) {
+        setState(() {
+          cartQty = foundQty;
+        });
+      }
     } catch (e) {
-      // fallback: do nothing
-    } finally {
-      setState(() {});
+      debugPrint('Error fetching cart: $e');
     }
   }
 
-  // ✅ NEW: Fetch full cart item details (discounts, schemes, remarks, etc.)
   Future<Map<String, dynamic>> fetchCartItemDetails() async {
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
@@ -154,21 +182,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final mobile = user?.mobileNumber ?? '';
       final licNo = user?.licenseNumber ?? '';
       String firmCode = '';
+
       try {
         if (user != null && user.stores.isNotEmpty) {
-          final primary = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first);
+          final primary = user.stores.firstWhere(
+            (s) => s.primary,
+            orElse: () => user.stores.first,
+          );
           firmCode = primary.firmCode;
         }
       } catch (_) {}
-      final acCode = widget.selectedAccount.code ?? '';
-      
-      final payload = jsonEncode({
+
+      // Use same acCode logic as order_entry_page
+      final acCode = widget.selectedAccount.code ??
+          (widget.selectedAccount.acIdCol != null
+              ? widget.selectedAccount.acIdCol.toString()
+              : widget.selectedAccount.id);
+
+      final payload = {
         'lUserId': mobile,
         'lLicNo': licNo,
         'lFirmCode': firmCode,
         'AcCode': acCode,
-      });
-      
+      };
+
       final response = await dio.post(
         '/ListDraftOrder',
         data: payload,
@@ -176,124 +213,241 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           headers: {
             'Content-Type': 'application/json',
             'package_name': auth.packageNameHeader,
-            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
           },
         ),
       );
 
-      dynamic raw = response.data;
-      Map<String, dynamic> parsed = _parseJson(raw);
+      final parsed = _parseJson(response.data);
 
       if (parsed['success'] == true && parsed['data'] != null) {
         final list = (parsed['data']['DraftOrder'] as List<dynamic>?) ?? [];
 
-        // Get product identifiers
-        final productCode = product['Code']?.toString() ?? product['code']?.toString() ?? '';
-        final productIdCol = product['i_id_col']?.toString() ?? product['iidcol']?.toString() ?? '';
+        // Extract product identifiers - handle both Product objects and Maps
+        String productCode = '';
+        int productIdCol = 0;
+
+        if (product is Product) {
+          productCode = product.code ?? '';
+          productIdCol = product.iidcol ?? 0;
+        } else if (product is Map) {
+          productCode = product['Code']?.toString() ??
+              product['code']?.toString() ??
+              product['Icode']?.toString() ??
+              product['ItemCode']?.toString() ??
+              '';
+          productIdCol = int.tryParse(product['i_id_col']?.toString() ??
+                  product['iidcol']?.toString() ??
+                  product['IdCol']?.toString() ??
+                  '') ??
+              0;
+        } else {
+          try {
+            productCode = product.code ?? '';
+            productIdCol = product.iidcol ?? 0;
+          } catch (_) {}
+        }
+
+        debugPrint('[fetchCartItemDetails] Looking for - Code: $productCode, IdCol: $productIdCol');
 
         for (final e in list) {
-          final code = e['Code']?.toString() ?? e['ItemCode']?.toString() ?? '';
-          final idCol = e['i_id_col']?.toString() ?? e['IdCol']?.toString() ?? '';
+          final code = e['Icode']?.toString() ??
+              e['Code']?.toString() ??
+              e['ItemCode']?.toString() ??
+              '';
+          final idCol = int.tryParse(
+                  e['IdCol']?.toString() ?? e['Idcol']?.toString() ?? '') ??
+              0;
+
+          debugPrint('[fetchCartItemDetails] Checking - Code: $code, IdCol: $idCol');
 
           bool matches = false;
-          if (productIdCol.isNotEmpty && idCol.isNotEmpty) {
+
+          if (productIdCol > 0 && idCol > 0) {
             matches = productIdCol == idCol;
+            if (matches) debugPrint('[fetchCartItemDetails] Matched by IdCol');
           }
+
           if (!matches && productCode.isNotEmpty && code.isNotEmpty) {
             matches = productCode == code;
+            if (matches) debugPrint('[fetchCartItemDetails] Matched by Code');
           }
 
           if (matches) {
-            debugPrint('[fetchCartItemDetails] Found item with full details');
             return {
-              'Qty': int.tryParse(e['Qty']?.toString() ?? '1') ?? 1,
-              'FreeQty': int.tryParse(e['ItemFQty']?.toString() ?? e['FreeQty']?.toString() ?? '0') ?? 0,
-              'Scheme': int.tryParse(e['ItemSchQty']?.toString() ?? e['SchemeQty']?.toString() ?? '0') ?? 0,
-              'DiscPcs': double.tryParse(e['discount_pcs']?.toString() ?? e['DiscPcs']?.toString() ?? '0.0') ?? 0.0,
-              'DiscPer': double.tryParse(e['discount_percentage']?.toString() ?? e['DiscPer']?.toString() ?? '0.0') ?? 0.0,
-              'AddDiscPer': double.tryParse(e['discount_percentage1']?.toString() ?? e['AddDiscPer']?.toString() ?? '0.0') ?? 0.0,
-              'Remark': e['remark']?.toString() ?? e['Remark']?.toString() ?? '',
+              'Qty': int.tryParse(e['Qty']?.toString() ?? '0') ?? 0,
+              'FQty': int.tryParse(e['FQty']?.toString() ?? '0') ?? 0,
+              'SchQty': int.tryParse(e['SchQty']?.toString() ??
+                      e['SchDQty']?.toString() ??
+                      '0') ??
+                  0,
+              'DSchQty': int.tryParse(e['DSchQty']?.toString() ??
+                      e['SchDQty']?.toString() ??
+                      '0') ??
+                  0,
+              'Rate': (e['Rate'] is num)
+                  ? (e['Rate'] as num).toDouble()
+                  : double.tryParse(e['Rate']?.toString() ?? '') ?? 0.0,
+              'Mrp': (e['Mrp'] is num)
+                  ? (e['Mrp'] as num).toDouble()
+                  : double.tryParse(e['Mrp']?.toString() ?? '') ?? 0.0,
+              'DiscPcs': (e['DO_DiscAmt'] is num)
+                  ? (e['DO_DiscAmt'] as num).toDouble()
+                  : double.tryParse(e['DO_DiscAmt']?.toString() ?? '') ?? 0.0,
+              'DiscPer': (e['DO_DiscPer'] is num)
+                  ? (e['DO_DiscPer'] as num).toDouble()
+                  : double.tryParse(e['DO_DiscPer']?.toString() ?? '') ?? 0.0,
+              'AddDiscPer': (e['DO_Disc2Per'] is num)
+                  ? (e['DO_Disc2Per'] as num).toDouble()
+                  : double.tryParse(e['DO_Disc2Per']?.toString() ?? '') ?? 0.0,
+              'Remark': e['DO_Remark']?.toString() ?? '',
+              'SchNarr': e['SchNarr']?.toString() ?? '',
             };
           }
         }
       }
     } catch (e) {
-      debugPrint('[fetchCartItemDetails] Error: $e');
+      debugPrint('Error fetching cart details: $e');
     }
 
-    // Return empty map if not found
     return {
-      'Qty': 1,
-      'FreeQty': 0,
-      'Scheme': 0,
+      'Qty': 0,
+      'FQty': 0,
+      'SchQty': 0,
+      'DSchQty': 0,
+      'Rate': 0.0,
+      'Mrp': 0.0,
       'DiscPcs': 0.0,
       'DiscPer': 0.0,
       'AddDiscPer': 0.0,
       'Remark': '',
+      'SchNarr': '',
     };
   }
 
   Map<String, dynamic> _parseJson(dynamic raw) {
     if (raw is Map<String, dynamic>) return raw;
     if (raw is String) {
-      final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
-      return jsonDecode(clean) as Map<String, dynamic>;
+      try {
+        final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
+        return jsonDecode(clean) as Map<String, dynamic>;
+      } catch (_) {
+        return {};
+      }
     }
-    return jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+    try {
+      return jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+    } catch (_) {
+      return {};
+    }
   }
 
-  // ... (Keep existing _getInt, _getDouble, _getString helper methods exactly as they are) ...
-
   int _getInt(dynamic obj, List<String> keys, {int fallback = 0}) {
+    // Handle Product model
+    if (obj is Product) {
+      for (var k in keys) {
+        switch (k) {
+          case 'stockQuantity':
+          case 'Stock':
+          case 'stock':
+          case 'quantity':
+            return obj.stockQuantity;
+          case 'iidcol':
+          case 'i_id_col':
+          case 'IdCol':
+            return obj.iidcol ?? fallback;
+          case 'qty':
+          case 'Qty':
+            return fallback;
+        }
+      }
+    }
+
+    // Handle Map objects
     for (var k in keys) {
       if (obj is Map && obj[k] != null) {
         if (obj[k] is int) return obj[k];
         if (obj[k] is String) return int.tryParse(obj[k]) ?? fallback;
         if (obj[k] is double) return (obj[k] as double).toInt();
-      } else if (obj != null && obj is! Map) {
-        try {
-          var json = obj.toJson();
-          if (json.containsKey(k)) {
-            var v = json[k];
-            if (v is int) return v;
-            if (v is String) return int.tryParse(v) ?? fallback;
-            if (v is double) return v.toInt();
-          }
-        } catch (_) {}
       }
     }
     return fallback;
   }
 
   double _getDouble(dynamic obj, List<String> keys, {double fallback = 0.0}) {
+    // Handle Product model
+    if (obj is Product) {
+      for (var k in keys) {
+        switch (k) {
+          case 'price':
+          case 'Rate':
+          case 'Amt':
+          case 'amt':
+            return obj.price;
+          case 'Mrp':
+          case 'mrp':
+            return obj.mrp;
+        }
+      }
+    }
+
+    // Handle Map objects
     for (var k in keys) {
       if (obj is Map && obj[k] != null) {
         if (obj[k] is double) return obj[k];
         if (obj[k] is int) return (obj[k] as int).toDouble();
         if (obj[k] is String) return double.tryParse(obj[k]) ?? fallback;
-      } else if (obj != null && obj is! Map) {
-        try {
-          var json = obj.toJson();
-          if (json.containsKey(k)) {
-            var v = json[k];
-            if (v is double) return v;
-            if (v is int) return v.toDouble();
-            if (v is String) return double.tryParse(v) ?? fallback;
-          }
-        } catch (_) {}
       }
     }
     return fallback;
   }
 
-  String _getString(dynamic obj, List<String> keys, {String fallback = ''}) {
+  String _getString(dynamic obj, List<String> keys,
+      {String fallback = ''}) {
+    // Handle Product model
+    if (obj is Product) {
+      for (var k in keys) {
+        switch (k) {
+          case 'name':
+          case 'Name':
+          case 'ItemName':
+          case 'item_name':
+          case 'I_NAME':
+            return obj.name;
+          case 'code':
+          case 'Code':
+          case 'ItemCode':
+          case 'Icode':
+          case 'icode':
+            return obj.code ?? '';
+          case 'manufacturer':
+          case 'MfgComp':
+          case 'mfgcomp':
+          case 'company':
+            return obj.manufacturer ?? '';
+          case 'unit':
+          case 'packing':
+          case 'Packing':
+          case 'UOM':
+          case 'uom':
+            return obj.unit;
+          case 'salt':
+          case 'Salt':
+          case 'composition':
+          case 'Composition':
+            return obj.salt ?? '';
+          case 'description':
+          case 'Description':
+            return obj.description ?? '';
+        }
+      }
+    }
+
+    // Handle Map objects
     for (var k in keys) {
-      if (obj is Map && obj[k] != null) return obj[k].toString();
-      else if (obj != null && obj is! Map) {
-        try {
-          var json = obj.toJson();
-          if (json.containsKey(k)) return json[k].toString();
-        } catch (_) {}
+      if (obj is Map && obj[k] != null) {
+        return obj[k].toString();
       }
     }
     return fallback;
@@ -305,19 +459,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       final auth = Provider.of<AuthService>(context, listen: false);
       final dio = auth.getDioClient();
       String firmCode = '';
+
       try {
         final stores = auth.currentUser?.stores;
         if (stores != null && stores.isNotEmpty) {
-          final primary = stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
+          final primary =
+              stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
           firmCode = primary.firmCode;
         }
-      } catch (_) {
-        firmCode = '';
-      }
-      // Use robust payload logic as in the reference
+      } catch (_) {}
+
       final payload = {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
-        'lUserId': auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
+        'lUserId': auth.currentUser?.mobileNumber ??
+            auth.currentUser?.userId ??
+            '',
         'lFirmCode': firmCode,
         'lPageNo': 1,
         'lSize': -1,
@@ -334,17 +490,20 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         'lExcludeId': receivedId,
         'filters': [],
       };
+
       final headers = {
         'Content-Type': 'application/json',
         'package_name': auth.packageNameHeader,
-        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+        if (auth.getAuthHeader() != null)
+          'Authorization': auth.getAuthHeader(),
       };
-      debugPrint('[SimilarItems] Request payload: ' + payload.toString());
-      final response = await dio.post('/GetItemList', data: payload, options: Options(headers: headers));
-      dynamic raw = response.data;
-      debugPrint('[SimilarItems] Full raw response: ' + raw.toString());
+
+      final response =
+          await dio.post('/GetItemList', data: payload, options: Options(headers: headers));
+
       List<dynamic> items = [];
-      // Fix: If raw is a String, decode it first
+      dynamic raw = response.data;
+
       if (raw is String) {
         try {
           final decoded = jsonDecode(raw);
@@ -357,9 +516,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           } else if (decoded is Map && decoded['items'] is List) {
             items = decoded['items'];
           }
-        } catch (e) {
-          debugPrint('[SimilarItems] JSON decode error: ' + e.toString());
-        }
+        } catch (_) {}
       } else if (raw is List) {
         items = raw;
       } else if (raw is Map && raw['data'] is List) {
@@ -369,10 +526,10 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       } else if (raw is Map && raw['items'] is List) {
         items = raw['items'];
       }
-      debugPrint('[SimilarItems] Parsed items: ' + items.toString());
+
       setState(() => similarProducts = items);
     } catch (e) {
-      debugPrint('Error: $e');
+      debugPrint('Error fetching similar products: $e');
     } finally {
       setState(() => loadingSimilar = false);
     }
@@ -382,114 +539,91 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final price = _getDouble(product, ['price', 'Rate'], fallback: 0.0);
-    final stock = _getInt(product, ['stockQuantity', 'Stock'], fallback: 0);
-    final manufacturer = _getString(product, ['manufacturer', 'MfgComp']);
-    final packing = _getString(product, ['unit', 'packing']);
-    final name = _getString(product, ['name', 'Name']);
-    final salt = _getString(product, ['salt', 'Salt']);
-
-    // Extract account code and selected account for cart navigation
-    final auth = Provider.of<AuthService>(context, listen: false);
-    final user = auth.currentUser;
-    String acCode = '';
-    models.Account? selectedAccount;
-    // Use Provider or navigation arguments to get the current selectedAccount
-    // If you have a selectedAccount in navigation arguments, use that
-    final routeArgs = ModalRoute.of(context)?.settings.arguments;
-    if (routeArgs is Map && routeArgs['selectedAccount'] != null) {
-      selectedAccount = routeArgs['selectedAccount'] as models.Account?;
-      acCode = selectedAccount?.code ?? '';
-    } else if (user != null && user.stores.isNotEmpty) {
-      // Fallback: try to get Account from Provider or other app state
-      // If you have a global selectedAccount, use that here
-      // Otherwise, leave selectedAccount as null
-      acCode = user.stores.first.firmCode;
-    }
+    final price = _getDouble(product, ['price', 'Rate', 'Amt', 'amt'], fallback: 0.0);
+    final stock = _getInt(product, ['stockQuantity', 'Stock', 'stock', 'quantity'], fallback: 0);
+    final manufacturer = _getString(product, ['manufacturer', 'MfgComp', 'mfgcomp', 'company']);
+    final packing = _getString(product, ['unit', 'packing', 'Packing', 'UOM', 'uom']);
+    final name = _getString(product, ['name', 'Name', 'ItemName', 'item_name', 'I_NAME']);
+    final salt = _getString(product, ['salt', 'Salt', 'composition', 'Composition']);
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: const Text('Product Details'),
+        title: Text('Product Details',
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        backgroundColor: colorScheme.surfaceContainerLowest,
         surfaceTintColor: Colors.transparent,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.shopping_cart),
-            tooltip: 'Open Cart',
-            onPressed: () {
-              final acCode = widget.selectedAccount.code ?? '';
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => CartPage(acCode: acCode, selectedAccount: widget.selectedAccount),
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: Icon(Icons.shopping_cart_outlined, color: colorScheme.onSurface),
+                tooltip: 'Open Cart',
+                onPressed: () {
+                  final acCode = widget.selectedAccount.code ??
+                      (widget.selectedAccount.acIdCol != null
+                          ? widget.selectedAccount.acIdCol.toString()
+                          : widget.selectedAccount.id);
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => CartPage(
+                      acCode: acCode,
+                      selectedAccount: widget.selectedAccount,
+                    ),
+                  ));
+                },
+              ),
+              if (cartQty > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: BoxDecoration(
+                      color: colorScheme.error,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        cartQty > 9 ? '9+' : '$cartQty',
+                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
                 ),
-              );
-            },
+            ],
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Product Hero Section ---
-            Container(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            _buildProductHeroSection(colorScheme, textTheme, price, stock, manufacturer, packing, name),
+            if (salt.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              _buildInfoSection(colorScheme, textTheme, "Composition", salt, Icons.biotech_outlined),
+            ],
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: colorScheme.primaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(packing, style: textTheme.labelLarge?.copyWith(color: colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 10),
-                      Text('Stock: $stock Pcs', style: textTheme.bodyMedium?.copyWith(color: stock > 0 ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(name, style: textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-                  const SizedBox(height: 4),
-                  Text(manufacturer, style: textTheme.titleMedium?.copyWith(color: colorScheme.primary)),
-                  const Divider(height: 32),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Unit Price', style: textTheme.bodySmall),
-                          Text('₹${price.toStringAsFixed(2)}', style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-                        ],
-                      ),
-                      _buildQtyCounter(colorScheme),
-                    ],
-                  ),
+                  Container(width: 4, height: 20, decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(width: 10),
+                  Text('Similar Products',
+                      style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
-
-            // --- Salt/Description Section ---
-            if (salt.isNotEmpty)
-              _buildInfoSection(colorScheme, textTheme, "Composition", salt, Icons.biotech_outlined),
-
-            const SizedBox(height: 20),
-
-            // --- Similar Products Header ---
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text('Similar Products', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-            ),
             const SizedBox(height: 12),
             _buildSimilarProductsList(colorScheme, textTheme),
-
-            const SizedBox(height: 100), // Bottom padding for FAB
+            const SizedBox(height: 110),
           ],
         ),
       ),
@@ -497,39 +631,187 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  Widget _buildQtyCounter(ColorScheme colorScheme) {
-    // Remove + and - buttons, just show quantity
+  Widget _buildProductHeroSection(ColorScheme cs, TextTheme tt, double price,
+      int stock, String manufacturer, String packing, String name) {
+    final mrp = _getDouble(product, ['Mrp', 'mrp'], fallback: 0.0);
+    final code = _getString(product, ['code', 'Code', 'Icode', 'icode']);
     return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withAlpha(77),
-        borderRadius: BorderRadius.circular(12),
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 12, offset: const Offset(0, 4)),
+        ],
       ),
-      child: Center(
-        child: Text('$qty', textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top accent bar
+          Container(
+            height: 4,
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              gradient: LinearGradient(colors: [cs.primary, cs.tertiary]),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Code + stock row
+                Row(
+                  children: [
+                    if (code.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: cs.secondaryContainer,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(code,
+                            style: tt.labelSmall?.copyWith(
+                                color: cs.onSecondaryContainer, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+                      ),
+                    if (code.isNotEmpty) const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: stock > 0 ? Colors.green.shade50 : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: stock > 0 ? Colors.green.shade200 : Colors.red.shade200),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            stock > 0 ? Icons.check_circle_outline : Icons.cancel_outlined,
+                            size: 11,
+                            color: stock > 0 ? Colors.green.shade700 : Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            stock > 0 ? 'In Stock: $stock' : 'Out of Stock',
+                            style: tt.labelSmall?.copyWith(
+                                color: stock > 0 ? Colors.green.shade700 : Colors.red.shade700,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (packing.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(packing,
+                            style: tt.labelSmall?.copyWith(
+                                color: cs.onPrimaryContainer, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(name.isNotEmpty ? name : 'Product',
+                    style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.3, height: 1.25)),
+                if (manufacturer.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(manufacturer,
+                      style: tt.bodyMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.w600)),
+                ],
+                const SizedBox(height: 16),
+                // Price row
+                Row(
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Price', style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant, letterSpacing: 0.5)),
+                        const SizedBox(height: 2),
+                        Text('₹${price.toStringAsFixed(2)}',
+                            style: tt.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: -0.5)),
+                      ],
+                    ),
+                    if (mrp > 0) ...[
+                      const SizedBox(width: 24),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('MRP', style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant, letterSpacing: 0.5)),
+                          const SizedBox(height: 2),
+                          Text('₹${mrp.toStringAsFixed(2)}',
+                              style: tt.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: cs.onSurfaceVariant,
+                                  decoration: TextDecoration.lineThrough)),
+                        ],
+                      ),
+                    ],
+                    const Spacer(),
+                    if (cartQty > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.shopping_cart_outlined, size: 14, color: cs.onPrimaryContainer),
+                            const SizedBox(width: 4),
+                            Text('Qty: $cartQty',
+                                style: tt.labelMedium?.copyWith(
+                                    fontWeight: FontWeight.w700, color: cs.onPrimaryContainer)),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildInfoSection(ColorScheme cs, TextTheme tt, String title, String content, IconData icon) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withAlpha(51),
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: cs.primary),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: cs.primary, size: 18),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: tt.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
+                Text(title,
+                    style: tt.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700, color: cs.onSurfaceVariant, letterSpacing: 0.4)),
                 const SizedBox(height: 4),
-                Text(content, style: tt.bodyMedium),
+                Text(content, style: tt.bodyMedium?.copyWith(height: 1.4)),
               ],
             ),
           ),
@@ -539,33 +821,84 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Widget _buildSimilarProductsList(ColorScheme cs, TextTheme tt) {
-    if (loadingSimilar) return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator()));
-    if (similarProducts.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text("No similar products found."));
+    if (loadingSimilar) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator(color: cs.primary, strokeWidth: 2)),
+      );
+    }
+    if (similarProducts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Text('No similar products found.',
+            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+      );
+    }
 
     return ListView.separated(
       shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       itemCount: similarProducts.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (ctx, idx) {
         final sp = similarProducts[idx];
+        final spName = _getString(sp, ['Name', 'name', 'ItemName', 'item_name', 'I_NAME']);
+        final spMfg = _getString(sp, ['MfgComp', 'manufacturer', 'mfgcomp', 'company']);
+        final spPrice = _getDouble(sp, ['Rate', 'price', 'Amt', 'amt']);
         return GestureDetector(
-          onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProductDetailPage(product: sp, selectedAccount: widget.selectedAccount))),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              border: Border.all(color: cs.outlineVariant),
-              borderRadius: BorderRadius.circular(16),
+          onTap: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProductDetailPage(product: sp, selectedAccount: widget.selectedAccount),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Row(
               children: [
-                Text(_getString(sp, ['Name', 'name']), maxLines: 2, overflow: TextOverflow.ellipsis, style: tt.labelLarge?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(_getString(sp, ['MfgComp', 'manufacturer']), maxLines: 1, overflow: TextOverflow.ellipsis, style: tt.bodySmall),
-                const SizedBox(height: 8),
-                Text('₹${_getDouble(sp, ['Rate', 'price']).toStringAsFixed(2)}', style: tt.titleMedium?.copyWith(color: cs.primary, fontWeight: FontWeight.bold)),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: cs.secondaryContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.medication_outlined, size: 20, color: cs.secondary),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(spName, maxLines: 2, overflow: TextOverflow.ellipsis,
+                          style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+                      if (spMfg.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(spMfg, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('₹${spPrice.toStringAsFixed(2)}',
+                        style: tt.titleSmall?.copyWith(color: cs.primary, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 4),
+                    Icon(Icons.chevron_right_rounded, size: 16, color: cs.onSurfaceVariant),
+                  ],
+                ),
               ],
             ),
           ),
@@ -576,10 +909,13 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Widget _buildBottomAction(ColorScheme cs, double price) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
         color: cs.surface,
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(13), blurRadius: 10, offset: const Offset(0, -5))],
+        border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 16, offset: const Offset(0, -4)),
+        ],
       ),
       child: Row(
         children: [
@@ -588,54 +924,34 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Total Value', style: TextStyle(color: cs.outline)),
-                          Text('₹${(price * qty).toStringAsFixed(2)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                    ),
-                    if (cartQty > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: cs.primaryContainer,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'In Cart: $cartQty',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: cs.onPrimaryContainer,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                Text('Price', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+                Text('₹${price.toStringAsFixed(2)}',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: -0.5)),
+                if (cartQty > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text('In cart: $cartQty pcs',
+                        style: TextStyle(fontSize: 11, color: cs.primary, fontWeight: FontWeight.w600)),
+                  ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: () {
-              // Convert product to Product model if needed
-              final p = product is Map ? _tryMapToProduct(product) : product;
-              if (p != null) _showBulkAddBottomSheetFromDetail(p);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: cs.primary,
-              foregroundColor: cs.onPrimary,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            ),
-            child: Text(
-              cartQty > 0 ? 'UPDATE' : 'ADD',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+          SizedBox(
+            height: 48,
+            child: FilledButton.icon(
+              onPressed: _showAddToCartBottomSheet,
+              style: FilledButton.styleFrom(
+                backgroundColor: cartQty > 0 ? cs.secondary : cs.primary,
+                foregroundColor: cartQty > 0 ? cs.onSecondary : cs.onPrimary,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: Icon(cartQty > 0 ? Icons.edit_outlined : Icons.add_shopping_cart_outlined, size: 18),
+              label: Text(
+                cartQty > 0 ? 'UPDATE' : 'ADD TO CART',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.5),
+              ),
             ),
           ),
         ],
@@ -643,338 +959,628 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  Product? _tryMapToProduct(dynamic map) {
-    try {
-      return Product(
-        id: map['id']?.toString() ?? map['Code']?.toString() ?? '',
-        name: map['Name']?.toString() ?? map['name']?.toString() ?? '',
-        category: map['category']?.toString() ?? '',
-        price: (map['Rate'] ?? map['price'] ?? 0).toDouble(),
-        mrp: (map['Mrp'] ?? map['mrp'] ?? 0).toDouble(),
-        unit: map['packing']?.toString() ?? map['unit']?.toString() ?? '',
-        stockQuantity: (map['Stock'] ?? map['stockQuantity'] ?? 0).toInt(),
-        manufacturer: map['MfgComp']?.toString() ?? map['manufacturer']?.toString(),
-        batchNumber: map['batchNumber']?.toString(),
-        expiryDate: map['expiryDate'] != null ? DateTime.tryParse(map['expiryDate']) : null,
-        description: map['description']?.toString(),
-        imageUrl: map['imageUrl']?.toString(),
-        salt: map['Salt']?.toString() ?? map['salt']?.toString(),
-        code: map['Code']?.toString() ?? map['code']?.toString(),
-        iidcol: (map['i_id_col'] ?? map['iidcol'] ?? map['IdCol']) != null ? int.tryParse(map['i_id_col']?.toString() ?? map['iidcol']?.toString() ?? map['IdCol']?.toString() ?? '') : null,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
+  void _showAddToCartBottomSheet() async {
+    await fetchCartAndSetQty();
+    final cartDetails = await fetchCartItemDetails();
 
+    if (!mounted) return;
 
-  void _showBulkAddBottomSheetFromDetail(Product product) async {
-    await fetchCartAndSetQty(); // Always refresh cart qty before showing
-    
-    // ✅ NEW: Fetch existing cart item details if item is in cart
-    final cartItemDetails = await fetchCartItemDetails();
-    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final colorScheme = Theme.of(context).colorScheme;
-        final textTheme = Theme.of(context).textTheme;
-        
-        // ✅ NEW: Pre-fill with existing data
-        final TextEditingController qtyController = TextEditingController(text: cartItemDetails['Qty'].toString());
-        final TextEditingController freeQtyController = TextEditingController(text: cartItemDetails['FreeQty'].toString());
-        final TextEditingController schemeController = TextEditingController(text: cartItemDetails['Scheme'].toString());
-        final TextEditingController discPcsController = TextEditingController(text: cartItemDetails['DiscPcs'].toString());
-        final TextEditingController discPerController = TextEditingController(text: cartItemDetails['DiscPer'].toString());
-        final TextEditingController addDiscPerController = TextEditingController(text: cartItemDetails['AddDiscPer'].toString());
-        final TextEditingController remarkController = TextEditingController(text: cartItemDetails['Remark'].toString());
+        return _buildBottomSheetContent(cartDetails);
+      },
+    );
+  }
 
-        double price = product.price;
-        int available = product.stockQuantity;
-        double goodsValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
+  Widget _buildBottomSheetContent(Map<String, dynamic> cartDetails) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final price = _getDouble(product, ['price', 'Rate'], fallback: 0.0);
+    final mrp = _getDouble(product, ['Mrp', 'mrp'], fallback: 0.0);
+    final stock = _getInt(product, ['stockQuantity', 'Stock'], fallback: 0);
 
-        void recalc() {
-          int qty = int.tryParse(qtyController.text) ?? 1;
-          int scheme = int.tryParse(schemeController.text) ?? 0;
-          double discPcs = double.tryParse(discPcsController.text) ?? 0.0;
-          double discPer = double.tryParse(discPerController.text) ?? 0.0;
-          double addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
-          goodsValue = price * qty;
-          discountValue = discPcs + (goodsValue * (discPer + addDiscPer) / 100);
-          gst = (goodsValue - discountValue) * 0.18;
-          netValue = goodsValue - discountValue + gst;
-        }
-        recalc();
+    final qtyCtrl = TextEditingController(text: (cartDetails['Qty'] ?? 0).toString());
+    final fQtyCtrl = TextEditingController(text: (cartDetails['FQty'] ?? 0).toString());
+    final schQtyCtrl = TextEditingController(text: (cartDetails['SchQty'] ?? 0).toString());
+    final dSchQtyCtrl = TextEditingController(text: (cartDetails['DSchQty'] ?? 0).toString());
+    final priceCtrl = TextEditingController(
+        text: (cartDetails['Rate'] != null && cartDetails['Rate'] > 0)
+            ? (cartDetails['Rate'] as double).toStringAsFixed(2)
+            : price.toStringAsFixed(2));
+    final discPcsCtrl = TextEditingController(text: (cartDetails['DiscPcs'] ?? 0.0).toString());
+    final discPerCtrl = TextEditingController(text: (cartDetails['DiscPer'] ?? 0.0).toString());
+    final addDiscPerCtrl = TextEditingController(text: (cartDetails['AddDiscPer'] ?? 0.0).toString());
+    final schNarrCtrl = TextEditingController(text: cartDetails['SchNarr'] ?? '');
+    final remarkCtrl = TextEditingController(text: cartDetails['Remark'] ?? '');
 
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            void updateFields() => setModalState(() => recalc());
-            InputDecoration _inputDeco(String label, {IconData? icon, String? suffix}) => InputDecoration(
-              labelText: label,
-              suffixText: suffix,
-              isDense: true,
-              filled: true,
-              fillColor: colorScheme.surfaceContainerHighest.withAlpha(77),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              prefixIcon: icon != null ? Icon(icon, size: 18) : null,
-            );
-            return Container(
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40, height: 4,
-                        margin: const EdgeInsets.only(bottom: 20),
-                        decoration: BoxDecoration(color: colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
-                      ),
+    double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
+
+    void recalc() {
+      final qty = int.tryParse(qtyCtrl.text) ?? 0;
+      final schQty = int.tryParse(schQtyCtrl.text) ?? 0;
+      final dSchQty = int.tryParse(dSchQtyCtrl.text) ?? 0;
+      final enteredPrice = double.tryParse(priceCtrl.text) ?? price;
+      final discPcs = double.tryParse(discPcsCtrl.text) ?? 0.0;
+      final discPer = double.tryParse(discPerCtrl.text) ?? 0.0;
+      final addDiscPer = double.tryParse(addDiscPerCtrl.text) ?? 0.0;
+
+      goodsValue = enteredPrice * qty;
+      schemeValue = enteredPrice * (schQty + dSchQty);
+
+      final discPcsAmt = discPcs;
+      final discPerAmt = (goodsValue * discPer) / 100;
+      final discAddAmt = (goodsValue * addDiscPer) / 100;
+      discountValue = discPcsAmt + discPerAmt + discAddAmt;
+
+      gst = (goodsValue - discountValue) * 0.18;
+      netValue = goodsValue - discountValue + gst;
+    }
+
+    recalc();
+
+    return StatefulBuilder(
+      builder: (context, setModalState) {
+        void updateFields() => setModalState(() => recalc());
+
+        return Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.92,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (ctx, scroll) {
+              return Column(
+                children: [
+                  // Handle
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 4),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                  // Sheet header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
+                    child: Row(
                       children: [
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(product.name, style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: cartQty > 0
-                                        ? colorScheme.primaryContainer
-                                        : colorScheme.secondaryContainer,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      cartQty > 0 ? 'UPDATE' : 'ADD',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: cartQty > 0
-                                          ? colorScheme.onPrimaryContainer
-                                          : colorScheme.onSecondaryContainer,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              Text(
+                                _getString(product, ['name', 'Name', 'ItemName', 'item_name', 'I_NAME']),
+                                style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              Text("${product.manufacturer ?? ''} • ${product.unit}", style: textTheme.bodySmall),
+                              const SizedBox(height: 2),
+                              Text(
+                                _getString(product, ['manufacturer', 'MfgComp', 'mfgcomp', 'company']),
+                                style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                              ),
                             ],
                           ),
                         ),
                         IconButton.filledTonal(
                           onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(36, 36),
+                            padding: EdgeInsets.zero,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: colorScheme.primaryContainer.withAlpha(102), borderRadius: BorderRadius.circular(16)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildHeaderStat("Price", "₹${price.toStringAsFixed(2)}", colorScheme),
-                          _buildHeaderStat("Stock", "$available", colorScheme),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
+                  ),
+                  // Quick info chips
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: Row(
                       children: [
-                        Expanded(child: TextField(controller: qtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Quantity', icon: Icons.shopping_basket))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: schemeController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Scheme', icon: Icons.card_giftcard))),
+                        _infoChip(colorScheme, '₹${price.toStringAsFixed(2)}', Icons.sell_outlined, colorScheme.primary),
+                        const SizedBox(width: 8),
+                        if (mrp > 0) _infoChip(colorScheme, 'MRP ₹${mrp.toStringAsFixed(2)}', Icons.price_change_outlined, colorScheme.secondary),
+                        if (mrp > 0) const SizedBox(width: 8),
+                        _infoChip(
+                          colorScheme,
+                          'Stock: $stock',
+                          stock > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined,
+                          stock > 0 ? Colors.green.shade600 : colorScheme.error,
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: discPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc %', icon: Icons.percent))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: addDiscPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Add %', icon: Icons.add_circle_outline))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: discPcsController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc Cash', icon: Icons.money))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: freeQtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Free Qty', icon: Icons.inventory_2))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(controller: remarkController, decoration: _inputDeco('Add Remark', icon: Icons.notes)),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceContainerHighest.withAlpha(128),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colorScheme.outlineVariant),
-                      ),
+                  ),
+                  Divider(height: 1, thickness: 0.5, color: colorScheme.outlineVariant),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      controller: scroll,
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSummaryRow("Goods Value", "₹${goodsValue.toStringAsFixed(2)}", textTheme),
-                          _buildSummaryRow("Total Discount", "-₹${discountValue.toStringAsFixed(2)}", textTheme, isNegative: true),
-                          _buildSummaryRow("GST (18%)", "+₹${gst.toStringAsFixed(2)}", textTheme),
-                          const Divider(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Net Payable', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                              Text('₹${netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
+                          // ORDER DETAILS section
+                          _sheetSectionLabel(colorScheme, textTheme, 'ORDER DETAILS'),
+                          const SizedBox(height: 14),
+                          _buildInputField('Quantity', qtyCtrl, TextInputType.number, updateFields, colorScheme, textTheme),
+                          const SizedBox(height: 12),
+                          _buildInputField('Free Quantity', fQtyCtrl, TextInputType.number, updateFields, colorScheme, textTheme),
+                          const SizedBox(height: 12),
+                          _buildSchemeInput(schQtyCtrl, dSchQtyCtrl, updateFields, colorScheme, textTheme),
+                          const SizedBox(height: 12),
+                          _buildInputField('Price', priceCtrl, const TextInputType.numberWithOptions(decimal: true), updateFields, colorScheme, textTheme),
+                          const SizedBox(height: 20),
+                          // DISCOUNTS section
+                          _sheetSectionLabel(colorScheme, textTheme, 'DISCOUNTS'),
+                          const SizedBox(height: 14),
+                          _buildInputFieldWithAmount('Discount (Pcs)', discPcsCtrl, double.tryParse(discPcsCtrl.text) ?? 0.0, updateFields, colorScheme, textTheme),
+                          const SizedBox(height: 12),
+                          _buildInputFieldWithAmount('Discount (%)', discPerCtrl, (goodsValue * (double.tryParse(discPerCtrl.text) ?? 0.0)) / 100, updateFields, colorScheme, textTheme),
+                          const SizedBox(height: 12),
+                          _buildInputFieldWithAmount('Add. Discount (%)', addDiscPerCtrl, (goodsValue * (double.tryParse(addDiscPerCtrl.text) ?? 0.0)) / 100, updateFields, colorScheme, textTheme),
+                          const SizedBox(height: 20),
+                          _buildRemarkField(remarkCtrl, 'Add Remark (Optional)', colorScheme, textTheme),
+                          const SizedBox(height: 24),
+                          // Summary card
+                          _buildSummaryCard(goodsValue, schemeValue, discountValue, gst, netValue, colorScheme, textTheme),
+                          const SizedBox(height: 24),
+                          _buildActionButtons(colorScheme, textTheme, qtyCtrl, fQtyCtrl, schQtyCtrl, dSchQtyCtrl, priceCtrl, discPcsCtrl, discPerCtrl, addDiscPerCtrl, schNarrCtrl, remarkCtrl),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('CANCEL'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: colorScheme.primary,
-                              foregroundColor: colorScheme.onPrimary,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () async {
-                              int qty = int.tryParse(qtyController.text) ?? 1;
-                              if (qty > available) {
-                                debugPrint('[ProductDetailPage] Attempted to add qty > available: $qty > $available');
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Cannot add more than available stock ($available)')),
-                                );
-                                return;
-                              }
-                              final auth = Provider.of<AuthService>(context, listen: false);
-                              final dio = auth.getDioClient();
-                              final user = auth.currentUser;
-                              final acCode = widget.selectedAccount.code ?? '';
-                              final cuId = int.tryParse(user?.userId ?? '') ?? 0;
-                              final itemCode = product.code ?? product.id;
-                              final idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
-
-                              // Get firmCode from user's stores (same as order_entry_page)
-                              String firmCode = '';
-                              if (user?.stores.isNotEmpty == true) {
-                                firmCode = user!.stores.first.firmCode;
-                              }
-
-                              debugPrint('[ProductDetailPage] Add to cart pressed');
-                              debugPrint('[ProductDetailPage] Product id: ${product.id}, code: $itemCode, iidcol: $idCol');
-                              final payload = {
-                                'UserId': user?.mobileNumber ?? user?.userId ?? '',
-                                'LicNo': user?.licenseNumber ?? '',
-                                'lFirmCode': firmCode,
-                                'AcCode': acCode,
-                                'ItemCode': itemCode,
-                                'Icode': itemCode,
-                                'IdCol': idCol,
-                                'ItemQty': qtyController.text,
-                                'ItemRate': price.toStringAsFixed(2),
-                                'cu_id': cuId,
-                                'ItemFQty': freeQtyController.text,
-                                'ItemSchQty': schemeController.text,
-                                'ItemDSchQty': '0.0',
-                                'ItemAmt': goodsValue.toStringAsFixed(2),
-                                'discount_percentage': discPerController.text,
-                                'discount_percentage1': addDiscPerController.text,
-                                'discount_pcs': discPcsController.text,
-                                'remark': remarkController.text,
-                                'insert_record': 1,
-                                'default_hit': true,
-                              };
-                              final headers = {
-                                'Content-Type': 'application/json',
-                                'package_name': auth.packageNameHeader,
-                                if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-                              };
-                              debugPrint('[ProductDetailPage] Cart API payload: ' + payload.toString());
-                              debugPrint('[ProductDetailPage] Cart API headers: ' + headers.toString());
-                              try {
-                                final response = await dio.post('/AddDraftOrder', data: payload, options: Options(headers: headers));
-                                debugPrint('[ProductDetailPage] Cart API response: ' + response.data.toString());
-                                if (mounted) {
-                                  final wasUpdating = cartQty > 0;
-                                  await fetchCartAndSetQty(); // Refresh cart quantity
-                                  Navigator.pop(context, true);
-                                  final message = wasUpdating
-                                    ? 'Item quantity updated in cart'
-                                    : 'Item added to cart';
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-                                }
-                              } catch (e) {
-                                debugPrint('[ProductDetailPage] Cart API error: ' + e.toString());
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e')));
-                                }
-                              }
-                            },
-                            child: Text(
-                              cartQty > 0 ? 'UPDATE CART' : 'ADD TO CART',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+                  ),
+                ],
+              );
+            },
+          ),
         );
       },
     );
   }
 
-  Widget _buildHeaderStat(String label, String value, ColorScheme cs) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+  Widget _infoChip(ColorScheme cs, String label, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sheetSectionLabel(ColorScheme cs, TextTheme tt, String title) {
+    return Row(
       children: [
-        Text(label, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-        const SizedBox(height: 4),
-        Text(value, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.bold, fontSize: 16)),
+        Container(width: 3, height: 16, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 8),
+        Text(title,
+            style: tt.labelMedium?.copyWith(
+                fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1.2)),
       ],
     );
   }
 
-  Widget _buildSummaryRow(String label, String value, TextTheme tt, {bool isNegative = false}) {
+  Widget _buildInputField(String label, TextEditingController controller, TextInputType keyboardType,
+      VoidCallback onChanged, ColorScheme cs, TextTheme tt) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: tt.bodyMedium?.copyWith(color: isNegative ? Colors.red : null)),
-        Text(value, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: isNegative ? Colors.red : null)),
+        Expanded(
+          child: Text(label, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: cs.onSurface)),
+        ),
+        SizedBox(
+          width: 130,
+          child: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            textAlign: TextAlign.right,
+            onChanged: (_) => onChanged(),
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            decoration: InputDecoration(
+              hintText: '0',
+              hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true,
+              fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: cs.primary, width: 2)),
+            ),
+          ),
+        ),
       ],
     );
   }
+
+  Widget _buildSchemeInput(TextEditingController schQtyCtrl, TextEditingController dSchQtyCtrl,
+      VoidCallback onChanged, ColorScheme cs, TextTheme tt) {
+    InputDecoration schemeDeco(String hint) => InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      filled: true,
+      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: cs.primary, width: 2)),
+    );
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text('Scheme', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: cs.onSurface)),
+        ),
+        SizedBox(
+          width: 56,
+          child: TextField(
+            controller: schQtyCtrl,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            onChanged: (_) => onChanged(),
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            decoration: schemeDeco('0'),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text('+', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary)),
+        ),
+        SizedBox(
+          width: 56,
+          child: TextField(
+            controller: dSchQtyCtrl,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            onChanged: (_) => onChanged(),
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            decoration: schemeDeco('0'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInputFieldWithAmount(String label, TextEditingController controller, double amount,
+      VoidCallback onChanged, ColorScheme cs, TextTheme tt) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: cs.onSurface)),
+              const SizedBox(height: 2),
+              Text('₹${amount.toStringAsFixed(2)}',
+                  style: tt.labelSmall?.copyWith(color: cs.outline, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        SizedBox(
+          width: 130,
+          child: TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textAlign: TextAlign.right,
+            onChanged: (_) => onChanged(),
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            decoration: InputDecoration(
+              hintText: '0',
+              hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true,
+              fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide(color: cs.primary, width: 2)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRemarkField(TextEditingController controller, String label, ColorScheme cs, TextTheme tt) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: cs.onSurface)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          maxLength: 200,
+          maxLines: 2,
+          style: tt.bodyMedium,
+          decoration: InputDecoration(
+            hintText: 'Type here...',
+            hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+            contentPadding: const EdgeInsets.all(12),
+            isDense: true,
+            filled: true,
+            fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+            focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: cs.primary, width: 2)),
+            counterText: '',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSummaryCard(double goodsValue, double schemeValue, double discountValue,
+      double gst, double netValue, ColorScheme cs, TextTheme tt) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Column(
+              children: [
+                _summaryRow(cs, tt, 'Goods Value', '₹${goodsValue.toStringAsFixed(2)}', isHighlight: false),
+                const SizedBox(height: 8),
+                _summaryRow(cs, tt, 'Scheme Value', '₹${schemeValue.toStringAsFixed(2)}', isHighlight: false),
+                const SizedBox(height: 8),
+                _summaryRow(cs, tt, 'Discount Value', '-₹${discountValue.toStringAsFixed(2)}', isHighlight: false, isNegative: true),
+                const SizedBox(height: 8),
+                _summaryRow(cs, tt, 'GST 18% (Inclusive)', '₹${gst.toStringAsFixed(2)}', isHighlight: false),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: cs.primary.withValues(alpha: 0.08),
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+              border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15))),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Net Value',
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
+                Text('₹${netValue.toStringAsFixed(2)}',
+                    style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(ColorScheme cs, TextTheme tt, String label, String value,
+      {bool isHighlight = false, bool isNegative = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: tt.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+        Text(value,
+            style: tt.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: isNegative ? Colors.red.shade600 : cs.onSurface)),
+      ],
+    );
+  }
+
+  Widget _buildActionButtons(ColorScheme cs, TextTheme tt,
+      TextEditingController qtyCtrl, TextEditingController fQtyCtrl,
+      TextEditingController schQtyCtrl, TextEditingController dSchQtyCtrl,
+      TextEditingController priceCtrl, TextEditingController discPcsCtrl,
+      TextEditingController discPerCtrl, TextEditingController addDiscPerCtrl,
+      TextEditingController schNarrCtrl, TextEditingController remarkCtrl) {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: BorderSide(color: cs.outlineVariant),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('CLOSE',
+                style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: FilledButton(
+            onPressed: () => _addToCart(qtyCtrl, fQtyCtrl, schQtyCtrl, dSchQtyCtrl,
+                priceCtrl, discPcsCtrl, discPerCtrl, addDiscPerCtrl, schNarrCtrl, remarkCtrl),
+            style: FilledButton.styleFrom(
+              backgroundColor: cartQty > 0 ? cs.secondary : cs.primary,
+              foregroundColor: cartQty > 0 ? cs.onSecondary : cs.onPrimary,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(
+              cartQty > 0 ? 'UPDATE CART' : 'ADD TO CART',
+              style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8,
+                  color: cartQty > 0 ? cs.onSecondary : cs.onPrimary),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addToCart(
+    TextEditingController qtyCtrl,
+    TextEditingController fQtyCtrl,
+    TextEditingController schQtyCtrl,
+    TextEditingController dSchQtyCtrl,
+    TextEditingController priceCtrl,
+    TextEditingController discPcsCtrl,
+    TextEditingController discPerCtrl,
+    TextEditingController addDiscPerCtrl,
+    TextEditingController schNarrCtrl,
+    TextEditingController remarkCtrl,
+  ) async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+      final user = auth.currentUser;
+
+      // Get firmCode from user stores (same as order_entry_page)
+      String firmCode = '';
+      try {
+        final stores = user?.stores;
+        if (stores != null && stores.isNotEmpty) {
+          final primary = stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
+          firmCode = primary.firmCode;
+        }
+      } catch (_) {}
+
+      final acCode = widget.selectedAccount.code ??
+          (widget.selectedAccount.acIdCol != null
+              ? widget.selectedAccount.acIdCol.toString()
+              : widget.selectedAccount.id);
+      final cuId = int.tryParse(user?.userId ?? '') ?? 0;
+
+      // Extract product identifiers - handle both Product objects and Maps
+      String itemCode = '';
+      int idCol = 0;
+
+      if (product is Product) {
+        itemCode = product.code ?? product.id;
+        idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
+      } else if (product is Map) {
+        itemCode = product['Icode']?.toString() ??
+            product['icode']?.toString() ??
+            product['Code']?.toString() ??
+            product['code']?.toString() ??
+            '';
+        idCol = int.tryParse(
+                product['i_id_col']?.toString() ??
+                    product['iidcol']?.toString() ??
+                    product['IdCol']?.toString() ??
+                    '') ??
+            0;
+      } else {
+        try {
+          itemCode = product.code ?? '';
+          idCol = product.iidcol ?? 0;
+        } catch (_) {}
+      }
+
+      final qty = int.tryParse(qtyCtrl.text) ?? 1;
+      final fQty = int.tryParse(fQtyCtrl.text) ?? 0;
+      final schQty = int.tryParse(schQtyCtrl.text) ?? 0;
+      final dSchQty = int.tryParse(dSchQtyCtrl.text) ?? 0;
+      final usedPrice = double.tryParse(priceCtrl.text) ?? 0.0;
+      final goodsValue = usedPrice * qty;
+
+      // Exact same payload structure as order_entry_page._submitOrder
+      final payload = {
+        'UserId': user?.mobileNumber ?? user?.userId ?? '',
+        'LicNo': user?.licenseNumber ?? '',
+        'lFirmCode': firmCode,
+        'AcCode': acCode,
+        'ItemCode': itemCode,
+        'Icode': itemCode,
+        'IdCol': idCol,
+        'ItemQty': qtyCtrl.text,
+        'ItemRate': usedPrice.toStringAsFixed(2),
+        'cu_id': cuId,
+        'ItemFQty': fQty.toString(),
+        'ItemSchQty': schQty.toString(),
+        'ItemDSchQty': dSchQty.toString(),
+        'ItemAmt': goodsValue.toStringAsFixed(2),
+        'discount_percentage': discPerCtrl.text,
+        'discount_percentage1': addDiscPerCtrl.text,
+        'discount_pcs': discPcsCtrl.text,
+        'remark': remarkCtrl.text,
+        'insert_record': 1,
+        'default_hit': true,
+      };
+
+      debugPrint('[ProductDetailPage] AddDraftOrder payload:');
+      debugPrint(payload.toString());
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'package_name': auth.packageNameHeader,
+        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+      };
+
+      await dio.post(
+        '/AddDraftOrder',
+        data: payload,
+        options: Options(headers: headers),
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        await fetchCartAndSetQty();
+        if (mounted) {
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Item added to cart')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add: $e')),
+        );
+      }
+      debugPrint('Error adding to cart: $e');
+    }
+  }
 }
+

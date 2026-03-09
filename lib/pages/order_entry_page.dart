@@ -219,6 +219,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
       };
 
+      print('===== GetItemList Request Body (_loadProducts) =====');
+      print(jsonEncode(payload));
+      print('====================================================');
+
       final response = await dio.post('/GetItemList', data: payload, options: Options(headers: headers));
       dynamic raw = response.data;
 
@@ -292,6 +296,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         'package_name': auth.packageNameHeader,
         if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
       };
+
+      print('===== GetItemList Request Body (_loadMoreProducts) =====');
+      print(jsonEncode(payload));
+      print('========================================================');
 
       final response = await dio.post('/GetItemList', data: payload, options: Options(headers: headers));
       dynamic raw = response.data;
@@ -956,6 +964,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
       };
 
+      print('===== ListDraftOrder Request Body (_loadDraftOrder) =====');
+      print(jsonEncode(payload));
+      print('=========================================================');
+
       final response = await dio.post('/ListDraftOrder', data: payload, options: Options(headers: headers));
       dynamic raw = response.data;
 
@@ -1296,34 +1308,37 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // Allow custom background
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
         final colorScheme = Theme.of(context).colorScheme;
         final textTheme = Theme.of(context).textTheme;
 
-        final TextEditingController qtyController = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '1');
-        final TextEditingController freeQtyController = TextEditingController(text: '0');
-        final TextEditingController schemeController = TextEditingController(text: '0');
-        final TextEditingController discPcsController = TextEditingController(text: '0.0');
-        final TextEditingController discPerController = TextEditingController(text: '0.0');
-        final TextEditingController addDiscPerController = TextEditingController(text: '0.0');
-        final TextEditingController remarkController = TextEditingController();
+        final qtyController = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '1');
+        final priceController = TextEditingController(text: product.price.toStringAsFixed(2));
+        final freeQtyController = TextEditingController(text: '0');
+        final schemeController = TextEditingController(text: '0');
+        final dSchemeController = TextEditingController(text: '0');
+        final discPcsController = TextEditingController(text: '0.0');
+        final discPerController = TextEditingController(text: '0.0');
+        final addDiscPerController = TextEditingController(text: '0.0');
+        final remarkController = TextEditingController();
 
         double price = product.price;
-        int available = product.stockQuantity;
+        final int available = product.stockQuantity;
+        final mrp = product.mrp;
 
-        // Values for calculation
         double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
 
         void recalc() {
-          int qty = int.tryParse(qtyController.text) ?? 1;
-          int scheme = int.tryParse(schemeController.text) ?? 0;
-          double discPcs = double.tryParse(discPcsController.text) ?? 0.0;
-          double discPer = double.tryParse(discPerController.text) ?? 0.0;
-          double addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
-
+          final qty = int.tryParse(qtyController.text) ?? 1;
+          final scheme = int.tryParse(schemeController.text) ?? 0;
+          final dScheme = int.tryParse(dSchemeController.text) ?? 0;
+          final discPcs = double.tryParse(discPcsController.text) ?? 0.0;
+          final discPer = double.tryParse(discPerController.text) ?? 0.0;
+          final addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
+          price = double.tryParse(priceController.text) ?? product.price;
           goodsValue = price * qty;
-          schemeValue = scheme * price;
+          schemeValue = (scheme + dScheme) * price;
           discountValue = discPcs + (goodsValue * (discPer + addDiscPer) / 100);
           gst = (goodsValue - discountValue) * 0.18;
           netValue = goodsValue - discountValue + gst;
@@ -1331,204 +1346,337 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
         recalc();
 
+        // Shared input decoration
+        InputDecoration _fieldDeco(ColorScheme cs) => InputDecoration(
+          hintText: '0',
+          hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          filled: true,
+          fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
+        );
+
         return StatefulBuilder(
           builder: (context, setModalState) {
             void updateFields() => setModalState(() => recalc());
 
-            // Custom Input Decoration for small fields
-            InputDecoration _inputDeco(String label, {IconData? icon, String? suffix}) => InputDecoration(
-              labelText: label,
-              suffixText: suffix,
-              isDense: true,
-              filled: true,
-              fillColor: colorScheme.surfaceVariant.withOpacity(0.3),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              prefixIcon: icon != null ? Icon(icon, size: 18) : null,
+            Widget sectionLabel(String title) => Row(
+              children: [
+                Container(width: 3, height: 16, decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(2))),
+                const SizedBox(width: 8),
+                Text(title, style: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800, color: colorScheme.primary, letterSpacing: 1.2)),
+              ],
+            );
+
+            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType) => Row(
+              children: [
+                Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                SizedBox(
+                  width: 130,
+                  child: TextField(
+                    controller: ctrl,
+                    keyboardType: kbType,
+                    textAlign: TextAlign.right,
+                    onChanged: (_) => updateFields(),
+                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    decoration: _fieldDeco(colorScheme),
+                  ),
+                ),
+              ],
+            );
+
+            Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt) => Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                      Text('₹${amt.toStringAsFixed(2)}', style: textTheme.labelSmall?.copyWith(color: colorScheme.outline, fontWeight: FontWeight.w500)),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 130,
+                  child: TextField(
+                    controller: ctrl,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    textAlign: TextAlign.right,
+                    onChanged: (_) => updateFields(),
+                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    decoration: _fieldDeco(colorScheme),
+                  ),
+                ),
+              ],
+            );
+
+            Widget infoChip(String label, IconData icon, Color color) => Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: color.withValues(alpha: 0.25)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 13, color: color),
+                  const SizedBox(width: 4),
+                  Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+                ],
+              ),
             );
 
             return Container(
               decoration: BoxDecoration(
                 color: colorScheme.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              child: DraggableScrollableSheet(
+                expand: false,
+                initialChildSize: 0.92,
+                minChildSize: 0.5,
+                maxChildSize: 0.95,
+                builder: (ctx, scroll) => Column(
                   children: [
-                    // Handle bar
-                    Center(
-                      child: Container(
-                        width: 40, height: 4,
-                        margin: const EdgeInsets.only(bottom: 20),
-                        decoration: BoxDecoration(color: colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
-                      ),
-                    ),
-
-                    // Header Section
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(product.name, style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                              Text("${product.manufacturer ?? ''} • ${product.unit}", style: textTheme.bodySmall),
-                            ],
-                          ),
-                        ),
-                        IconButton.filledTonal(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Quick Info Banner
+                    // Handle
                     Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: colorScheme.primaryContainer.withOpacity(0.4), borderRadius: BorderRadius.circular(16)),
+                      margin: const EdgeInsets.only(top: 12, bottom: 4),
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(color: colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
+                    ),
+                    // Header
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildHeaderStat("Price", "₹${price.toStringAsFixed(2)}", colorScheme),
-                          _buildHeaderStat("Stock", "$available", colorScheme),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Input Grid
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: qtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Quantity', icon: Icons.shopping_basket))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: schemeController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Scheme', icon: Icons.card_giftcard))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: discPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc %', icon: Icons.percent))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: addDiscPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Add %', icon: Icons.add_circle_outline))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: discPcsController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc Cash', icon: Icons.money))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: freeQtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Free Qty', icon: Icons.inventory_2))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(controller: remarkController, decoration: _inputDeco('Add Remark', icon: Icons.notes)),
-
-                    const SizedBox(height: 24),
-
-                    // Valuation Summary Card
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surfaceVariant.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: colorScheme.outlineVariant),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildSummaryRow("Goods Value", "₹${goodsValue.toStringAsFixed(2)}", textTheme),
-                          _buildSummaryRow("Total Discount", "-₹${discountValue.toStringAsFixed(2)}", textTheme, isNegative: true),
-                          _buildSummaryRow("GST (18%)", "+₹${gst.toStringAsFixed(2)}", textTheme),
-                          const Divider(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Net Payable', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                              Text('₹${netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Action Buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('CANCEL'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: colorScheme.primary,
-                              foregroundColor: colorScheme.onPrimary,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(product.name,
+                                    style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                                const SizedBox(height: 2),
+                                Text('${product.manufacturer ?? ''} • ${product.unit}',
+                                    style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+                              ],
                             ),
-                            onPressed: () async {
-                              int qty = int.tryParse(qtyController.text) ?? 1;
-                              if (qty > available) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Cannot add more than available stock ($available)')),
-                                );
-                                return;
-                              }
-                              _submitOrder(context, product, qtyController, price, freeQtyController, schemeController, goodsValue, discPerController, addDiscPerController, discPcsController, remarkController);
-                            },
-                            child: _isSubmittingDraft
-                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                : Text(currentQuantity != null ? "UPDATE CART" : "ADD TO CART", style: const TextStyle(fontWeight: FontWeight.bold)),
                           ),
+                          IconButton.filledTonal(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            style: IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Info chips
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          infoChip('₹${product.price.toStringAsFixed(2)}', Icons.sell_outlined, colorScheme.primary),
+                          if ((mrp) > 0) infoChip('MRP ₹${mrp.toStringAsFixed(2)}', Icons.price_change_outlined, colorScheme.secondary),
+                          infoChip(
+                            available > 0 ? 'Stock: $available' : 'Out of Stock',
+                            available > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined,
+                            available > 0 ? Colors.green.shade600 : colorScheme.error,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Divider(height: 1, thickness: 0.5, color: colorScheme.outlineVariant),
+                    // Scrollable form body
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: scroll,
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // ORDER DETAILS
+                            sectionLabel('ORDER DETAILS'),
+                            const SizedBox(height: 14),
+                            rowField('Quantity', qtyController, TextInputType.number),
+                            const SizedBox(height: 12),
+                            rowField('Free Quantity', freeQtyController, TextInputType.number),
+                            const SizedBox(height: 12),
+                            // Scheme (two boxes with +)
+                            Row(
+                              children: [
+                                Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                                SizedBox(
+                                  width: 56,
+                                  child: TextField(
+                                    controller: schemeController,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    onChanged: (_) => updateFields(),
+                                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                                    decoration: _fieldDeco(colorScheme),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                                  child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: colorScheme.primary)),
+                                ),
+                                SizedBox(
+                                  width: 56,
+                                  child: TextField(
+                                    controller: dSchemeController,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    onChanged: (_) => updateFields(),
+                                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                                    decoration: _fieldDeco(colorScheme),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
+                            const SizedBox(height: 20),
+                            // DISCOUNTS
+                            sectionLabel('DISCOUNTS'),
+                            const SizedBox(height: 14),
+                            rowFieldWithAmt('Discount (Pcs)', discPcsController, double.tryParse(discPcsController.text) ?? 0.0),
+                            const SizedBox(height: 12),
+                            rowFieldWithAmt('Discount (%)', discPerController, (goodsValue * (double.tryParse(discPerController.text) ?? 0.0)) / 100),
+                            const SizedBox(height: 12),
+                            rowFieldWithAmt('Add. Discount (%)', addDiscPerController, (goodsValue * (double.tryParse(addDiscPerController.text) ?? 0.0)) / 100),
+                            const SizedBox(height: 20),
+                            // Remark
+                            Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: remarkController,
+                              maxLength: 200,
+                              maxLines: 2,
+                              style: textTheme.bodyMedium,
+                              decoration: _fieldDeco(colorScheme).copyWith(
+                                hintText: 'Type here...',
+                                contentPadding: const EdgeInsets.all(12),
+                                counterText: '',
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Summary card
+                            Container(
+                              decoration: BoxDecoration(
+                                color: colorScheme.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                              ),
+                              child: Column(
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                                    child: Column(
+                                      children: [
+                                        _oeySummaryRow(colorScheme, textTheme, 'Goods Value', '₹${goodsValue.toStringAsFixed(2)}'),
+                                        const SizedBox(height: 8),
+                                        _oeySummaryRow(colorScheme, textTheme, 'Scheme Value', '₹${schemeValue.toStringAsFixed(2)}'),
+                                        const SizedBox(height: 8),
+                                        _oeySummaryRow(colorScheme, textTheme, 'Discount Value', '-₹${discountValue.toStringAsFixed(2)}', isNegative: true),
+                                        const SizedBox(height: 8),
+                                        _oeySummaryRow(colorScheme, textTheme, 'GST 18% (Inclusive)', '₹${gst.toStringAsFixed(2)}'),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primary.withValues(alpha: 0.08),
+                                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                                      border: Border(top: BorderSide(color: colorScheme.primary.withValues(alpha: 0.15))),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: colorScheme.primary)),
+                                        Text('₹${netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: colorScheme.primary, letterSpacing: -0.5)),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            // Action buttons
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      side: BorderSide(color: colorScheme.outlineVariant),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  flex: 2,
+                                  child: FilledButton(
+                                    onPressed: _isSubmittingDraft ? null : () async {
+                                      final qty = int.tryParse(qtyController.text) ?? 1;
+                                      final enteredPrice = double.tryParse(priceController.text) ?? product.price;
+                                      final finalGoodsValue = enteredPrice * qty;
+                                      if (qty > available) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(content: Text('Cannot add more than available stock ($available)')),
+                                        );
+                                        return;
+                                      }
+                                      _submitOrder(context, product, qtyController, enteredPrice, freeQtyController, schemeController, finalGoodsValue, discPerController, addDiscPerController, discPcsController, remarkController);
+                                    },
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: currentQuantity != null ? colorScheme.secondary : colorScheme.primary,
+                                      foregroundColor: currentQuantity != null ? colorScheme.onSecondary : colorScheme.onPrimary,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    child: _isSubmittingDraft
+                                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                        : Text(
+                                            currentQuantity != null ? 'UPDATE CART' : 'ADD TO CART',
+                                            style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                                          ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
-              )
-              );
+              ),
+            );
           },
         );
       },
     );
   }
 
-  Widget _buildHeaderStat(String label, String value, ColorScheme colorScheme) {
-    return Column(
+  Widget _oeySummaryRow(ColorScheme cs, TextTheme tt, String label, String value, {bool isNegative = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(fontSize: 12, color: colorScheme.primary)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(label, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+        Text(value, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: isNegative ? Colors.red.shade600 : cs.onSurface)),
       ],
-    );
-  }
-
-  Widget _buildSummaryRow(String label, String value, TextTheme textTheme, {bool isNegative = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: textTheme.bodyMedium),
-          Text(value, style: textTheme.bodyMedium?.copyWith(
-            color: isNegative ? Colors.red : null,
-            fontWeight: FontWeight.w500,
-          )),
-        ],
-      ),
     );
   }
 
