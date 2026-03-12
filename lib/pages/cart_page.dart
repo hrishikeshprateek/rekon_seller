@@ -117,6 +117,9 @@ class _CartPageState extends State<CartPage> {
       );
 
       dynamic raw = response.data;
+      print('===== ListDraftOrder RESPONSE (cart_page _loadCart) =====');
+      print(raw);
+      print('==========================================================');
       Map<String, dynamic> parsed = _parseJson(raw);
 
       if (parsed['success'] == true && parsed['data'] != null) {
@@ -675,7 +678,6 @@ class _CartPageState extends State<CartPage> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.local_offer, size: 10, color: Colors.white),
                       const SizedBox(width: 4),
                       Text(
                         it.schNarr!,
