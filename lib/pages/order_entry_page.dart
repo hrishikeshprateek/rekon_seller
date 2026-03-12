@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:dio/dio.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
 import '../models/product_model.dart';
 import '../models/cart_item_model.dart';
 import '../models/item_model.dart';
+import '../services/draft_order_service.dart';
 import 'select_account_page.dart';
 import 'item_filter_page.dart';
 import 'cart_page.dart';
@@ -914,7 +916,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                           child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
                         )
                       : FilledButton(
-                          onPressed: () => _showBulkAddBottomSheet(product, qty),
+                          onPressed: () => _showBulkAddBottomSheet(product, _cartMeta[product.id]),
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -1041,10 +1043,20 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           'tax': taxAmt,
           'net': netAmt,
           'mrp': mrp,
-          'gv': amt, // gross value (display)
+          'gv': amt,
           'sv': disc1,
           'dv': disc2,
           'disc': discAmt,
+          // prefill fields for update bottom sheet
+          'qty':       qty,
+          'rate':      rate,
+          'freeQty':   parseDouble(m['FQty'] ?? 0).toInt(),
+          'schQty':    parseDouble(m['SchQty'] ?? 0),
+          'dSchQty':   parseDouble(m['SchDQty'] ?? 0),
+          'discPcs':   parseDouble(m['DO_Disc2Amt'] ?? 0),
+          'discPer':   parseDouble(m['DO_Disc1Per'] ?? m['DO_DiscPer'] ?? 0),
+          'addDiscPer':parseDouble(m['DO_Disc2Per'] ?? 0),
+          'remark':    (m['DO_Remark'] ?? '').toString(),
         };
       }
 
@@ -1304,7 +1316,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   }
 
   // Bulk Add Bottom Sheet UI
-  void _showBulkAddBottomSheet(Product product, int? currentQuantity) {
+  void _showBulkAddBottomSheet(Product product, Map<String, dynamic>? cartData) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1313,15 +1325,17 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         final colorScheme = Theme.of(context).colorScheme;
         final textTheme = Theme.of(context).textTheme;
 
-        final qtyController = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '1');
-        final priceController = TextEditingController(text: product.price.toStringAsFixed(2));
-        final freeQtyController = TextEditingController(text: '0');
-        final schemeController = TextEditingController(text: '0');
-        final dSchemeController = TextEditingController(text: '0');
-        final discPcsController = TextEditingController(text: '0.0');
-        final discPerController = TextEditingController(text: '0.0');
-        final addDiscPerController = TextEditingController(text: '0.0');
-        final remarkController = TextEditingController();
+        final int? currentQuantity = cartData != null ? (cartData['qty'] as int?) : null;
+
+        final qtyController        = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '0');
+        final priceController      = TextEditingController(text: cartData != null ? (cartData['rate'] as double).toStringAsFixed(2) : product.price.toStringAsFixed(2));
+        final freeQtyController    = TextEditingController(text: cartData != null ? (cartData['freeQty'] as int).toString() : '0');
+        final schemeController     = TextEditingController(text: cartData != null ? (cartData['schQty'] as double).toStringAsFixed(0) : '0');
+        final dSchemeController    = TextEditingController(text: cartData != null ? (cartData['dSchQty'] as double).toStringAsFixed(0) : '0');
+        final discPcsController    = TextEditingController(text: cartData != null ? (cartData['discPcs'] as double).toStringAsFixed(2) : '0.0');
+        final discPerController    = TextEditingController(text: cartData != null ? (cartData['discPer'] as double).toStringAsFixed(2) : '0.0');
+        final addDiscPerController = TextEditingController(text: cartData != null ? (cartData['addDiscPer'] as double).toStringAsFixed(2) : '0.0');
+        final remarkController     = TextEditingController(text: cartData != null ? (cartData['remark'] as String) : '');
 
         double price = product.price;
         final int available = product.stockQuantity;
@@ -1329,22 +1343,21 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
         double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
 
-        void recalc() {
-          final qty = int.tryParse(qtyController.text) ?? 1;
-          final scheme = int.tryParse(schemeController.text) ?? 0;
-          final dScheme = int.tryParse(dSchemeController.text) ?? 0;
-          final discPcs = double.tryParse(discPcsController.text) ?? 0.0;
-          final discPer = double.tryParse(discPerController.text) ?? 0.0;
-          final addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
-          price = double.tryParse(priceController.text) ?? product.price;
-          goodsValue = price * qty;
-          schemeValue = (scheme + dScheme) * price;
-          discountValue = discPcs + (goodsValue * (discPer + addDiscPer) / 100);
-          gst = (goodsValue - discountValue) * 0.18;
-          netValue = goodsValue - discountValue + gst;
-        }
+        DraftOrderPreviewResult? preview;
+        Timer? previewDebounce;
+        int previewToken = 0;
+        bool isPreviewLoading = false;
 
-        recalc();
+        void syncFromPreview() {
+          // Only use server values - no fallback to frontend calculation
+          if (preview != null) {
+            goodsValue = preview!.amt;
+            schemeValue = preview!.schemeAmt;
+            discountValue = preview!.totalDisc;
+            gst = preview!.taxAmt;
+            netValue = preview!.netAmt;
+          }
+        }
 
         // Shared input decoration
         InputDecoration _fieldDeco(ColorScheme cs) => InputDecoration(
@@ -1361,7 +1374,69 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
         return StatefulBuilder(
           builder: (context, setModalState) {
-            void updateFields() => setModalState(() => recalc());
+            Future<void> runPreview() async {
+              previewDebounce?.cancel();
+              previewDebounce = Timer(const Duration(milliseconds: 350), () async {
+                final qty = int.tryParse(qtyController.text.trim()) ?? 0;
+                if (qty <= 0) {
+                  setModalState(() {
+                    preview = null;
+                    isPreviewLoading = false;
+                    goodsValue = 0.0;
+                    schemeValue = 0.0;
+                    discountValue = 0.0;
+                    gst = 0.0;
+                    netValue = 0.0;
+                  });
+                  return;
+                }
+
+                String itemCode = '';
+                int idCol = 0;
+                itemCode = product.code ?? product.id;
+                idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
+
+                final acCode = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
+                final request = _buildDraftOrderRequest(
+                  product: product,
+                  qty: qtyController.text.trim(),
+                  rate: priceController.text.trim(),
+                  freeQty: freeQtyController.text.trim(),
+                  schemeQty: schemeController.text.trim(),
+                  dSchemeQty: dSchemeController.text.trim(),
+                  itemAmt: ((double.tryParse(priceController.text.trim()) ?? product.price) * qty).toStringAsFixed(2),
+                  discountPer: discPerController.text.trim(),
+                  addDiscountPer: addDiscPerController.text.trim(),
+                  discountPcs: discPcsController.text.trim(),
+                  remark: remarkController.text.trim(),
+                  insertRecord: 0,
+                );
+                final currentToken = ++previewToken;
+                setModalState(() => isPreviewLoading = true);
+                try {
+                  final result = await _draftOrderServiceFor(acCode).calculate(request);
+                  if (!mounted || currentToken != previewToken) return;
+                  setModalState(() {
+                    preview = result;
+                    isPreviewLoading = false;
+                    syncFromPreview();
+                  });
+                } catch (_) {
+                  if (!mounted || currentToken != previewToken) return;
+                  setModalState(() {
+                    isPreviewLoading = false;
+                    // No fallback calculation - values stay at 0.0
+                  });
+                }
+              });
+            }
+
+            void updateFields() {
+              setModalState(() {
+                preview = null;
+              });
+              runPreview();
+            }
 
             Widget sectionLabel(String title) => Row(
               children: [
@@ -1388,30 +1463,53 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               ],
             );
 
-            Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt) => Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                      Text('₹${amt.toStringAsFixed(2)}', style: textTheme.labelSmall?.copyWith(color: colorScheme.outline, fontWeight: FontWeight.w500)),
-                    ],
+            Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt) {
+              final bool hasAmt = amt > 0;
+              return Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: hasAmt ? Colors.red.shade50 : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: hasAmt ? Colors.red.shade200 : colorScheme.outlineVariant.withValues(alpha: 0.4),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            '- ₹${amt.toStringAsFixed(2)}',
+                            style: textTheme.labelSmall?.copyWith(
+                              color: hasAmt ? Colors.red.shade700 : colorScheme.outline,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                SizedBox(
-                  width: 130,
-                  child: TextField(
-                    controller: ctrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    textAlign: TextAlign.right,
-                    onChanged: (_) => updateFields(),
-                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                    decoration: _fieldDeco(colorScheme),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 130,
+                    child: TextField(
+                      controller: ctrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textAlign: TextAlign.right,
+                      onChanged: (_) => updateFields(),
+                      style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                      decoration: _fieldDeco(colorScheme),
+                    ),
                   ),
-                ),
-              ],
-            );
+                ],
+              );
+            }
 
             Widget infoChip(String label, IconData icon, Color color) => Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1546,11 +1644,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                             // DISCOUNTS
                             sectionLabel('DISCOUNTS'),
                             const SizedBox(height: 14),
-                            rowFieldWithAmt('Discount (Pcs)', discPcsController, double.tryParse(discPcsController.text) ?? 0.0),
+                            rowFieldWithAmt('Discount (Pcs)', discPcsController, preview?.discAmt ?? 0.0),
                             const SizedBox(height: 12),
-                            rowFieldWithAmt('Discount (%)', discPerController, (goodsValue * (double.tryParse(discPerController.text) ?? 0.0)) / 100),
+                            rowFieldWithAmt('Discount (%)', discPerController, preview?.disc1Amt ?? 0.0),
                             const SizedBox(height: 12),
-                            rowFieldWithAmt('Add. Discount (%)', addDiscPerController, (goodsValue * (double.tryParse(addDiscPerController.text) ?? 0.0)) / 100),
+                            rowFieldWithAmt('Add. Discount (%)', addDiscPerController, preview?.disc2Amt ?? 0.0),
                             const SizedBox(height: 20),
                             // Remark
                             Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
@@ -1609,6 +1707,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                               ),
                             ),
                             const SizedBox(height: 24),
+                            if (isPreviewLoading) ...[
+                              const SizedBox(height: 12),
+                              const LinearProgressIndicator(minHeight: 3),
+                              const SizedBox(height: 12),
+                            ],
                             // Action buttons
                             Row(
                               children: [
@@ -1637,7 +1740,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                         );
                                         return;
                                       }
-                                      _submitOrder(context, product, qtyController, enteredPrice, freeQtyController, schemeController, finalGoodsValue, discPerController, addDiscPerController, discPcsController, remarkController);
+                                      _submitOrder(context, product, qtyController, enteredPrice, freeQtyController, schemeController, dSchemeController, finalGoodsValue, discPerController, addDiscPerController, discPcsController, remarkController);
                                     },
                                     style: FilledButton.styleFrom(
                                       backgroundColor: currentQuantity != null ? colorScheme.secondary : colorScheme.primary,
@@ -1688,6 +1791,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       double price,
       TextEditingController freeQtyController,
       TextEditingController schemeController,
+      TextEditingController dSchemeController,
       double goodsValue,
       TextEditingController discPerController,
       TextEditingController addDiscPerController,
@@ -1713,7 +1817,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       'cu_id': cuId,
       'ItemFQty': freeQtyController.text,
       'ItemSchQty': schemeController.text,
-      'ItemDSchQty': '0.0',
+      'ItemDSchQty': dSchemeController.text,
       'ItemAmt': goodsValue.toStringAsFixed(2),
       'discount_percentage': discPerController.text,
       'discount_percentage1': addDiscPerController.text,
@@ -1742,5 +1846,44 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to add: $e')));
       }
     }
+  }
+
+  DraftOrderService _draftOrderServiceFor(String acCode) {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    return DraftOrderService(
+      dio: auth.getDioClient(),
+      context: DraftOrderContext.fromAuth(auth: auth, acCode: acCode),
+    );
+  }
+
+  DraftOrderRequest _buildDraftOrderRequest({
+    required Product product,
+    required String qty,
+    required String rate,
+    required String freeQty,
+    required String schemeQty,
+    required String dSchemeQty,
+    required String itemAmt,
+    required String discountPer,
+    required String addDiscountPer,
+    required String discountPcs,
+    required String remark,
+    required int insertRecord,
+  }) {
+    return DraftOrderRequest(
+      itemCode: product.code ?? product.id,
+      idCol: product.iidcol ?? int.tryParse(product.id) ?? 0,
+      itemQty: qty,
+      itemRate: rate,
+      itemFQty: freeQty.isEmpty ? '0' : freeQty,
+      itemSchQty: schemeQty.isEmpty ? '0' : schemeQty,
+      itemDSchQty: dSchemeQty.isEmpty ? '0' : dSchemeQty,
+      itemAmt: itemAmt,
+      discountPercentage: discountPer,
+      discountPercentage1: addDiscountPer,
+      discountPcs: discountPcs,
+      remark: remark,
+      insertRecord: insertRecord,
+    );
   }
 }

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
-import 'select_account_page.dart';
+import 'do_account_selector_page.dart';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'order_detail_page.dart';
@@ -35,17 +35,16 @@ class _OrderBookPageState extends State<OrderBookPage> {
   // --- LOGIC REMAINS EXACTLY THE SAME ---
 
   Future<void> _selectAccountAndFetchOrders() async {
-    final account = await Navigator.of(context).push<models.Account>(
-      MaterialPageRoute(builder: (_) => const SelectAccountPage()),
-    );
+    final account = await DoAccountSelectorPage.show(context);
     if (account != null) {
       setState(() {
         _selectedAccount = account;
       });
       _fetchOrders();
     } else {
-      // If user cancels, exit to home
-      if (mounted) Navigator.of(context).pop();
+      // If user cancels and no account was previously selected, exit to home
+      if (!mounted) return;
+      if (_selectedAccount == null) Navigator.of(context).pop();
     }
   }
 
@@ -130,6 +129,13 @@ class _OrderBookPageState extends State<OrderBookPage> {
     try {
       final response = await dio.post('/GetOrderDetail', data: payload, options: Options(headers: headers));
       final raw = response.data;
+      debugPrint('=== GetOrderDetail RAW RESPONSE ===');
+      final rawStr = raw is String ? raw : jsonEncode(raw);
+      // Print in 800-char chunks to avoid truncation
+      for (int i = 0; i < rawStr.length; i += 800) {
+        debugPrint(rawStr.substring(i, i + 800 > rawStr.length ? rawStr.length : i + 800));
+      }
+      debugPrint('=== END (total ${rawStr.length} chars) ===');
       Map<String, dynamic> parsed = {};
       if (raw is Map<String, dynamic>) {
         parsed = raw;
@@ -140,11 +146,11 @@ class _OrderBookPageState extends State<OrderBookPage> {
         parsed = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
       }
       if (parsed['success'] == true && parsed['data'] != null && parsed['data'] is List && parsed['data'].isNotEmpty) {
-        final detail = parsed['data'][0];
+        final List<dynamic> products = List.from(parsed['data']);
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => OrderDetailPage(orderDetail: detail),
+              builder: (_) => OrderDetailPage(orderDetail: products[0], products: products),
             ),
           );
         }

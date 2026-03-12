@@ -39,6 +39,7 @@ import 'widgets/spotlight_search.dart';
 import 'models/dashboard_config_model.dart';
 import 'pages/settings_page.dart';
 import 'pages/select_account_page.dart';
+import 'pages/do_account_selector_page.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -987,27 +988,22 @@ class DraftOrderHandler extends StatelessWidget {
   }
 
   Future<void> _handleAccountSelection(BuildContext context) async {
-    // Open SelectAccountPage to let user pick the account
-    final selectedAccount = await SelectAccountPage.show(
+    final selectedAccount = await DoAccountSelectorPage.show(
       context,
-      title: 'Select Party',
-      accountType: 'Party',
-      showBalance: true,
+      fromDo: 1,
     );
 
     if (selectedAccount != null) {
-      // Push CartPage with required acCode and selectedAccount
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => CartPage(
-            acCode: selectedAccount.id,
+            acCode: selectedAccount.code ?? selectedAccount.id,
             selectedAccount: selectedAccount,
           ),
         ),
       );
     } else {
-      // If user pressed back, exit to home (pop to root)
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }

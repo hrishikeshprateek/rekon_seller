@@ -293,246 +293,87 @@ class _CartPageState extends State<CartPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final textTheme = Theme.of(context).textTheme;
-
-        final TextEditingController priceController = TextEditingController(text: (item.rate ?? 0).toStringAsFixed(2));
-        final TextEditingController qtyController = TextEditingController(text: item.qty.toString());
-        final TextEditingController freeQtyController = TextEditingController(text: (item.freeQty ?? 0).toString());
-        final TextEditingController schemeController = TextEditingController(text: '0');
-        final TextEditingController discPcsController = TextEditingController(text: (item.disc1Amt ?? 0).toStringAsFixed(2));
-        final TextEditingController discPerController = TextEditingController(text: (item.disc2Amt ?? 0).toStringAsFixed(2));
-        final TextEditingController addDiscPerController = TextEditingController(text: '0.0');
-        final TextEditingController remarkController = TextEditingController(text: item.remark ?? '');
-
-        double price = item.rate ?? 0;
-        int available = (item.stock ?? 0).toInt();
-        double goodsValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
-
-        void recalc() {
-          int qty = int.tryParse(qtyController.text) ?? 1;
-          double discPcs = double.tryParse(discPcsController.text) ?? 0.0;
-          double discPer = double.tryParse(discPerController.text) ?? 0.0;
-          double addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
-          price = double.tryParse(priceController.text) ?? (item.rate ?? 0);
-          goodsValue = price * qty;
-          discountValue = discPcs + (goodsValue * (discPer + addDiscPer) / 100);
-          gst = (goodsValue - discountValue) * 0.18;
-          netValue = goodsValue - discountValue + gst;
-        }
-        recalc();
-
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            void updateFields() => setModalState(() => recalc());
-
-            InputDecoration _inputDeco(String label, {IconData? icon, String? suffix}) => InputDecoration(
-              labelText: label,
-              suffixText: suffix,
-              isDense: true,
-              filled: true,
-              fillColor: cs.surfaceContainerHighest.withAlpha(77),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              prefixIcon: icon != null ? Icon(icon, size: 18) : null,
-            );
-
-            return Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40, height: 4,
-                        margin: const EdgeInsets.only(bottom: 20),
-                        decoration: BoxDecoration(color: cs.outlineVariant, borderRadius: BorderRadius.circular(2)),
-                      ),
-                    ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(item.name, style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: cs.primaryContainer,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      'UPDATE',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: cs.onPrimaryContainer,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Text("${item.mfg ?? ''}", style: textTheme.bodySmall),
-                            ],
-                          ),
-                        ),
-                        IconButton.filledTonal(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: cs.primaryContainer.withAlpha(102), borderRadius: BorderRadius.circular(16)),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: [
-                          _buildHeaderStatForSheet("Price", "₹${price.toStringAsFixed(2)}", cs),
-                          _buildHeaderStatForSheet("Stock", "${available}", cs),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: priceController, keyboardType: TextInputType.numberWithOptions(decimal: true), onChanged: (_) => updateFields(), decoration: _inputDeco('Price', icon: Icons.price_check))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: qtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Quantity', icon: Icons.shopping_basket))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: discPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc %', icon: Icons.percent))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: addDiscPerController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Add %', icon: Icons.add_circle_outline))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: discPcsController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Disc Cash', icon: Icons.money))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: freeQtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Free Qty', icon: Icons.inventory_2))),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(child: TextField(controller: schemeController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Scheme', icon: Icons.card_giftcard))),
-                        const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: remarkController, decoration: _inputDeco('Add Remark', icon: Icons.notes))),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withAlpha(128),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cs.outlineVariant),
-                      ),
-                      child: Column(
-                        children: [
-                          _buildSummaryRowForSheet("Goods Value", "₹${goodsValue.toStringAsFixed(2)}", textTheme),
-                          _buildSummaryRowForSheet("Total Discount", "-₹${discountValue.toStringAsFixed(2)}", textTheme, isNegative: true),
-                          _buildSummaryRowForSheet("GST (18%)", "+₹${gst.toStringAsFixed(2)}", textTheme),
-                          const Divider(height: 20),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Net Payable', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                              Text('₹${netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(color: cs.primary, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 1,
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('CANCEL'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: cs.primary,
-                              foregroundColor: cs.onPrimary,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () async {
-                              int qty = int.tryParse(qtyController.text) ?? 1;
-                              if (qty <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Quantity must be greater than 0')),
-                                );
-                                return;
-                              }
-                              await _updateQuantity(item, qty);
-                              Navigator.of(context).pop();
-                            },
-                            child: const Text('UPDATE CART', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildHeaderStatForSheet(String label, String value, ColorScheme colorScheme) {
-    return Column(
-      children: [
-        Text(label, style: TextStyle(fontSize: 12, color: colorScheme.primary)),
-        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-      ],
-    );
-  }
-
-  Widget _buildSummaryRowForSheet(String label, String value, TextTheme textTheme, {bool isNegative = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: textTheme.bodyMedium?.copyWith(color: isNegative ? Colors.red : null)),
-          Text(value, style: textTheme.bodyMedium?.copyWith(
-            color: isNegative ? Colors.red : null,
-            fontWeight: FontWeight.w500,
-          )),
-        ],
+      useSafeArea: true,
+      builder: (ctx) => _CartUpdateBottomSheet(
+        item: item,
+        acCode: _currentAcCode,
+        onUpdated: () async {
+          Navigator.pop(ctx);
+          await _loadCart();
+        },
       ),
     );
+  }
+
+  Future<void> _updateItemWithDetails({
+    required DraftOrderItem item,
+    required int qty,
+    required double price,
+    required int freeQty,
+    required int schemeQty,
+    required double discPcs,
+    required double discPer,
+    required double addDiscPer,
+    required String remark,
+    required double goodsValue,
+  }) async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final user = auth.currentUser;
+      final cuId = int.tryParse(user?.userId ?? '') ?? 0;
+      String firmCode = '';
+      try {
+        if (user != null && user.stores.isNotEmpty) {
+          firmCode = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first).firmCode;
+        }
+      } catch (_) {}
+
+      final payload = {
+        'UserId': user?.mobileNumber ?? user?.userId ?? '',
+        'LicNo': user?.licenseNumber ?? '',
+        'lFirmCode': firmCode,
+        'AcCode': _currentAcCode,
+        'ItemCode': item.code,
+        'IdCol': item.idCol,
+        'ItemQty': qty.toString(),
+        'ItemRate': price.toStringAsFixed(2),
+        'cu_id': cuId,
+        'ItemFQty': freeQty.toString(),
+        'ItemSchQty': schemeQty.toString(),
+        'ItemDSchQty': '0',
+        'ItemAmt': goodsValue.toStringAsFixed(2),
+        'discount_percentage': discPer.toString(),
+        'discount_percentage1': addDiscPer.toString(),
+        'discount_pcs': discPcs.toString(),
+        'remark': remark,
+        'insert_record': 1,
+        'default_hit': true,
+      };
+
+      final response = await auth.getDioClient().post(
+        '/AddDraftOrder',
+        data: payload,
+        options: Options(headers: {
+          'Content-Type': 'application/json',
+          'package_name': auth.packageNameHeader,
+          if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+        }),
+      );
+
+      if (_parseJson(response.data)['success'] == true) {
+        await _loadCart();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update: ${_parseJson(response.data)['message'] ?? 'Unknown error'}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
   }
 
   @override
@@ -673,17 +514,29 @@ class _CartPageState extends State<CartPage> {
       itemCount: _items.length,
       itemBuilder: (context, index) {
         final it = _items[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12.0),
+
+        final double gv  = it.amt ?? 0;
+        final double sv  = it.schAmt ?? 0;
+        final double dv  = (it.discAmt ?? 0) + (it.disc1Amt ?? 0) + (it.disc2Amt ?? 0);
+        final double gst = it.taxAmt ?? 0;
+        final double net = it.netAmt ?? 0;
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+          margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: cs.outlineVariant.withAlpha((0.5 * 255).toInt())),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ── Header: name + mfg + delete ──────────────────────────────
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -693,141 +546,171 @@ class _CartPageState extends State<CartPage> {
                         children: [
                           Text(
                             it.name,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.2,
-                            ),
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: -0.2),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 3),
                           Text(
-                            it.mfg ?? 'No Mfr Info',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: cs.onSurfaceVariant,
-                            ),
+                            it.mfg ?? '',
+                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                           ),
                         ],
                       ),
                     ),
-                    // delete icon for single item removal
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
                       tooltip: 'Remove item',
                       onPressed: () => _removeItem(it),
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: cs.outlineVariant.withAlpha((0.3 * 255).toInt())),
-                  ),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(16),
-                  ),
-                ),
+
+              Divider(height: 1, color: cs.outlineVariant.withAlpha((0.3 * 255).toInt())),
+
+              // ── Details grid ──────────────────────────────────────────────
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
                 child: Column(
                   children: [
-                    // Row 1: Price, MRP, Value
+                    // Row 1: Price | MRP | Value
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _metric('Price', '₹${it.rate?.toStringAsFixed(2) ?? '0.00'}', cs),
-                        _metric('MRP', '₹${it.mrp?.toStringAsFixed(2) ?? '0.00'}', cs),
-                        _metric('Value', '₹${it.amt?.toStringAsFixed(2) ?? '0.00'}', cs),
+                        _metricCell(cs, 'Price',  '₹${(it.rate ?? 0).toStringAsFixed(2)}'),
+                        _metricCell(cs, 'MRP',    '₹${(it.mrp  ?? 0).toStringAsFixed(2)}'),
+                        _metricCell(cs, 'Value',  '₹${gv.toStringAsFixed(2)}'),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
-                    // Row 2: Dis (Pcs), Dis (%), Add Dis (%)
+                    // Row 2: Dis(Pcs) | Dis(%) | Add Dis(%)
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _metric('Dis (Pcs)', '₹${it.disc1Amt?.toStringAsFixed(2) ?? '0.00'}', cs),
-                        _metric('Dis (%)', '₹${it.disc2Amt?.toStringAsFixed(2) ?? '0.00'}', cs),
-                        _metric('Add Dis (%)', '₹${((it.discAmt ?? 0) - (it.disc1Amt ?? 0) - (it.disc2Amt ?? 0)).toStringAsFixed(2)}', cs),
+                        _metricCell(cs, 'Dis (Pcs)', '${(it.disc2Per ?? 0).toStringAsFixed(1)} (₹${(it.disc2Amt ?? 0).toStringAsFixed(2)})'),
+                        _metricCell(cs, 'Dis (%)',   '${(it.discPer ?? 0).toStringAsFixed(0)} (₹${(it.discAmt ?? 0).toStringAsFixed(2)})'),
+                        _metricCell(cs, 'Add Dis (%)', '${(it.disc1Per ?? 0).toStringAsFixed(0)} (₹${(it.disc1Amt ?? 0).toStringAsFixed(2)})'),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
-                    // Row 3: Qty, FQty, UPDATE button
+                    // Row 3: Qty | FQty | UPDATE
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _metric('Qty', '${it.qty}', cs),
-                        _metric('FQty', '${it.freeQty ?? 0}', cs),
-                        ElevatedButton(
-                          onPressed: () => _showUpdateBottomSheet(it, cs),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: cs.primary,
-                            foregroundColor: cs.onPrimary,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        _metricCell(cs, 'Qty',  '${it.qty}'),
+                        _metricCell(cs, 'FQty', '${it.freeQty ?? 0}'),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: SizedBox(
+                              height: 34,
+                              child: FilledButton(
+                                onPressed: () => _showUpdateBottomSheet(it, cs),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                child: const Text('UPDATE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              ),
+                            ),
                           ),
-                          child: const Text('UPDATE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
 
-                    // Row 4: GV, SV, DV, GST
+                    Divider(height: 1, color: cs.outlineVariant.withAlpha((0.25 * 255).toInt())),
+                    const SizedBox(height: 10),
+
+                    // Row 4: GV | SV | DV | GST
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _metric('GV', '₹${((it.rate ?? 0) * it.qty).toStringAsFixed(2)}', cs),
-                        _metric('SV', '₹${(it.discAmt ?? 0).toStringAsFixed(2)}', cs),
-                        _metric('DV', '₹${(it.taxAmt ?? 0).toStringAsFixed(2)}', cs),
-                        _metric('GST', '₹${((((it.rate ?? 0) * it.qty) - (it.discAmt ?? 0)) * 0.18).toStringAsFixed(2)}', cs),
+                        _metricCell(cs, 'GV',  '₹${gv.toStringAsFixed(2)}'),
+                        _metricCell(cs, 'SV',  '₹${sv.toStringAsFixed(2)}'),
+                        _metricCell(cs, 'DV',  '₹${dv.toStringAsFixed(2)}'),
+                        _metricCell(cs, 'GST', '₹${gst.toStringAsFixed(2)}'),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
-                    // Row 5: Net Value
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Net Value', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
-                        Text('₹${(it.netAmt ?? 0).toStringAsFixed(2)}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: cs.primary)),
-                      ],
+                    // Row 5: Net Value (full width)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: cs.primary.withAlpha((0.07 * 255).toInt()),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Net Value',
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.primary),
+                          ),
+                          Text(
+                            '₹${net.toStringAsFixed(2)}',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: cs.primary),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
             ],
           ),
+        ),
+            // ── SchNarr top-right badge ──
+            if (it.schNarr != null && it.schNarr!.isNotEmpty)
+              Positioned(
+                top: -1,
+                right: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade600,
+                    borderRadius: const BorderRadius.vertical(
+                      bottom: Radius.circular(8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.local_offer, size: 10, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        it.schNarr!,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
   }
 
-  Widget _metric(String label, String val, ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: cs.onSurfaceVariant,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          val,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        ),
-      ],
+  Widget _metricCell(ColorScheme cs, String label, String val) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2),
+          Text(val, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+        ],
+      ),
     );
   }
 
   Widget _buildCheckoutFooter(ColorScheme cs) {
-    final total = _items.fold(0.0, (s, e) => s + (e.amt ?? 0));
+    final total = _items.fold(0.0, (s, e) => s + (e.netAmt ?? 0));
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -927,9 +810,16 @@ class DraftOrderItem {
   final double? discAmt;
   final double? disc1Amt;
   final double? disc2Amt;
+  final double? discPer;
+  final double? disc1Per;
+  final double? disc2Per;
   final double? stock;
   final int idCol;
   final String? remark;
+  final double? schQty;
+  final double? dSchQty;
+  final String? schNarr;
+  final double? schAmt;
 
   DraftOrderItem({
     required this.code,
@@ -945,9 +835,16 @@ class DraftOrderItem {
     this.discAmt,
     this.disc1Amt,
     this.disc2Amt,
+    this.discPer,
+    this.disc1Per,
+    this.disc2Per,
     this.stock,
     required this.idCol,
     this.remark,
+    this.schQty,
+    this.dSchQty,
+    this.schNarr,
+    this.schAmt,
   });
 
   factory DraftOrderItem.fromJson(Map<String, dynamic> json) {
@@ -978,9 +875,526 @@ class DraftOrderItem {
       discAmt: parseDouble(json['DO_DiscAmt']),
       disc1Amt: parseDouble(json['DO_Disc1Amt']),
       disc2Amt: parseDouble(json['DO_Disc2Amt']),
+      discPer: parseDouble(json['DO_DiscPer']),
+      disc1Per: parseDouble(json['DO_Disc1Per']),
+      disc2Per: parseDouble(json['DO_Disc2Per']),
       stock: parseDouble(json['Stock']),
       idCol: parseInt(json['i_id_col'] ?? json['IdCol'] ?? json['Idcol']),
       remark: (json['DO_Remark'] ?? '').toString(),
+      schQty: parseDouble(json['SchQty']),
+      dSchQty: parseDouble(json['SchDQty']),
+      schNarr: (json['SchNarr'] ?? '').toString().trim(),
+      schAmt: parseDouble(json['SchAmt']),
     );
   }
+}
+
+class _CartUpdateBottomSheet extends StatefulWidget {
+  final DraftOrderItem item;
+  final String acCode;
+  final VoidCallback onUpdated;
+
+  const _CartUpdateBottomSheet({
+    Key? key,
+    required this.item,
+    required this.acCode,
+    required this.onUpdated,
+  }) : super(key: key);
+
+  @override
+  State<_CartUpdateBottomSheet> createState() => _CartUpdateBottomSheetState();
+}
+
+class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
+  late final TextEditingController qtyController;
+  late final TextEditingController priceController;
+  late final TextEditingController freeQtyController;
+  late final TextEditingController schemeController;
+  late final TextEditingController dSchemeController;
+  late final TextEditingController discPcsController;
+  late final TextEditingController discPerController;
+  late final TextEditingController addDiscPerController;
+  late final TextEditingController remarkController;
+
+  // Computed summary values kept in state so they survive keyboard dismissal
+  double _goodsValue    = 0.0;
+  double _schemeValue   = 0.0;
+  double _discountValue = 0.0;
+  double _gst           = 0.0;
+  double _netValue      = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    qtyController        = TextEditingController(text: widget.item.qty.toString());
+    priceController      = TextEditingController(text: (widget.item.rate ?? 0).toStringAsFixed(2));
+    freeQtyController    = TextEditingController(text: (widget.item.freeQty ?? 0).toString());
+    schemeController     = TextEditingController(text: '0');
+    dSchemeController    = TextEditingController(text: '0');
+    discPcsController    = TextEditingController(text: (widget.item.disc2Amt ?? 0).toStringAsFixed(2));
+    discPerController    = TextEditingController(text: (widget.item.disc1Amt ?? 0).toStringAsFixed(2));
+    addDiscPerController = TextEditingController(text: '0.0');
+    remarkController     = TextEditingController(text: widget.item.remark ?? '');
+    _recalc();
+  }
+
+  void _recalc() {
+    final qty        = int.tryParse(qtyController.text) ?? 1;
+    final scheme     = int.tryParse(schemeController.text) ?? 0;
+    final dScheme    = int.tryParse(dSchemeController.text) ?? 0;
+    final discPcs    = double.tryParse(discPcsController.text) ?? 0.0;
+    final discPer    = double.tryParse(discPerController.text) ?? 0.0;
+    final addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
+    final price      = double.tryParse(priceController.text) ?? (widget.item.rate ?? 0);
+    final gv         = price * qty;
+    final sv         = (scheme + dScheme) * price;
+    final dv         = discPcs + (gv * (discPer + addDiscPer) / 100);
+    final tax        = (gv - dv) * 0.18;
+    setState(() {
+      _goodsValue    = gv;
+      _schemeValue   = sv;
+      _discountValue = dv;
+      _gst           = tax;
+      _netValue      = gv - dv + tax;
+    });
+  }
+
+  @override
+  void dispose() {
+    qtyController.dispose();
+    priceController.dispose();
+    freeQtyController.dispose();
+    schemeController.dispose();
+    dSchemeController.dispose();
+    discPcsController.dispose();
+    discPerController.dispose();
+    addDiscPerController.dispose();
+    remarkController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final qty        = int.tryParse(qtyController.text) ?? 1;
+    final price      = double.tryParse(priceController.text) ?? (widget.item.rate ?? 0);
+    final freeQty    = int.tryParse(freeQtyController.text) ?? 0;
+    final schemeQty  = int.tryParse(schemeController.text) ?? 0;
+    final dSchemeQty = int.tryParse(dSchemeController.text) ?? 0;
+    final discPcs    = double.tryParse(discPcsController.text) ?? 0.0;
+    final discPer    = double.tryParse(discPerController.text) ?? 0.0;
+    final addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
+    final remark     = remarkController.text;
+
+    try {
+      final auth      = Provider.of<AuthService>(context, listen: false);
+      final user      = auth.currentUser;
+      final cuId      = int.tryParse(user?.userId ?? '') ?? 0;
+      String firmCode = '';
+      try {
+        if (user != null && user.stores.isNotEmpty) {
+          firmCode = user.stores
+              .firstWhere((s) => s.primary, orElse: () => user.stores.first)
+              .firmCode;
+        }
+      } catch (_) {}
+
+      final payload = {
+        'UserId':               user?.mobileNumber ?? user?.userId ?? '',
+        'LicNo':                user?.licenseNumber ?? '',
+        'lFirmCode':            firmCode,
+        'AcCode':               widget.acCode,
+        'ItemCode':             widget.item.code,
+        'IdCol':                widget.item.idCol,
+        'ItemQty':              qty.toString(),
+        'ItemRate':             price.toStringAsFixed(2),
+        'cu_id':                cuId,
+        'ItemFQty':             freeQty.toString(),
+        'ItemSchQty':           schemeQty.toString(),
+        'ItemDSchQty':          dSchemeQty.toString(),
+        'ItemAmt':              _goodsValue.toStringAsFixed(2),
+        'discount_percentage':  discPer.toString(),
+        'discount_percentage1': addDiscPer.toString(),
+        'discount_pcs':         discPcs.toString(),
+        'remark':               remark,
+        'insert_record':        1,
+        'default_hit':          true,
+      };
+
+      print('===== AddDraftOrder REQUEST (cart_page _submit) =====');
+      print(jsonEncode(payload));
+      print('======================================================');
+
+      final response = await auth.getDioClient().post(
+        '/AddDraftOrder',
+        data: payload,
+        options: Options(headers: {
+          'Content-Type': 'application/json',
+          'package_name': auth.packageNameHeader,
+          if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+        }),
+      );
+
+      final parsed = _parseResp(response.data);
+      print('===== AddDraftOrder RESPONSE (cart_page _submit) =====');
+      print(response.data);
+      print('=======================================================');
+      if (parsed['success'] == true) {
+        widget.onUpdated();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed: ${parsed['message'] ?? 'Unknown error'}')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Map<String, dynamic> _parseResp(dynamic raw) {
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is String) {
+      final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
+      return jsonDecode(clean) as Map<String, dynamic>;
+    }
+    return jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final int available = (widget.item.stock ?? 0).toInt();
+
+    // Shared input decoration – same as order_entry_page
+    InputDecoration fieldDeco(ColorScheme csc) => InputDecoration(
+      hintText: '0',
+      hintStyle: TextStyle(color: csc.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      filled: true,
+      fillColor: csc.surfaceContainerHighest.withValues(alpha: 0.5),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: csc.outlineVariant.withValues(alpha: 0.3))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: csc.outlineVariant.withValues(alpha: 0.3))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: csc.primary, width: 2)),
+    );
+
+    // Section label exactly like order_entry_page
+    Widget sectionLabel(String title) => Row(
+      children: [
+        Container(width: 3, height: 16, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 8),
+        Text(title, style: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1.2)),
+      ],
+    );
+
+    // Row field: label on left, text field (130px) on right
+    Widget rowField(String label, TextEditingController ctrl, TextInputType kbType) => Row(
+      children: [
+        Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+        SizedBox(
+          width: 130,
+          child: TextField(
+            controller: ctrl,
+            keyboardType: kbType,
+            textAlign: TextAlign.right,
+            onChanged: (_) => _recalc(),
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            decoration: fieldDeco(cs),
+          ),
+        ),
+      ],
+    );
+
+    // Row field with computed amount shown below label
+    Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt) => Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text('₹${amt.toStringAsFixed(2)}', style: textTheme.labelSmall?.copyWith(color: cs.outline, fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
+        SizedBox(
+          width: 130,
+          child: TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textAlign: TextAlign.right,
+            onChanged: (_) => _recalc(),
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            decoration: fieldDeco(cs),
+          ),
+        ),
+      ],
+    );
+
+    // Info chip – same as order_entry_page
+    Widget infoChip(String label, IconData icon, Color color) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+        ],
+      ),
+    );
+
+    // Summary row helper
+    Widget summaryRow(String label, String value, {bool isNegative = false}) => Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+        Text(value, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: isNegative ? Colors.red.shade600 : cs.onSurface)),
+      ],
+    );
+
+    return Padding(
+      padding: MediaQuery.of(context).viewInsets,
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.92,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (ctx, scroll) => Column(
+          children: [
+            // Handle bar
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 4),
+              width: 40, height: 4,
+              decoration: BoxDecoration(color: cs.outlineVariant, borderRadius: BorderRadius.circular(2)),
+            ),
+            // Header – product name + close
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.item.name,
+                          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                          maxLines: 2, overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${widget.item.mfg ?? ''}',
+                          style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    style: IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero),
+                  ),
+                ],
+              ),
+            ),
+            // Info chips row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Wrap(
+                spacing: 8, runSpacing: 6,
+                children: [
+                  infoChip('₹${(widget.item.rate ?? 0).toStringAsFixed(2)}', Icons.sell_outlined, cs.primary),
+                  if ((widget.item.mrp ?? 0) > 0)
+                    infoChip('MRP ₹${(widget.item.mrp ?? 0).toStringAsFixed(2)}', Icons.price_change_outlined, cs.secondary),
+                  infoChip(
+                    available > 0 ? 'Stock: $available' : 'Out of Stock',
+                    available > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined,
+                    available > 0 ? Colors.green.shade600 : cs.error,
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, thickness: 0.5, color: cs.outlineVariant),
+            // Scrollable form body
+            Expanded(
+              child: SingleChildScrollView(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ORDER DETAILS section
+                    sectionLabel('ORDER DETAILS'),
+                    const SizedBox(height: 14),
+                    rowField('Quantity', qtyController, TextInputType.number),
+                    const SizedBox(height: 12),
+                    rowField('Free Quantity', freeQtyController, TextInputType.number),
+                    const SizedBox(height: 12),
+                    // Scheme two-box row with +
+                    Row(
+                      children: [
+                        Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                        SizedBox(
+                          width: 56,
+                          child: TextField(
+                            controller: schemeController,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            onChanged: (_) => _recalc(),
+                            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                            decoration: fieldDeco(cs),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary)),
+                        ),
+                        SizedBox(
+                          width: 56,
+                          child: TextField(
+                            controller: dSchemeController,
+                            keyboardType: TextInputType.number,
+                            textAlign: TextAlign.center,
+                            onChanged: (_) => _recalc(),
+                            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                            decoration: fieldDeco(cs),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
+                    const SizedBox(height: 20),
+                    // DISCOUNTS section
+                    sectionLabel('DISCOUNTS'),
+                    const SizedBox(height: 14),
+                    rowFieldWithAmt('Discount (Pcs)', discPcsController, double.tryParse(discPcsController.text) ?? 0.0),
+                    const SizedBox(height: 12),
+                    rowFieldWithAmt('Discount (%)', discPerController, (_goodsValue * (double.tryParse(discPerController.text) ?? 0.0)) / 100),
+                    const SizedBox(height: 12),
+                    rowFieldWithAmt('Add. Discount (%)', addDiscPerController, (_goodsValue * (double.tryParse(addDiscPerController.text) ?? 0.0)) / 100),
+                    const SizedBox(height: 20),
+                    // Remark
+                    Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: remarkController,
+                      maxLength: 200,
+                      maxLines: 2,
+                      style: textTheme.bodyMedium,
+                      decoration: fieldDeco(cs).copyWith(
+                        hintText: 'Type here...',
+                        contentPadding: const EdgeInsets.all(12),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Summary card – identical to order_entry_page
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerLow,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                            child: Column(
+                              children: [
+                                summaryRow('Goods Value', '₹${_goodsValue.toStringAsFixed(2)}'),
+                                const SizedBox(height: 8),
+                                summaryRow('Scheme Value', '₹${_schemeValue.toStringAsFixed(2)}'),
+                                const SizedBox(height: 8),
+                                summaryRow('Discount Value', '-₹${_discountValue.toStringAsFixed(2)}', isNegative: true),
+                                const SizedBox(height: 8),
+                                summaryRow('GST 18% (Inclusive)', '₹${_gst.toStringAsFixed(2)}'),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: cs.primary.withValues(alpha: 0.08),
+                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                              border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15))),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
+                                Text('₹${_netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    // Action buttons – same layout as order_entry_page
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(color: cs.outlineVariant),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: FilledButton(
+                            onPressed: () async {
+                              final qty = int.tryParse(qtyController.text) ?? 1;
+                              if (qty <= 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Quantity must be greater than 0')),
+                                );
+                                return;
+                              }
+                              await _submit();
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: cs.secondary,
+                              foregroundColor: cs.onSecondary,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('UPDATE CART', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),  // Container
+    );  // Padding
+  }
+
 }

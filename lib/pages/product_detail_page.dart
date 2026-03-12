@@ -6,6 +6,8 @@ import 'dart:convert';
 import '../models/account_model.dart' as models;
 import '../models/product_model.dart';
 import 'cart_page.dart';
+import 'dart:async';
+import '../services/draft_order_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final dynamic product;
@@ -998,32 +1000,92 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
     double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
 
-    void recalc() {
-      final qty = int.tryParse(qtyCtrl.text) ?? 0;
-      final schQty = int.tryParse(schQtyCtrl.text) ?? 0;
-      final dSchQty = int.tryParse(dSchQtyCtrl.text) ?? 0;
-      final enteredPrice = double.tryParse(priceCtrl.text) ?? price;
-      final discPcs = double.tryParse(discPcsCtrl.text) ?? 0.0;
-      final discPer = double.tryParse(discPerCtrl.text) ?? 0.0;
-      final addDiscPer = double.tryParse(addDiscPerCtrl.text) ?? 0.0;
+    DraftOrderPreviewResult? preview;
+    Timer? previewDebounce;
+    int previewToken = 0;
+    bool isPreviewLoading = false;
 
-      goodsValue = enteredPrice * qty;
-      schemeValue = enteredPrice * (schQty + dSchQty);
-
-      final discPcsAmt = discPcs;
-      final discPerAmt = (goodsValue * discPer) / 100;
-      final discAddAmt = (goodsValue * addDiscPer) / 100;
-      discountValue = discPcsAmt + discPerAmt + discAddAmt;
-
-      gst = (goodsValue - discountValue) * 0.18;
-      netValue = goodsValue - discountValue + gst;
+    void syncFromPreview() {
+      // Only use server values - no fallback to frontend calculation
+      if (preview != null) {
+        goodsValue = preview!.amt;
+        schemeValue = preview!.schemeAmt;
+        discountValue = preview!.totalDisc;
+        gst = preview!.taxAmt;
+        netValue = preview!.netAmt;
+      }
     }
-
-    recalc();
 
     return StatefulBuilder(
       builder: (context, setModalState) {
-        void updateFields() => setModalState(() => recalc());
+        Future<void> runPreview() async {
+          previewDebounce?.cancel();
+          previewDebounce = Timer(const Duration(milliseconds: 350), () async {
+            final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
+            if (qty <= 0) {
+              setModalState(() {
+                preview = null;
+                isPreviewLoading = false;
+                goodsValue = 0.0;
+                schemeValue = 0.0;
+                discountValue = 0.0;
+                gst = 0.0;
+                netValue = 0.0;
+              });
+              return;
+            }
+
+            String itemCode = '';
+            int idCol = 0;
+            if (product is Product) {
+              itemCode = product.code ?? product.id;
+              idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
+            } else if (product is Map) {
+              itemCode = product['Icode']?.toString() ?? product['icode']?.toString() ?? product['Code']?.toString() ?? product['code']?.toString() ?? '';
+              idCol = int.tryParse(product['i_id_col']?.toString() ?? product['iidcol']?.toString() ?? product['IdCol']?.toString() ?? '') ?? 0;
+            }
+            final acCode = widget.selectedAccount.code ?? (widget.selectedAccount.acIdCol != null ? widget.selectedAccount.acIdCol.toString() : widget.selectedAccount.id);
+            final request = _buildDraftOrderRequest(
+              itemCode: itemCode,
+              idCol: idCol,
+              qty: qtyCtrl.text.trim(),
+              rate: priceCtrl.text.trim(),
+              freeQty: fQtyCtrl.text.trim(),
+              schemeQty: schQtyCtrl.text.trim(),
+              dSchemeQty: dSchQtyCtrl.text.trim(),
+              itemAmt: ((double.tryParse(priceCtrl.text.trim()) ?? price) * qty).toStringAsFixed(2),
+              discountPer: discPerCtrl.text.trim(),
+              addDiscountPer: addDiscPerCtrl.text.trim(),
+              discountPcs: discPcsCtrl.text.trim(),
+              remark: remarkCtrl.text.trim(),
+              insertRecord: 0,
+            );
+            final currentToken = ++previewToken;
+            setModalState(() => isPreviewLoading = true);
+            try {
+              final result = await _draftOrderServiceFor(acCode).calculate(request);
+              if (!mounted || currentToken != previewToken) return;
+              setModalState(() {
+                preview = result;
+                isPreviewLoading = false;
+                syncFromPreview();
+              });
+            } catch (_) {
+              if (!mounted || currentToken != previewToken) return;
+              setModalState(() {
+                isPreviewLoading = false;
+                // No fallback calculation - values stay at 0.0
+              });
+            }
+          });
+        }
+
+        void updateFields() {
+          setModalState(() {
+            preview = null;
+          });
+          runPreview();
+        }
 
         return Container(
           decoration: BoxDecoration(
@@ -1123,17 +1185,22 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           // DISCOUNTS section
                           _sheetSectionLabel(colorScheme, textTheme, 'DISCOUNTS'),
                           const SizedBox(height: 14),
-                          _buildInputFieldWithAmount('Discount (Pcs)', discPcsCtrl, double.tryParse(discPcsCtrl.text) ?? 0.0, updateFields, colorScheme, textTheme),
+                          _buildInputFieldWithAmount('Discount (Pcs)', discPcsCtrl, preview?.discAmt ?? 0.0, updateFields, colorScheme, textTheme),
                           const SizedBox(height: 12),
-                          _buildInputFieldWithAmount('Discount (%)', discPerCtrl, (goodsValue * (double.tryParse(discPerCtrl.text) ?? 0.0)) / 100, updateFields, colorScheme, textTheme),
+                          _buildInputFieldWithAmount('Discount (%)', discPerCtrl, preview?.disc1Amt ?? 0.0, updateFields, colorScheme, textTheme),
                           const SizedBox(height: 12),
-                          _buildInputFieldWithAmount('Add. Discount (%)', addDiscPerCtrl, (goodsValue * (double.tryParse(addDiscPerCtrl.text) ?? 0.0)) / 100, updateFields, colorScheme, textTheme),
+                          _buildInputFieldWithAmount('Add. Discount (%)', addDiscPerCtrl, preview?.disc2Amt ?? 0.0, updateFields, colorScheme, textTheme),
                           const SizedBox(height: 20),
                           _buildRemarkField(remarkCtrl, 'Add Remark (Optional)', colorScheme, textTheme),
                           const SizedBox(height: 24),
                           // Summary card
                           _buildSummaryCard(goodsValue, schemeValue, discountValue, gst, netValue, colorScheme, textTheme),
                           const SizedBox(height: 24),
+                          if (isPreviewLoading) ...[
+                            const SizedBox(height: 12),
+                            const LinearProgressIndicator(minHeight: 3),
+                            const SizedBox(height: 12),
+                          ],
                           _buildActionButtons(colorScheme, textTheme, qtyCtrl, fQtyCtrl, schQtyCtrl, dSchQtyCtrl, priceCtrl, discPcsCtrl, discPerCtrl, addDiscPerCtrl, schNarrCtrl, remarkCtrl),
                         ],
                       ),
@@ -1274,6 +1341,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Widget _buildInputFieldWithAmount(String label, TextEditingController controller, double amount,
       VoidCallback onChanged, ColorScheme cs, TextTheme tt) {
+    final bool hasAmount = amount > 0;
     return Row(
       children: [
         Expanded(
@@ -1281,12 +1349,35 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: cs.onSurface)),
-              const SizedBox(height: 2),
-              Text('₹${amount.toStringAsFixed(2)}',
-                  style: tt.labelSmall?.copyWith(color: cs.outline, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 4),
+              // API-returned amount shown as a small colored badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: hasAmount
+                      ? Colors.red.shade50
+                      : cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: hasAmount
+                        ? Colors.red.shade200
+                        : cs.outlineVariant.withValues(alpha: 0.4),
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  '- ₹${amount.toStringAsFixed(2)}',
+                  style: tt.labelSmall?.copyWith(
+                    color: hasAmount ? Colors.red.shade700 : cs.outline,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
+        const SizedBox(width: 12),
         SizedBox(
           width: 130,
           child: TextField(
@@ -1372,7 +1463,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 const SizedBox(height: 8),
                 _summaryRow(cs, tt, 'Discount Value', '-₹${discountValue.toStringAsFixed(2)}', isHighlight: false, isNegative: true),
                 const SizedBox(height: 8),
-                _summaryRow(cs, tt, 'GST 18% (Inclusive)', '₹${gst.toStringAsFixed(2)}', isHighlight: false),
+                _summaryRow(cs, tt, 'GST % (EXCLUSIVE)', '₹${gst.toStringAsFixed(2)}', isHighlight: false),
               ],
             ),
           ),
@@ -1489,12 +1580,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           (widget.selectedAccount.acIdCol != null
               ? widget.selectedAccount.acIdCol.toString()
               : widget.selectedAccount.id);
-      final cuId = int.tryParse(user?.userId ?? '') ?? 0;
 
-      // Extract product identifiers - handle both Product objects and Maps
       String itemCode = '';
       int idCol = 0;
-
       if (product is Product) {
         itemCode = product.code ?? product.id;
         idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
@@ -1518,50 +1606,28 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       }
 
       final qty = int.tryParse(qtyCtrl.text) ?? 1;
-      final fQty = int.tryParse(fQtyCtrl.text) ?? 0;
-      final schQty = int.tryParse(schQtyCtrl.text) ?? 0;
-      final dSchQty = int.tryParse(dSchQtyCtrl.text) ?? 0;
       final usedPrice = double.tryParse(priceCtrl.text) ?? 0.0;
-      final goodsValue = usedPrice * qty;
 
-      // Exact same payload structure as order_entry_page._submitOrder
-      final payload = {
-        'UserId': user?.mobileNumber ?? user?.userId ?? '',
-        'LicNo': user?.licenseNumber ?? '',
-        'lFirmCode': firmCode,
-        'AcCode': acCode,
-        'ItemCode': itemCode,
-        'Icode': itemCode,
-        'IdCol': idCol,
-        'ItemQty': qtyCtrl.text,
-        'ItemRate': usedPrice.toStringAsFixed(2),
-        'cu_id': cuId,
-        'ItemFQty': fQty.toString(),
-        'ItemSchQty': schQty.toString(),
-        'ItemDSchQty': dSchQty.toString(),
-        'ItemAmt': goodsValue.toStringAsFixed(2),
-        'discount_percentage': discPerCtrl.text,
-        'discount_percentage1': addDiscPerCtrl.text,
-        'discount_pcs': discPcsCtrl.text,
-        'remark': remarkCtrl.text,
-        'insert_record': 1,
-        'default_hit': true,
-      };
-
-      debugPrint('[ProductDetailPage] AddDraftOrder payload:');
-      debugPrint(payload.toString());
-
-      final headers = {
-        'Content-Type': 'application/json',
-        'package_name': auth.packageNameHeader,
-        if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-      };
-
-      await dio.post(
-        '/AddDraftOrder',
-        data: payload,
-        options: Options(headers: headers),
+      final request = _buildDraftOrderRequest(
+        itemCode: itemCode,
+        idCol: idCol,
+        qty: qtyCtrl.text.trim(),
+        rate: usedPrice.toStringAsFixed(2),
+        freeQty: fQtyCtrl.text.trim(),
+        schemeQty: schQtyCtrl.text.trim(),
+        dSchemeQty: dSchQtyCtrl.text.trim(),
+        itemAmt: (usedPrice * qty).toStringAsFixed(2),
+        discountPer: discPerCtrl.text.trim(),
+        addDiscountPer: addDiscPerCtrl.text.trim(),
+        discountPcs: discPcsCtrl.text.trim(),
+        remark: remarkCtrl.text.trim(),
+        insertRecord: 1,
       );
+
+      final result = await _draftOrderServiceFor(acCode).insert(request);
+      if (!result.success) {
+        throw Exception(result.message.isNotEmpty ? result.message : 'Failed to add item');
+      }
 
       if (mounted) {
         Navigator.pop(context);
@@ -1582,5 +1648,44 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       debugPrint('Error adding to cart: $e');
     }
   }
-}
 
+  DraftOrderService _draftOrderServiceFor(String acCode) {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    return DraftOrderService(
+      dio: auth.getDioClient(),
+      context: DraftOrderContext.fromAuth(auth: auth, acCode: acCode),
+    );
+  }
+
+  DraftOrderRequest _buildDraftOrderRequest({
+    required String itemCode,
+    required int idCol,
+    required String qty,
+    required String rate,
+    required String freeQty,
+    required String schemeQty,
+    required String dSchemeQty,
+    required String itemAmt,
+    required String discountPer,
+    required String addDiscountPer,
+    required String discountPcs,
+    required String remark,
+    required int insertRecord,
+  }) {
+    return DraftOrderRequest(
+      itemCode: itemCode,
+      idCol: idCol,
+      itemQty: qty,
+      itemRate: rate,
+      itemFQty: freeQty.isEmpty ? '0' : freeQty,
+      itemSchQty: schemeQty.isEmpty ? '0' : schemeQty,
+      itemDSchQty: dSchemeQty.isEmpty ? '0' : dSchemeQty,
+      itemAmt: itemAmt,
+      discountPercentage: discountPer,
+      discountPercentage1: addDiscountPer,
+      discountPcs: discountPcs,
+      remark: remark,
+      insertRecord: insertRecord,
+    );
+  }
+}
