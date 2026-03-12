@@ -277,33 +277,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           }
 
           if (matches) {
+            int parseQty(dynamic v) => v is int ? v : (v is double ? v.toInt() : (v is num ? v.toInt() : int.tryParse(v?.toString().split('.').first ?? '0') ?? 0));
             return {
-              'Qty': int.tryParse(e['Qty']?.toString() ?? '0') ?? 0,
-              'FQty': int.tryParse(e['FQty']?.toString() ?? '0') ?? 0,
-              'SchQty': int.tryParse(e['SchQty']?.toString() ??
-                      e['SchDQty']?.toString() ??
-                      '0') ??
-                  0,
-              'DSchQty': int.tryParse(e['DSchQty']?.toString() ??
-                      e['SchDQty']?.toString() ??
-                      '0') ??
-                  0,
-              'Rate': (e['Rate'] is num)
-                  ? (e['Rate'] as num).toDouble()
-                  : double.tryParse(e['Rate']?.toString() ?? '') ?? 0.0,
-              'Mrp': (e['Mrp'] is num)
-                  ? (e['Mrp'] as num).toDouble()
-                  : double.tryParse(e['Mrp']?.toString() ?? '') ?? 0.0,
-              'DiscPcs': (e['DO_DiscAmt'] is num)
-                  ? (e['DO_DiscAmt'] as num).toDouble()
-                  : double.tryParse(e['DO_DiscAmt']?.toString() ?? '') ?? 0.0,
-              'DiscPer': (e['DO_DiscPer'] is num)
-                  ? (e['DO_DiscPer'] as num).toDouble()
-                  : double.tryParse(e['DO_DiscPer']?.toString() ?? '') ?? 0.0,
-              'AddDiscPer': (e['DO_Disc2Per'] is num)
-                  ? (e['DO_Disc2Per'] as num).toDouble()
-                  : double.tryParse(e['DO_Disc2Per']?.toString() ?? '') ?? 0.0,
-              'Remark': e['DO_Remark']?.toString() ?? '',
+              'Qty':     parseQty(e['Qty']),
+              'FQty':    parseQty(e['FQty']),
+              'SchQty':  (e['SchQty'] is num) ? (e['SchQty'] as num).toDouble() : double.tryParse(e['SchQty']?.toString() ?? '') ?? 0.0,
+              'DSchQty': (e['SchDQty'] is num) ? (e['SchDQty'] as num).toDouble() : double.tryParse(e['SchDQty']?.toString() ?? '') ?? 0.0,
+              'Rate':    (e['Rate']   is num) ? (e['Rate']   as num).toDouble() : double.tryParse(e['Rate']?.toString()   ?? '') ?? 0.0,
+              'Mrp':     (e['Mrp']    is num) ? (e['Mrp']    as num).toDouble() : double.tryParse(e['Mrp']?.toString()    ?? '') ?? 0.0,
+              // discount_pcs        → DO_Disc2Per
+              'DiscPcs':    (e['DO_Disc2Per'] is num) ? (e['DO_Disc2Per'] as num).toDouble() : double.tryParse(e['DO_Disc2Per']?.toString() ?? '') ?? 0.0,
+              // discount_percentage → DO_DiscPer
+              'DiscPer':    (e['DO_DiscPer']  is num) ? (e['DO_DiscPer']  as num).toDouble() : double.tryParse(e['DO_DiscPer']?.toString()  ?? '') ?? 0.0,
+              // discount_percentage1→ DO_Disc1Per
+              'AddDiscPer': (e['DO_Disc1Per'] is num) ? (e['DO_Disc1Per'] as num).toDouble() : double.tryParse(e['DO_Disc1Per']?.toString() ?? '') ?? 0.0,
+              'Remark':  e['DO_Remark']?.toString() ?? '',
               'SchNarr': e['SchNarr']?.toString() ?? '',
             };
           }
@@ -964,256 +952,28 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   void _showAddToCartBottomSheet() async {
     await fetchCartAndSetQty();
     final cartDetails = await fetchCartItemDetails();
-
     if (!mounted) return;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return _buildBottomSheetContent(cartDetails);
-      },
+      builder: (ctx) => _KeyboardAwareSheet(
+        child: _AddToCartSheet(
+          product: product,
+          selectedAccount: widget.selectedAccount,
+          cartDetails: cartDetails,
+          cartQty: cartQty,
+          onCartUpdated: () async {
+            Navigator.pop(ctx);
+            await fetchCartAndSetQty();
+            if (mounted) setState(() {});
+          },
+        ),
+      ),
     );
   }
 
-  Widget _buildBottomSheetContent(Map<String, dynamic> cartDetails) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final price = _getDouble(product, ['price', 'Rate'], fallback: 0.0);
-    final mrp = _getDouble(product, ['Mrp', 'mrp'], fallback: 0.0);
-    final stock = _getInt(product, ['stockQuantity', 'Stock'], fallback: 0);
-
-    final qtyCtrl = TextEditingController(text: (cartDetails['Qty'] ?? 0).toString());
-    final fQtyCtrl = TextEditingController(text: (cartDetails['FQty'] ?? 0).toString());
-    final schQtyCtrl = TextEditingController(text: (cartDetails['SchQty'] ?? 0).toString());
-    final dSchQtyCtrl = TextEditingController(text: (cartDetails['DSchQty'] ?? 0).toString());
-    final priceCtrl = TextEditingController(
-        text: (cartDetails['Rate'] != null && cartDetails['Rate'] > 0)
-            ? (cartDetails['Rate'] as double).toStringAsFixed(2)
-            : price.toStringAsFixed(2));
-    final discPcsCtrl = TextEditingController(text: (cartDetails['DiscPcs'] ?? 0.0).toString());
-    final discPerCtrl = TextEditingController(text: (cartDetails['DiscPer'] ?? 0.0).toString());
-    final addDiscPerCtrl = TextEditingController(text: (cartDetails['AddDiscPer'] ?? 0.0).toString());
-    final schNarrCtrl = TextEditingController(text: cartDetails['SchNarr'] ?? '');
-    final remarkCtrl = TextEditingController(text: cartDetails['Remark'] ?? '');
-
-    double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
-
-    DraftOrderPreviewResult? preview;
-    Timer? previewDebounce;
-    int previewToken = 0;
-    bool isPreviewLoading = false;
-
-    void syncFromPreview() {
-      // Only use server values - no fallback to frontend calculation
-      if (preview != null) {
-        goodsValue = preview!.amt;
-        schemeValue = preview!.schemeAmt;
-        discountValue = preview!.totalDisc;
-        gst = preview!.taxAmt;
-        netValue = preview!.netAmt;
-      }
-    }
-
-    return StatefulBuilder(
-      builder: (context, setModalState) {
-        Future<void> runPreview() async {
-          previewDebounce?.cancel();
-          previewDebounce = Timer(const Duration(milliseconds: 350), () async {
-            final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
-            if (qty <= 0) {
-              setModalState(() {
-                preview = null;
-                isPreviewLoading = false;
-                goodsValue = 0.0;
-                schemeValue = 0.0;
-                discountValue = 0.0;
-                gst = 0.0;
-                netValue = 0.0;
-              });
-              return;
-            }
-
-            String itemCode = '';
-            int idCol = 0;
-            if (product is Product) {
-              itemCode = product.code ?? product.id;
-              idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
-            } else if (product is Map) {
-              itemCode = product['Icode']?.toString() ?? product['icode']?.toString() ?? product['Code']?.toString() ?? product['code']?.toString() ?? '';
-              idCol = int.tryParse(product['i_id_col']?.toString() ?? product['iidcol']?.toString() ?? product['IdCol']?.toString() ?? '') ?? 0;
-            }
-            final acCode = widget.selectedAccount.code ?? (widget.selectedAccount.acIdCol != null ? widget.selectedAccount.acIdCol.toString() : widget.selectedAccount.id);
-            final request = _buildDraftOrderRequest(
-              itemCode: itemCode,
-              idCol: idCol,
-              qty: qtyCtrl.text.trim(),
-              rate: priceCtrl.text.trim(),
-              freeQty: fQtyCtrl.text.trim(),
-              schemeQty: schQtyCtrl.text.trim(),
-              dSchemeQty: dSchQtyCtrl.text.trim(),
-              itemAmt: ((double.tryParse(priceCtrl.text.trim()) ?? price) * qty).toStringAsFixed(2),
-              discountPer: discPerCtrl.text.trim(),
-              addDiscountPer: addDiscPerCtrl.text.trim(),
-              discountPcs: discPcsCtrl.text.trim(),
-              remark: remarkCtrl.text.trim(),
-              insertRecord: 0,
-            );
-            final currentToken = ++previewToken;
-            setModalState(() => isPreviewLoading = true);
-            try {
-              final result = await _draftOrderServiceFor(acCode).calculate(request);
-              if (!mounted || currentToken != previewToken) return;
-              setModalState(() {
-                preview = result;
-                isPreviewLoading = false;
-                syncFromPreview();
-              });
-            } catch (_) {
-              if (!mounted || currentToken != previewToken) return;
-              setModalState(() {
-                isPreviewLoading = false;
-                // No fallback calculation - values stay at 0.0
-              });
-            }
-          });
-        }
-
-        void updateFields() {
-          setModalState(() {
-            preview = null;
-          });
-          runPreview();
-        }
-
-        return Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: DraggableScrollableSheet(
-            expand: false,
-            initialChildSize: 0.92,
-            minChildSize: 0.5,
-            maxChildSize: 0.95,
-            builder: (ctx, scroll) {
-              return Column(
-                children: [
-                  // Handle
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 4),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  // Sheet header
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _getString(product, ['name', 'Name', 'ItemName', 'item_name', 'I_NAME']),
-                                style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _getString(product, ['manufacturer', 'MfgComp', 'mfgcomp', 'company']),
-                                style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton.filledTonal(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close_rounded, size: 18),
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(36, 36),
-                            padding: EdgeInsets.zero,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Quick info chips
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                    child: Row(
-                      children: [
-                        _infoChip(colorScheme, '₹${price.toStringAsFixed(2)}', Icons.sell_outlined, colorScheme.primary),
-                        const SizedBox(width: 8),
-                        if (mrp > 0) _infoChip(colorScheme, 'MRP ₹${mrp.toStringAsFixed(2)}', Icons.price_change_outlined, colorScheme.secondary),
-                        if (mrp > 0) const SizedBox(width: 8),
-                        _infoChip(
-                          colorScheme,
-                          'Stock: $stock',
-                          stock > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined,
-                          stock > 0 ? Colors.green.shade600 : colorScheme.error,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Divider(height: 1, thickness: 0.5, color: colorScheme.outlineVariant),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      controller: scroll,
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // ORDER DETAILS section
-                          _sheetSectionLabel(colorScheme, textTheme, 'ORDER DETAILS'),
-                          const SizedBox(height: 14),
-                          _buildInputField('Quantity', qtyCtrl, TextInputType.number, updateFields, colorScheme, textTheme),
-                          const SizedBox(height: 12),
-                          _buildInputField('Free Quantity', fQtyCtrl, TextInputType.number, updateFields, colorScheme, textTheme),
-                          const SizedBox(height: 12),
-                          _buildSchemeInput(schQtyCtrl, dSchQtyCtrl, updateFields, colorScheme, textTheme),
-                          const SizedBox(height: 12),
-                          _buildInputField('Price', priceCtrl, const TextInputType.numberWithOptions(decimal: true), updateFields, colorScheme, textTheme),
-                          const SizedBox(height: 20),
-                          // DISCOUNTS section
-                          _sheetSectionLabel(colorScheme, textTheme, 'DISCOUNTS'),
-                          const SizedBox(height: 14),
-                          _buildInputFieldWithAmount('Discount (Pcs)', discPcsCtrl, preview?.discAmt ?? 0.0, updateFields, colorScheme, textTheme),
-                          const SizedBox(height: 12),
-                          _buildInputFieldWithAmount('Discount (%)', discPerCtrl, preview?.disc1Amt ?? 0.0, updateFields, colorScheme, textTheme),
-                          const SizedBox(height: 12),
-                          _buildInputFieldWithAmount('Add. Discount (%)', addDiscPerCtrl, preview?.disc2Amt ?? 0.0, updateFields, colorScheme, textTheme),
-                          const SizedBox(height: 20),
-                          _buildRemarkField(remarkCtrl, 'Add Remark (Optional)', colorScheme, textTheme),
-                          const SizedBox(height: 24),
-                          // Summary card
-                          _buildSummaryCard(goodsValue, schemeValue, discountValue, gst, netValue, colorScheme, textTheme),
-                          const SizedBox(height: 24),
-                          if (isPreviewLoading) ...[
-                            const SizedBox(height: 12),
-                            const LinearProgressIndicator(minHeight: 3),
-                            const SizedBox(height: 12),
-                          ],
-                          _buildActionButtons(colorScheme, textTheme, qtyCtrl, fQtyCtrl, schQtyCtrl, dSchQtyCtrl, priceCtrl, discPcsCtrl, discPerCtrl, addDiscPerCtrl, schNarrCtrl, remarkCtrl),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
+  Widget _buildBottomSheetContent(Map<String, dynamic> cartDetails) => const SizedBox.shrink();
 
   Widget _infoChip(ColorScheme cs, String label, IconData icon, Color color) {
     return Container(
@@ -1689,3 +1449,347 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyboard-aware wrapper — isolates viewInsets so sheet never resets on KB dismiss
+// ─────────────────────────────────────────────────────────────────────────────
+class _KeyboardAwareSheet extends StatelessWidget {
+  final Widget child;
+  const _KeyboardAwareSheet({required this.child});
+  @override
+  Widget build(BuildContext context) => AnimatedPadding(
+    duration: const Duration(milliseconds: 150),
+    curve: Curves.easeOut,
+    padding: MediaQuery.of(context).viewInsets,
+    child: child,
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Add/Update cart bottom sheet — StatefulWidget so controllers live in initState
+// ─────────────────────────────────────────────────────────────────────────────
+class _AddToCartSheet extends StatefulWidget {
+  final dynamic product;
+  final dynamic selectedAccount;
+  final Map<String, dynamic> cartDetails;
+  final int cartQty;
+  final VoidCallback onCartUpdated;
+
+  const _AddToCartSheet({
+    required this.product,
+    required this.selectedAccount,
+    required this.cartDetails,
+    required this.cartQty,
+    required this.onCartUpdated,
+  });
+
+  @override
+  State<_AddToCartSheet> createState() => _AddToCartSheetState();
+}
+
+class _AddToCartSheetState extends State<_AddToCartSheet> {
+  late final TextEditingController qtyCtrl;
+  late final TextEditingController fQtyCtrl;
+  late final TextEditingController schQtyCtrl;
+  late final TextEditingController dSchQtyCtrl;
+  late final TextEditingController priceCtrl;
+  late final TextEditingController discPcsCtrl;
+  late final TextEditingController discPerCtrl;
+  late final TextEditingController addDiscPerCtrl;
+  late final TextEditingController schNarrCtrl;
+  late final TextEditingController remarkCtrl;
+
+  double goodsValue = 0, schemeValue = 0, discountValue = 0, gst = 0, netValue = 0;
+  DraftOrderPreviewResult? preview;
+  Timer? _debounce;
+  int _token = 0;
+  bool _loading = false;
+  bool _firstBuild = true;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.cartDetails;
+    double sd(dynamic v) => v is double ? v : (v is int ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0);
+    int si(dynamic v) => v is int ? v : (v is double ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0);
+
+    final p = widget.product;
+    final price = p is Product ? p.price : sd(p is Map ? (p['Rate'] ?? p['price']) : 0.0);
+
+    qtyCtrl        = TextEditingController(text: si(d['Qty']).toString());
+    fQtyCtrl       = TextEditingController(text: si(d['FQty']).toString());
+    schQtyCtrl     = TextEditingController(text: sd(d['SchQty']).toStringAsFixed(0));
+    dSchQtyCtrl    = TextEditingController(text: sd(d['DSchQty']).toStringAsFixed(0));
+    priceCtrl      = TextEditingController(text: sd(d['Rate']) > 0 ? sd(d['Rate']).toStringAsFixed(2) : price.toStringAsFixed(2));
+    discPcsCtrl    = TextEditingController(text: sd(d['DiscPcs']).toString());
+    discPerCtrl    = TextEditingController(text: sd(d['DiscPer']).toString());
+    addDiscPerCtrl = TextEditingController(text: sd(d['AddDiscPer']).toString());
+    schNarrCtrl    = TextEditingController(text: d['SchNarr']?.toString() ?? '');
+    remarkCtrl     = TextEditingController(text: d['Remark']?.toString() ?? '');
+  }
+
+  @override
+  void dispose() {
+    qtyCtrl.dispose(); fQtyCtrl.dispose(); schQtyCtrl.dispose();
+    dSchQtyCtrl.dispose(); priceCtrl.dispose(); discPcsCtrl.dispose();
+    discPerCtrl.dispose(); addDiscPerCtrl.dispose();
+    schNarrCtrl.dispose(); remarkCtrl.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  String get _acCode {
+    final acc = widget.selectedAccount;
+    try {
+      return acc.code ?? (acc.acIdCol != null ? acc.acIdCol.toString() : acc.id ?? '');
+    } catch (_) { return ''; }
+  }
+
+  void _resolveProductIds(void Function(String code, int idCol) cb) {
+    final p = widget.product;
+    String code = ''; int idCol = 0;
+    if (p is Product) {
+      code = p.code ?? p.id;
+      idCol = p.iidcol ?? int.tryParse(p.id) ?? 0;
+    } else if (p is Map) {
+      code = p['Icode']?.toString() ?? p['Code']?.toString() ?? p['code']?.toString() ?? '';
+      idCol = int.tryParse(p['i_id_col']?.toString() ?? p['iidcol']?.toString() ?? p['IdCol']?.toString() ?? '') ?? 0;
+    } else {
+      try { code = p.code ?? ''; idCol = p.iidcol ?? 0; } catch (_) {}
+    }
+    cb(code, idCol);
+  }
+
+  DraftOrderService _service() {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    return DraftOrderService(
+      dio: auth.getDioClient(),
+      context: DraftOrderContext.fromAuth(auth: auth, acCode: _acCode),
+    );
+  }
+
+  DraftOrderRequest _buildRequest(int insertRecord) {
+    String code = ''; int idCol = 0;
+    _resolveProductIds((c, i) { code = c; idCol = i; });
+    final qty  = int.tryParse(qtyCtrl.text.trim()) ?? 0;
+    final rate = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
+    return DraftOrderRequest(
+      itemCode: code, idCol: idCol,
+      itemQty: qtyCtrl.text.trim(),
+      itemRate: rate.toStringAsFixed(2),
+      itemFQty:    fQtyCtrl.text.trim().isEmpty    ? '0' : fQtyCtrl.text.trim(),
+      itemSchQty:  schQtyCtrl.text.trim().isEmpty  ? '0' : schQtyCtrl.text.trim(),
+      itemDSchQty: dSchQtyCtrl.text.trim().isEmpty ? '0' : dSchQtyCtrl.text.trim(),
+      itemAmt: (rate * qty).toStringAsFixed(2),
+      discountPercentage:  discPerCtrl.text.trim(),
+      discountPercentage1: addDiscPerCtrl.text.trim(),
+      discountPcs:         discPcsCtrl.text.trim(),
+      remark:              remarkCtrl.text.trim(),
+      insertRecord:        insertRecord,
+    );
+  }
+
+  void _onChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () async {
+      final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
+      if (qty <= 0) {
+        if (mounted) setState(() { goodsValue = 0; schemeValue = 0; discountValue = 0; gst = 0; netValue = 0; preview = null; _loading = false; });
+        return;
+      }
+      final t = ++_token;
+      if (mounted) setState(() => _loading = true);
+      try {
+        final result = await _service().calculate(_buildRequest(0));
+        if (!mounted || t != _token) return;
+        setState(() {
+          preview = result;
+          goodsValue = result.amt; schemeValue = result.schemeAmt;
+          discountValue = result.totalDisc; gst = result.taxAmt; netValue = result.netAmt;
+          _loading = false;
+        });
+      } catch (_) {
+        if (mounted) setState(() => _loading = false);
+      }
+    });
+  }
+
+  Future<void> _submit() async {
+    try {
+      final result = await _service().insert(_buildRequest(1));
+      if (!result.success) throw Exception(result.message.isNotEmpty ? result.message : 'Failed');
+      widget.onCartUpdated();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    if (_firstBuild) {
+      _firstBuild = false;
+      if ((int.tryParse(qtyCtrl.text) ?? 0) > 0) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _onChanged());
+      }
+    }
+
+    final p = widget.product;
+    final name  = p is Product ? p.name : (p is Map ? (p['Name'] ?? p['name'] ?? '') : '');
+    final mfg   = p is Product ? (p.manufacturer ?? '') : (p is Map ? (p['MfgComp'] ?? '') : '');
+    final price = p is Product ? p.price : (p is Map ? (double.tryParse(p['Rate']?.toString() ?? '') ?? 0.0) : 0.0);
+    final mrp   = p is Product ? p.mrp   : (p is Map ? (double.tryParse(p['Mrp']?.toString()  ?? '') ?? 0.0) : 0.0);
+    final stock = p is Product ? p.stockQuantity : (p is Map ? (int.tryParse(p['Stock']?.toString() ?? '') ?? 0) : 0);
+
+    InputDecoration fieldDeco({String hint = '0'}) => InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      filled: true,
+      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+      border:        OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
+    );
+
+    Widget rowField(String label, TextEditingController ctrl, TextInputType kb) => Row(
+      children: [
+        Expanded(child: Text(label, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+        SizedBox(width: 130, child: TextField(controller: ctrl, keyboardType: kb, textAlign: TextAlign.right, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco())),
+      ],
+    );
+
+    Widget rowFieldAmt(String label, TextEditingController ctrl, double amt) {
+      final has = amt > 0;
+      return Row(children: [
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(color: has ? Colors.red.shade50 : cs.surfaceContainerHighest.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(6), border: Border.all(color: has ? Colors.red.shade200 : cs.outlineVariant.withValues(alpha: 0.4), width: 0.8)),
+            child: Text('- ₹${amt.toStringAsFixed(2)}', style: tt.labelSmall?.copyWith(color: has ? Colors.red.shade700 : cs.outline, fontWeight: FontWeight.w700)),
+          ),
+        ])),
+        const SizedBox(width: 12),
+        SizedBox(width: 130, child: TextField(controller: ctrl, keyboardType: const TextInputType.numberWithOptions(decimal: true), textAlign: TextAlign.right, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco())),
+      ]);
+    }
+
+    Widget sLabel(String t) => Row(children: [
+      Container(width: 3, height: 16, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(2))),
+      const SizedBox(width: 8),
+      Text(t, style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1.2)),
+    ]);
+
+    Widget infoChip(String label, IconData icon, Color color) => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.25))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 13, color: color), const SizedBox(width: 4), Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color))]),
+    );
+
+    return Container(
+      decoration: BoxDecoration(color: cs.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+      child: DraggableScrollableSheet(
+        expand: false, initialChildSize: 0.92, minChildSize: 0.5, maxChildSize: 0.95,
+        builder: (ctx, scroll) => Column(children: [
+          Container(margin: const EdgeInsets.only(top: 12, bottom: 4), width: 40, height: 4, decoration: BoxDecoration(color: cs.outlineVariant, borderRadius: BorderRadius.circular(2))),
+          Padding(padding: const EdgeInsets.fromLTRB(20, 8, 12, 12), child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name.toString(), style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800), maxLines: 2, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 2),
+              Text(mfg.toString(), style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+            ])),
+            IconButton.filledTonal(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 18), style: IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero)),
+          ])),
+          Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 12), child: Wrap(spacing: 8, runSpacing: 6, children: [
+            infoChip('₹${price.toStringAsFixed(2)}', Icons.sell_outlined, cs.primary),
+            if (mrp > 0) infoChip('MRP ₹${mrp.toStringAsFixed(2)}', Icons.price_change_outlined, cs.secondary),
+            infoChip(stock > 0 ? 'Stock: $stock' : 'Out of Stock', stock > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined, stock > 0 ? Colors.green.shade600 : cs.error),
+          ])),
+          Divider(height: 1, thickness: 0.5, color: cs.outlineVariant),
+          Expanded(child: SingleChildScrollView(
+            controller: scroll,
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              sLabel('ORDER DETAILS'), const SizedBox(height: 14),
+              rowField('Quantity', qtyCtrl, TextInputType.number), const SizedBox(height: 12),
+              rowField('Free Quantity', fQtyCtrl, TextInputType.number), const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: Text('Scheme', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                SizedBox(width: 56, child: TextField(controller: schQtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(hint: '0'))),
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('+', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary))),
+                SizedBox(width: 56, child: TextField(controller: dSchQtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(hint: '0'))),
+              ]),
+              const SizedBox(height: 12),
+              rowField('Price', priceCtrl, const TextInputType.numberWithOptions(decimal: true)),
+              const SizedBox(height: 20),
+              sLabel('DISCOUNTS'), const SizedBox(height: 14),
+              rowFieldAmt('Discount (Pcs)', discPcsCtrl, preview?.discAmt ?? 0.0), const SizedBox(height: 12),
+              rowFieldAmt('Discount (%)', discPerCtrl, preview?.disc1Amt ?? 0.0), const SizedBox(height: 12),
+              rowFieldAmt('Add. Discount (%)', addDiscPerCtrl, preview?.disc2Amt ?? 0.0),
+              const SizedBox(height: 20),
+              Text('Add Remark (Optional)', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              TextField(controller: remarkCtrl, maxLength: 200, maxLines: 2, style: tt.bodyMedium,
+                decoration: fieldDeco(hint: 'Type here...').copyWith(counterText: '', contentPadding: const EdgeInsets.all(12))),
+              const SizedBox(height: 24),
+              // Summary
+              Container(
+                decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
+                child: Column(children: [
+                  Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Column(children: [
+                    _sr(cs, tt, 'Goods Value',    '₹${goodsValue.toStringAsFixed(2)}'),   const SizedBox(height: 8),
+                    _sr(cs, tt, 'Scheme Value',   '₹${schemeValue.toStringAsFixed(2)}'),  const SizedBox(height: 8),
+                    _sr(cs, tt, 'Discount Value', '-₹${discountValue.toStringAsFixed(2)}', neg: true), const SizedBox(height: 8),
+                    _sr(cs, tt, 'GST (Excl.)',    '₹${gst.toStringAsFixed(2)}'),
+                  ])),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)), border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15)))),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                      Text('Net Value', style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
+                      Text('₹${netValue.toStringAsFixed(2)}', style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
+                    ]),
+                  ),
+                ]),
+              ),
+              if (_loading) ...[const SizedBox(height: 12), const LinearProgressIndicator(minHeight: 3)],
+              const SizedBox(height: 24),
+              Row(children: [
+                Expanded(child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: BorderSide(color: cs.outlineVariant), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  child: Text('CLOSE', style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                )),
+                const SizedBox(width: 12),
+                Expanded(flex: 2, child: FilledButton(
+                  onPressed: _submit,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: widget.cartQty > 0 ? cs.secondary : cs.primary,
+                    foregroundColor: widget.cartQty > 0 ? cs.onSecondary : cs.onPrimary,
+                    padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: Text(widget.cartQty > 0 ? 'UPDATE CART' : 'ADD TO CART', style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                )),
+              ]),
+            ]),
+          )),
+        ]),
+      ),
+    );
+  }
+
+  Widget _sr(ColorScheme cs, TextTheme tt, String label, String value, {bool neg = false}) => Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Text(label, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+      Text(value, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: neg ? Colors.red.shade600 : cs.onSurface)),
+    ],
+  );
+}
+

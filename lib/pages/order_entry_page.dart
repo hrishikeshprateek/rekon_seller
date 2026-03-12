@@ -1053,9 +1053,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           'freeQty':   parseDouble(m['FQty'] ?? 0).toInt(),
           'schQty':    parseDouble(m['SchQty'] ?? 0),
           'dSchQty':   parseDouble(m['SchDQty'] ?? 0),
-          'discPcs':   parseDouble(m['DO_Disc2Amt'] ?? 0),
-          'discPer':   parseDouble(m['DO_Disc1Per'] ?? m['DO_DiscPer'] ?? 0),
-          'addDiscPer':parseDouble(m['DO_Disc2Per'] ?? 0),
+          'discPcs':   parseDouble(m['DO_Disc2Per'] ?? 0),   // discount_pcs  → DO_Disc2Per
+          'discPer':   parseDouble(m['DO_DiscPer']  ?? 0),   // discount_percentage  → DO_DiscPer
+          'addDiscPer':parseDouble(m['DO_Disc1Per'] ?? 0),   // discount_percentage1 → DO_Disc1Per
           'remark':    (m['DO_Remark'] ?? '').toString(),
         };
       }
@@ -1327,15 +1327,18 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
         final int? currentQuantity = cartData != null ? (cartData['qty'] as int?) : null;
 
+        double _safeDouble(dynamic v) => v is double ? v : (v is int ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0);
+        int _safeInt(dynamic v) => v is int ? v : (v is double ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0);
+
         final qtyController        = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '0');
-        final priceController      = TextEditingController(text: cartData != null ? (cartData['rate'] as double).toStringAsFixed(2) : product.price.toStringAsFixed(2));
-        final freeQtyController    = TextEditingController(text: cartData != null ? (cartData['freeQty'] as int).toString() : '0');
-        final schemeController     = TextEditingController(text: cartData != null ? (cartData['schQty'] as double).toStringAsFixed(0) : '0');
-        final dSchemeController    = TextEditingController(text: cartData != null ? (cartData['dSchQty'] as double).toStringAsFixed(0) : '0');
-        final discPcsController    = TextEditingController(text: cartData != null ? (cartData['discPcs'] as double).toStringAsFixed(2) : '0.0');
-        final discPerController    = TextEditingController(text: cartData != null ? (cartData['discPer'] as double).toStringAsFixed(2) : '0.0');
-        final addDiscPerController = TextEditingController(text: cartData != null ? (cartData['addDiscPer'] as double).toStringAsFixed(2) : '0.0');
-        final remarkController     = TextEditingController(text: cartData != null ? (cartData['remark'] as String) : '');
+        final priceController      = TextEditingController(text: cartData != null ? _safeDouble(cartData['rate']).toStringAsFixed(2) : product.price.toStringAsFixed(2));
+        final freeQtyController    = TextEditingController(text: cartData != null ? _safeInt(cartData['freeQty']).toString() : '0');
+        final schemeController     = TextEditingController(text: cartData != null ? _safeDouble(cartData['schQty']).toStringAsFixed(0) : '0');
+        final dSchemeController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['dSchQty']).toStringAsFixed(0) : '0');
+        final discPcsController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPcs']).toStringAsFixed(2) : '0.0');
+        final discPerController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPer']).toStringAsFixed(2) : '0.0');
+        final addDiscPerController = TextEditingController(text: cartData != null ? _safeDouble(cartData['addDiscPer']).toStringAsFixed(2) : '0.0');
+        final remarkController     = TextEditingController(text: cartData != null ? (cartData['remark']?.toString() ?? '') : '');
 
         double price = product.price;
         final int available = product.stockQuantity;
@@ -1371,6 +1374,8 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
         );
+
+        bool _firstBuild = true;
 
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -1436,6 +1441,15 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                 preview = null;
               });
               runPreview();
+            }
+
+            // On first open, if item is already in cart, run preview immediately
+            // so the summary section shows the correct server-calculated values
+            if (_firstBuild) {
+              _firstBuild = false;
+              if (cartData != null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) => runPreview());
+              }
             }
 
             Widget sectionLabel(String title) => Row(

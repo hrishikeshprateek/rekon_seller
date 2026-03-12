@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -918,47 +919,32 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   late final TextEditingController addDiscPerController;
   late final TextEditingController remarkController;
 
-  // Computed summary values kept in state so they survive keyboard dismissal
   double _goodsValue    = 0.0;
   double _schemeValue   = 0.0;
   double _discountValue = 0.0;
   double _gst           = 0.0;
   double _netValue      = 0.0;
 
+  Timer?  _debounce;
+  int     _token   = 0;
+  bool    _loading = false;
+  bool    _firstBuild = true;
+
   @override
   void initState() {
     super.initState();
-    qtyController        = TextEditingController(text: widget.item.qty.toString());
-    priceController      = TextEditingController(text: (widget.item.rate ?? 0).toStringAsFixed(2));
-    freeQtyController    = TextEditingController(text: (widget.item.freeQty ?? 0).toString());
-    schemeController     = TextEditingController(text: '0');
-    dSchemeController    = TextEditingController(text: '0');
-    discPcsController    = TextEditingController(text: (widget.item.disc2Amt ?? 0).toStringAsFixed(2));
-    discPerController    = TextEditingController(text: (widget.item.disc1Amt ?? 0).toStringAsFixed(2));
-    addDiscPerController = TextEditingController(text: '0.0');
-    remarkController     = TextEditingController(text: widget.item.remark ?? '');
-    _recalc();
-  }
-
-  void _recalc() {
-    final qty        = int.tryParse(qtyController.text) ?? 1;
-    final scheme     = int.tryParse(schemeController.text) ?? 0;
-    final dScheme    = int.tryParse(dSchemeController.text) ?? 0;
-    final discPcs    = double.tryParse(discPcsController.text) ?? 0.0;
-    final discPer    = double.tryParse(discPerController.text) ?? 0.0;
-    final addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
-    final price      = double.tryParse(priceController.text) ?? (widget.item.rate ?? 0);
-    final gv         = price * qty;
-    final sv         = (scheme + dScheme) * price;
-    final dv         = discPcs + (gv * (discPer + addDiscPer) / 100);
-    final tax        = (gv - dv) * 0.18;
-    setState(() {
-      _goodsValue    = gv;
-      _schemeValue   = sv;
-      _discountValue = dv;
-      _gst           = tax;
-      _netValue      = gv - dv + tax;
-    });
+    final it = widget.item;
+    qtyController        = TextEditingController(text: it.qty.toString());
+    priceController      = TextEditingController(text: (it.rate ?? 0).toStringAsFixed(2));
+    freeQtyController    = TextEditingController(text: (it.freeQty ?? 0).toString());
+    // scheme: map SchQty / SchDQty
+    schemeController     = TextEditingController(text: (it.schQty ?? 0).toStringAsFixed(0));
+    dSchemeController    = TextEditingController(text: (it.dSchQty ?? 0).toStringAsFixed(0));
+    // discounts: map the *Per fields (inputs), not Amt fields
+    discPcsController    = TextEditingController(text: (it.disc2Per ?? 0).toStringAsFixed(2));
+    discPerController    = TextEditingController(text: (it.discPer  ?? 0).toStringAsFixed(2));
+    addDiscPerController = TextEditingController(text: (it.disc1Per ?? 0).toStringAsFixed(2));
+    remarkController     = TextEditingController(text: it.remark ?? '');
   }
 
   @override
@@ -972,59 +958,93 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     discPerController.dispose();
     addDiscPerController.dispose();
     remarkController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final qty        = int.tryParse(qtyController.text) ?? 1;
-    final price      = double.tryParse(priceController.text) ?? (widget.item.rate ?? 0);
-    final freeQty    = int.tryParse(freeQtyController.text) ?? 0;
-    final schemeQty  = int.tryParse(schemeController.text) ?? 0;
-    final dSchemeQty = int.tryParse(dSchemeController.text) ?? 0;
-    final discPcs    = double.tryParse(discPcsController.text) ?? 0.0;
-    final discPer    = double.tryParse(discPerController.text) ?? 0.0;
-    final addDiscPer = double.tryParse(addDiscPerController.text) ?? 0.0;
-    final remark     = remarkController.text;
-
+  Map<String, dynamic> _buildPayload(int insertRecord) {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final user = auth.currentUser;
+    final cuId = int.tryParse(user?.userId ?? '') ?? 0;
+    String firmCode = '';
     try {
-      final auth      = Provider.of<AuthService>(context, listen: false);
-      final user      = auth.currentUser;
-      final cuId      = int.tryParse(user?.userId ?? '') ?? 0;
-      String firmCode = '';
+      if (user != null && user.stores.isNotEmpty) {
+        firmCode = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first).firmCode;
+      }
+    } catch (_) {}
+    return {
+      'UserId':               user?.mobileNumber ?? user?.userId ?? '',
+      'LicNo':                user?.licenseNumber ?? '',
+      'lFirmCode':            firmCode,
+      'AcCode':               widget.acCode,
+      'ItemCode':             widget.item.code,
+      'IdCol':                widget.item.idCol,
+      'ItemQty':              qtyController.text.trim(),
+      'ItemRate':             priceController.text.trim(),
+      'cu_id':                cuId,
+      'ItemFQty':             freeQtyController.text.trim().isEmpty    ? '0' : freeQtyController.text.trim(),
+      'ItemSchQty':           schemeController.text.trim().isEmpty     ? '0' : schemeController.text.trim(),
+      'ItemDSchQty':          dSchemeController.text.trim().isEmpty    ? '0' : dSchemeController.text.trim(),
+      'ItemAmt':              ((double.tryParse(priceController.text) ?? 0) * (int.tryParse(qtyController.text) ?? 0)).toStringAsFixed(2),
+      'discount_percentage':  discPerController.text.trim(),
+      'discount_percentage1': addDiscPerController.text.trim(),
+      'discount_pcs':         discPcsController.text.trim(),
+      'remark':               remarkController.text.trim(),
+      'insert_record':        insertRecord,
+      'default_hit':          true,
+    };
+  }
+
+  void _onChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () async {
+      final qty = int.tryParse(qtyController.text.trim()) ?? 0;
+      if (qty <= 0) {
+        if (mounted) setState(() { _goodsValue = 0; _schemeValue = 0; _discountValue = 0; _gst = 0; _netValue = 0; _loading = false; });
+        return;
+      }
+      final t = ++_token;
+      if (mounted) setState(() => _loading = true);
       try {
-        if (user != null && user.stores.isNotEmpty) {
-          firmCode = user.stores
-              .firstWhere((s) => s.primary, orElse: () => user.stores.first)
-              .firmCode;
+        final auth = Provider.of<AuthService>(context, listen: false);
+        final resp = await auth.getDioClient().post(
+          '/AddDraftOrder',
+          data: _buildPayload(0),
+          options: Options(headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+          }),
+        );
+        if (!mounted || t != _token) return;
+        final parsed = _parseResp(resp.data);
+        if (parsed['success'] == true && parsed['data'] != null) {
+          final d = parsed['data'];
+          double pd(dynamic v) => v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0;
+          setState(() {
+            _goodsValue    = pd(d['Amt']);
+            _schemeValue   = pd(d['ItemSchAmt']);
+            _discountValue = pd(d['totalDisc']);
+            _gst           = pd(d['ItemTaxAmt']);
+            _netValue      = pd(d['ItemNetAmt']);
+            _loading       = false;
+          });
+        } else {
+          if (mounted) setState(() => _loading = false);
         }
-      } catch (_) {}
+      } catch (_) {
+        if (mounted) setState(() => _loading = false);
+      }
+    });
+  }
 
-      final payload = {
-        'UserId':               user?.mobileNumber ?? user?.userId ?? '',
-        'LicNo':                user?.licenseNumber ?? '',
-        'lFirmCode':            firmCode,
-        'AcCode':               widget.acCode,
-        'ItemCode':             widget.item.code,
-        'IdCol':                widget.item.idCol,
-        'ItemQty':              qty.toString(),
-        'ItemRate':             price.toStringAsFixed(2),
-        'cu_id':                cuId,
-        'ItemFQty':             freeQty.toString(),
-        'ItemSchQty':           schemeQty.toString(),
-        'ItemDSchQty':          dSchemeQty.toString(),
-        'ItemAmt':              _goodsValue.toStringAsFixed(2),
-        'discount_percentage':  discPer.toString(),
-        'discount_percentage1': addDiscPer.toString(),
-        'discount_pcs':         discPcs.toString(),
-        'remark':               remark,
-        'insert_record':        1,
-        'default_hit':          true,
-      };
-
+  Future<void> _submit() async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final payload = _buildPayload(1);
       print('===== AddDraftOrder REQUEST (cart_page _submit) =====');
       print(jsonEncode(payload));
       print('======================================================');
-
       final response = await auth.getDioClient().post(
         '/AddDraftOrder',
         data: payload,
@@ -1034,7 +1054,6 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
           if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
         }),
       );
-
       final parsed = _parseResp(response.data);
       print('===== AddDraftOrder RESPONSE (cart_page _submit) =====');
       print(response.data);
@@ -1042,16 +1061,10 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       if (parsed['success'] == true) {
         widget.onUpdated();
       } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed: ${parsed['message'] ?? 'Unknown error'}')),
-          );
-        }
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: ${parsed['message'] ?? 'Unknown error'}')));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -1068,10 +1081,15 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-
     final int available = (widget.item.stock ?? 0).toInt();
 
-    // Shared input decoration – same as order_entry_page
+    // Trigger preview on first open with existing values
+    if (_firstBuild) {
+      _firstBuild = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onChanged());
+    }
+
+    // Shared input decoration
     InputDecoration fieldDeco(ColorScheme csc) => InputDecoration(
       hintText: '0',
       hintStyle: TextStyle(color: csc.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
@@ -1084,7 +1102,6 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: csc.primary, width: 2)),
     );
 
-    // Section label exactly like order_entry_page
     Widget sectionLabel(String title) => Row(
       children: [
         Container(width: 3, height: 16, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(2))),
@@ -1093,7 +1110,6 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       ],
     );
 
-    // Row field: label on left, text field (130px) on right
     Widget rowField(String label, TextEditingController ctrl, TextInputType kbType) => Row(
       children: [
         Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
@@ -1103,7 +1119,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
             controller: ctrl,
             keyboardType: kbType,
             textAlign: TextAlign.right,
-            onChanged: (_) => _recalc(),
+            onChanged: (_) => _onChanged(),
             style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             decoration: fieldDeco(cs),
           ),
@@ -1111,25 +1127,31 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       ],
     );
 
-    // Row field with computed amount shown below label
     Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt) => Row(
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-              Text('₹${amt.toStringAsFixed(2)}', style: textTheme.labelSmall?.copyWith(color: cs.outline, fontWeight: FontWeight.w500)),
-            ],
-          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: amt > 0 ? Colors.red.shade50 : cs.surfaceContainerHighest.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: amt > 0 ? Colors.red.shade200 : cs.outlineVariant.withValues(alpha: 0.4), width: 0.8),
+              ),
+              child: Text('- ₹${amt.toStringAsFixed(2)}', style: textTheme.labelSmall?.copyWith(color: amt > 0 ? Colors.red.shade700 : cs.outline, fontWeight: FontWeight.w700)),
+            ),
+          ]),
         ),
+        const SizedBox(width: 12),
         SizedBox(
           width: 130,
           child: TextField(
             controller: ctrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             textAlign: TextAlign.right,
-            onChanged: (_) => _recalc(),
+            onChanged: (_) => _onChanged(),
             style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             decoration: fieldDeco(cs),
           ),
@@ -1137,25 +1159,12 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       ],
     );
 
-    // Info chip – same as order_entry_page
     Widget infoChip(String label, IconData icon, Color color) => Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
-        ],
-      ),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.25))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 13, color: color), const SizedBox(width: 4), Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color))]),
     );
 
-    // Summary row helper
     Widget summaryRow(String label, String value, {bool isNegative = false}) => Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -1164,239 +1173,116 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       ],
     );
 
-    return Padding(
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOut,
       padding: MediaQuery.of(context).viewInsets,
       child: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
+        decoration: BoxDecoration(color: cs.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
         child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.92,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (ctx, scroll) => Column(
-          children: [
-            // Handle bar
-            Container(
-              margin: const EdgeInsets.only(top: 12, bottom: 4),
-              width: 40, height: 4,
-              decoration: BoxDecoration(color: cs.outlineVariant, borderRadius: BorderRadius.circular(2)),
-            ),
-            // Header – product name + close
+          expand: false,
+          initialChildSize: 0.92,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (ctx, scroll) => Column(children: [
+            Container(margin: const EdgeInsets.only(top: 12, bottom: 4), width: 40, height: 4, decoration: BoxDecoration(color: cs.outlineVariant, borderRadius: BorderRadius.circular(2))),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.item.name,
-                          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                          maxLines: 2, overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${widget.item.mfg ?? ''}',
-                          style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton.filledTonal(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    style: IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero),
-                  ),
-                ],
-              ),
+              child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(widget.item.name, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(widget.item.mfg ?? '', style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                ])),
+                IconButton.filledTonal(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 18), style: IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero)),
+              ]),
             ),
-            // Info chips row
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Wrap(
-                spacing: 8, runSpacing: 6,
-                children: [
-                  infoChip('₹${(widget.item.rate ?? 0).toStringAsFixed(2)}', Icons.sell_outlined, cs.primary),
-                  if ((widget.item.mrp ?? 0) > 0)
-                    infoChip('MRP ₹${(widget.item.mrp ?? 0).toStringAsFixed(2)}', Icons.price_change_outlined, cs.secondary),
-                  infoChip(
-                    available > 0 ? 'Stock: $available' : 'Out of Stock',
-                    available > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined,
-                    available > 0 ? Colors.green.shade600 : cs.error,
-                  ),
-                ],
-              ),
+              child: Wrap(spacing: 8, runSpacing: 6, children: [
+                infoChip('₹${(widget.item.rate ?? 0).toStringAsFixed(2)}', Icons.sell_outlined, cs.primary),
+                if ((widget.item.mrp ?? 0) > 0) infoChip('MRP ₹${(widget.item.mrp ?? 0).toStringAsFixed(2)}', Icons.price_change_outlined, cs.secondary),
+                infoChip(available > 0 ? 'Stock: $available' : 'Out of Stock', available > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined, available > 0 ? Colors.green.shade600 : cs.error),
+              ]),
             ),
             Divider(height: 1, thickness: 0.5, color: cs.outlineVariant),
-            // Scrollable form body
-            Expanded(
-              child: SingleChildScrollView(
-                controller: scroll,
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ORDER DETAILS section
-                    sectionLabel('ORDER DETAILS'),
-                    const SizedBox(height: 14),
-                    rowField('Quantity', qtyController, TextInputType.number),
-                    const SizedBox(height: 12),
-                    rowField('Free Quantity', freeQtyController, TextInputType.number),
-                    const SizedBox(height: 12),
-                    // Scheme two-box row with +
-                    Row(
-                      children: [
-                        Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-                        SizedBox(
-                          width: 56,
-                          child: TextField(
-                            controller: schemeController,
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            onChanged: (_) => _recalc(),
-                            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                            decoration: fieldDeco(cs),
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary)),
-                        ),
-                        SizedBox(
-                          width: 56,
-                          child: TextField(
-                            controller: dSchemeController,
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.center,
-                            onChanged: (_) => _recalc(),
-                            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                            decoration: fieldDeco(cs),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
-                    const SizedBox(height: 20),
-                    // DISCOUNTS section
-                    sectionLabel('DISCOUNTS'),
-                    const SizedBox(height: 14),
-                    rowFieldWithAmt('Discount (Pcs)', discPcsController, double.tryParse(discPcsController.text) ?? 0.0),
-                    const SizedBox(height: 12),
-                    rowFieldWithAmt('Discount (%)', discPerController, (_goodsValue * (double.tryParse(discPerController.text) ?? 0.0)) / 100),
-                    const SizedBox(height: 12),
-                    rowFieldWithAmt('Add. Discount (%)', addDiscPerController, (_goodsValue * (double.tryParse(addDiscPerController.text) ?? 0.0)) / 100),
-                    const SizedBox(height: 20),
-                    // Remark
-                    Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: remarkController,
-                      maxLength: 200,
-                      maxLines: 2,
-                      style: textTheme.bodyMedium,
-                      decoration: fieldDeco(cs).copyWith(
-                        hintText: 'Type here...',
-                        contentPadding: const EdgeInsets.all(12),
-                        counterText: '',
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Summary card – identical to order_entry_page
+            Expanded(child: SingleChildScrollView(
+              controller: scroll,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                sectionLabel('ORDER DETAILS'), const SizedBox(height: 14),
+                rowField('Quantity', qtyController, TextInputType.number), const SizedBox(height: 12),
+                rowField('Free Quantity', freeQtyController, TextInputType.number), const SizedBox(height: 12),
+                Row(children: [
+                  Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                  SizedBox(width: 56, child: TextField(controller: schemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary))),
+                  SizedBox(width: 56, child: TextField(controller: dSchemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
+                ]),
+                const SizedBox(height: 12),
+                rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
+                const SizedBox(height: 20),
+                sectionLabel('DISCOUNTS'), const SizedBox(height: 14),
+                rowFieldWithAmt('Discount (Pcs)', discPcsController, widget.item.disc2Amt ?? 0.0), const SizedBox(height: 12),
+                rowFieldWithAmt('Discount (%)',   discPerController,  widget.item.discAmt  ?? 0.0), const SizedBox(height: 12),
+                rowFieldWithAmt('Add. Discount (%)', addDiscPerController, widget.item.disc1Amt ?? 0.0),
+                const SizedBox(height: 20),
+                Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextField(controller: remarkController, maxLength: 200, maxLines: 2, style: textTheme.bodyMedium,
+                  decoration: fieldDeco(cs).copyWith(hintText: 'Type here...', contentPadding: const EdgeInsets.all(12), counterText: '')),
+                const SizedBox(height: 24),
+                // Summary
+                Container(
+                  decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
+                  child: Column(children: [
+                    Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Column(children: [
+                      summaryRow('Goods Value',    '₹${_goodsValue.toStringAsFixed(2)}'),    const SizedBox(height: 8),
+                      summaryRow('Scheme Value',   '₹${_schemeValue.toStringAsFixed(2)}'),   const SizedBox(height: 8),
+                      summaryRow('Discount Value', '-₹${_discountValue.toStringAsFixed(2)}', isNegative: true), const SizedBox(height: 8),
+                      summaryRow('GST (Excl.)',    '₹${_gst.toStringAsFixed(2)}'),
+                    ])),
                     Container(
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerLow,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
-                      ),
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                            child: Column(
-                              children: [
-                                summaryRow('Goods Value', '₹${_goodsValue.toStringAsFixed(2)}'),
-                                const SizedBox(height: 8),
-                                summaryRow('Scheme Value', '₹${_schemeValue.toStringAsFixed(2)}'),
-                                const SizedBox(height: 8),
-                                summaryRow('Discount Value', '-₹${_discountValue.toStringAsFixed(2)}', isNegative: true),
-                                const SizedBox(height: 8),
-                                summaryRow('GST 18% (Inclusive)', '₹${_gst.toStringAsFixed(2)}'),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: cs.primary.withValues(alpha: 0.08),
-                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-                              border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15))),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
-                                Text('₹${_netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)), border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15)))),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
+                        Text('₹${_netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
+                      ]),
                     ),
-                    const SizedBox(height: 24),
-                    // Action buttons – same layout as order_entry_page
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: BorderSide(color: cs.outlineVariant),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: FilledButton(
-                            onPressed: () async {
-                              final qty = int.tryParse(qtyController.text) ?? 1;
-                              if (qty <= 0) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Quantity must be greater than 0')),
-                                );
-                                return;
-                              }
-                              await _submit();
-                            },
-                            style: FilledButton.styleFrom(
-                              backgroundColor: cs.secondary,
-                              foregroundColor: cs.onSecondary,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: Text('UPDATE CART', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ]),
                 ),
-              ),
-            ),
-          ],
+                if (_loading) ...[const SizedBox(height: 12), const LinearProgressIndicator(minHeight: 3)],
+                const SizedBox(height: 24),
+                Row(children: [
+                  Expanded(child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: BorderSide(color: cs.outlineVariant), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                  )),
+                  const SizedBox(width: 12),
+                  Expanded(flex: 2, child: FilledButton(
+                    onPressed: () async {
+                      if ((int.tryParse(qtyController.text) ?? 0) <= 0) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quantity must be greater than 0')));
+                        return;
+                      }
+                      await _submit();
+                    },
+                    style: FilledButton.styleFrom(backgroundColor: cs.secondary, foregroundColor: cs.onSecondary, padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    child: Text('UPDATE CART', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                  )),
+                ]),
+              ]),
+            )),
+          ]),
         ),
       ),
-    ),  // Container
-    );  // Padding
+    );
   }
 
 }
+
+
+
+
