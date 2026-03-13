@@ -129,7 +129,7 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
         'lDelMode': 0,
         'lNote': _commentController.text.trim(),
         'lSlotTime': _deliveryDate.toIso8601String().substring(0, 10),
-        'lDelAdd': widget.account.address,
+        'lDelAdd': _fullDeliveryAddress(),
         'app_role': user?.userType ?? '',
       };
       final headers = {
@@ -170,6 +170,27 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  String _fullDeliveryAddress() {
+    final parts = <String>[];
+    final seen = <String>{};
+
+    void addPart(String? value) {
+      final trimmed = value?.trim() ?? '';
+      if (trimmed.isEmpty) return;
+      final key = trimmed.toLowerCase();
+      if (seen.add(key)) parts.add(trimmed);
+    }
+
+    addPart(widget.account.address);
+    addPart(widget.account.address2);
+    addPart(widget.account.address3);
+    if ((widget.account.pincode ?? '').trim().isNotEmpty) {
+      addPart('Pincode: ${widget.account.pincode!.trim()}');
+    }
+
+    return parts.join(', ');
   }
 
   // --- UI HELPER WIDGETS ---
@@ -221,6 +242,7 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final deliveryAddress = _fullDeliveryAddress();
 
     // Fallback success color (M3 standard doesn't officially enforce one)
     final successColor = const Color(0xFF2E7D32);
@@ -236,7 +258,7 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
         iconTheme: IconThemeData(color: cs.onSurface),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(color: cs.outlineVariant.withOpacity(0.5), height: 1),
+          child: Container(color: cs.outlineVariant.withValues(alpha: 0.5), height: 1),
         ),
       ),
       body: ListView(
@@ -271,12 +293,7 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            [
-                              widget.account.address,
-                              widget.account.address2,
-                              widget.account.address3,
-                              if ((widget.account.pincode ?? '').isNotEmpty) 'Pincode: ${widget.account.pincode}'
-                            ].where((e) => e != null && e.isNotEmpty).join(', '),
+                            deliveryAddress,
                             style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13, height: 1.4),
                           ),
                           if ((widget.account.phone ?? '').isNotEmpty) ...[
@@ -316,7 +333,6 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
                           data: Theme.of(context).copyWith(
                             colorScheme: Theme.of(context).colorScheme.copyWith(
                               surface: Colors.white,
-                              background: Colors.white, // deprecated, but kept for now
                             ),
                           ),
                           child: child!,
@@ -466,9 +482,9 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
                   style: TextStyle(fontSize: 14, color: cs.onSurface),
                   decoration: InputDecoration(
                     hintText: 'Any special instructions for delivery...',
-                    hintStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.7)),
+                    hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.7)),
                     filled: true,
-                    fillColor: cs.surfaceContainerHighest.withOpacity(0.5),
+                    fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: cs.outline),
@@ -499,7 +515,7 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
             color: cs.surfaceContainer,
             boxShadow: [
               BoxShadow(
-                color: cs.shadow.withOpacity(0.05),
+                color: cs.shadow.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, -5),
               ),

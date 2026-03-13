@@ -524,44 +524,6 @@ class OrderDetailPage extends StatelessWidget {
               ),
             ),
 
-            // --- SECTION 4: ACCOUNT & FIRM ---
-            _buildCard(
-              cs: cs,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionHeader('Parties Involved', Icons.storefront_outlined, cs),
-                  Row(
-                    children: [
-                      Icon(Icons.person_outline, size: 16, color: cs.primary),
-                      const SizedBox(width: 8),
-                      Text('ACCOUNT DETAILS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildDetailRow('Name', orderDetail['Ac_Name'], cs, isBold: true),
-                  _buildDetailRow('Account No.', orderDetail['Ac_AcNo'], cs),
-                  _buildDetailRow('GSTIN', orderDetail['AC_GST_NUMBER'], cs),
-                  _buildDetailRow('Shipping Address', shippingAddress, cs),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Divider(color: cs.outlineVariant.withOpacity(0.5)),
-                  ),
-                  Row(
-                    children: [
-                      Icon(Icons.domain_rounded, size: 16, color: cs.primary),
-                      const SizedBox(width: 8),
-                      Text('FIRM DETAILS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildDetailRow('Name', orderDetail['F_FirmName'], cs, isBold: true),
-                  _buildDetailRow('GSTIN', orderDetail['F_GST_Number'], cs),
-                  _buildDetailRow('Mobile', orderDetail['F_Firm_Mobile']?.toString(), cs),
-                  _buildDetailRow('Firm Address', firmAddress, cs),
-                ],
-              ),
-            ),
 
             const SizedBox(height: 24),
           ],

@@ -1698,7 +1698,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                         const SizedBox(height: 8),
                                         _oeySummaryRow(colorScheme, textTheme, 'Discount Value', '-₹${discountValue.toStringAsFixed(2)}', isNegative: true),
                                         const SizedBox(height: 8),
-                                        _oeySummaryRow(colorScheme, textTheme, 'GST 18% (Inclusive)', '₹${gst.toStringAsFixed(2)}'),
+                                        _oeySummaryRow(colorScheme, textTheme, 'GST % (Excl)', '₹${gst.toStringAsFixed(2)}'),
                                       ],
                                     ),
                                   ),
