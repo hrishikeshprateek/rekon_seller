@@ -278,10 +278,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
           if (matches) {
             int parseQty(dynamic v) => v is int ? v : (v is double ? v.toInt() : (v is num ? v.toInt() : int.tryParse(v?.toString().split('.').first ?? '0') ?? 0));
-            return {
+              'Qty':     int.tryParse(e['Qty']?.toString() ?? '0') ?? 0,
               'Qty':     parseQty(e['Qty']),
               'FQty':    parseQty(e['FQty']),
-              'SchQty':  (e['SchQty'] is num) ? (e['SchQty'] as num).toDouble() : double.tryParse(e['SchQty']?.toString() ?? '') ?? 0.0,
               'DSchQty': (e['SchDQty'] is num) ? (e['SchDQty'] as num).toDouble() : double.tryParse(e['SchDQty']?.toString() ?? '') ?? 0.0,
               'Rate':    (e['Rate']   is num) ? (e['Rate']   as num).toDouble() : double.tryParse(e['Rate']?.toString()   ?? '') ?? 0.0,
               'Mrp':     (e['Mrp']    is num) ? (e['Mrp']    as num).toDouble() : double.tryParse(e['Mrp']?.toString()    ?? '') ?? 0.0,
