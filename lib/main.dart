@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'dashboard_service.dart';
 import 'services/account_selection_service.dart';
-import 'pages/order_book_page.dart'; // Import the new OrderBookPage
+import 'services/salesman_flags_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -22,6 +22,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => AccountSelectionService()),
+        ChangeNotifierProvider(create: (_) => SalesmanFlagsService()),
         ProxyProvider<AuthService, DashboardService>(
           update: (_, authService, __) => DashboardService(authService),
         ),
@@ -146,6 +147,11 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
         final ok = await authService.promptForMpinAndRefresh(mobile: mobile, refreshOnSuccess: false);
         if (!ok) {
           await authService.logout();
+        } else {
+          // MPIN validated successfully, load cached salesman flags
+          final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
+          await flagsService.loadCachedFlags();
+          debugPrint('[AuthWrapper] Cached salesman flags loaded');
         }
       }
     } catch (e) {

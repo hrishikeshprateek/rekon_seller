@@ -7,6 +7,7 @@ import 'create_password_screen.dart';
 import 'create_mpin_screen.dart';
 import 'home_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'services/salesman_flags_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -145,7 +146,27 @@ class _LoginScreenState extends State<LoginScreen> {
           )));
           return;
         }
-        // Otherwise navigate to home
+
+        // Fetch salesman flags before navigating to home
+        debugPrint('[LoginScreen] Fetching salesman flags...');
+        if (!mounted) return;
+        final authService = Provider.of<AuthService>(context, listen: false);
+        final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
+
+        final flagsSuccess = await flagsService.fetchAndCacheSalesmanFlags(
+          authService: authService,
+          packageName: authService.packageNameHeader,
+        );
+
+        if (flagsSuccess) {
+          debugPrint('[LoginScreen] ✅ Salesman flags fetched successfully');
+        } else {
+          debugPrint('[LoginScreen] ⚠️ Failed to fetch salesman flags: ${flagsService.error}');
+          // Don't block navigation even if flags fetch fails
+        }
+
+        // Navigate to home
+        if (!mounted) return;
         debugPrint('[LoginScreen] Navigating to HomeScreen');
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeScreen()),

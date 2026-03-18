@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
@@ -278,17 +279,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
           if (matches) {
             int parseQty(dynamic v) => v is int ? v : (v is double ? v.toInt() : (v is num ? v.toInt() : int.tryParse(v?.toString().split('.').first ?? '0') ?? 0));
-              'Qty':     int.tryParse(e['Qty']?.toString() ?? '0') ?? 0,
+            return {
               'Qty':     parseQty(e['Qty']),
               'FQty':    parseQty(e['FQty']),
+              'SchQty':  (e['SchQty'] is num) ? (e['SchQty'] as num).toDouble() : double.tryParse(e['SchQty']?.toString() ?? '') ?? 0.0,
               'DSchQty': (e['SchDQty'] is num) ? (e['SchDQty'] as num).toDouble() : double.tryParse(e['SchDQty']?.toString() ?? '') ?? 0.0,
               'Rate':    (e['Rate']   is num) ? (e['Rate']   as num).toDouble() : double.tryParse(e['Rate']?.toString()   ?? '') ?? 0.0,
               'Mrp':     (e['Mrp']    is num) ? (e['Mrp']    as num).toDouble() : double.tryParse(e['Mrp']?.toString()    ?? '') ?? 0.0,
-              // discount_pcs        → DO_Disc2Per
               'DiscPcs':    (e['DO_Disc2Per'] is num) ? (e['DO_Disc2Per'] as num).toDouble() : double.tryParse(e['DO_Disc2Per']?.toString() ?? '') ?? 0.0,
-              // discount_percentage → DO_DiscPer
               'DiscPer':    (e['DO_DiscPer']  is num) ? (e['DO_DiscPer']  as num).toDouble() : double.tryParse(e['DO_DiscPer']?.toString()  ?? '') ?? 0.0,
-              // discount_percentage1→ DO_Disc1Per
               'AddDiscPer': (e['DO_Disc1Per'] is num) ? (e['DO_Disc1Per'] as num).toDouble() : double.tryParse(e['DO_Disc1Per']?.toString() ?? '') ?? 0.0,
               'Remark':  e['DO_Remark']?.toString() ?? '',
               'SchNarr': e['SchNarr']?.toString() ?? '',
