@@ -4,18 +4,27 @@ import 'home_screen.dart';
 import 'app_navigator.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/services.dart';
 import 'auth_service.dart';
 import 'dashboard_service.dart';
 import 'services/account_selection_service.dart';
 import 'services/salesman_flags_service.dart';
 
+// Platform channel for screenshot prevention
+const platform = MethodChannel('com.reckon.reckonbiz/screenshot');
+
 void main() {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -27,11 +36,26 @@ class MyApp extends StatelessWidget {
           update: (_, authService, __) => DashboardService(authService),
         ),
       ],
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        navigatorKey: appNavigatorKey,
-        title: 'Reckon BIZ360',
-        theme: ThemeData(
+      child: Consumer<SalesmanFlagsService>(
+        builder: (context, flagsService, _) {
+          final enableScreenshot = flagsService.flags?.enableScreenshot ?? true;
+
+          debugPrint('[MyApp] enable_screenshot flag: $enableScreenshot');
+
+          // Apply screenshot protection immediately
+          if (!enableScreenshot) {
+            debugPrint('[MyApp] Disabling screenshots...');
+            _disableScreenshot();
+          } else {
+            debugPrint('[MyApp] Enabling screenshots...');
+            _enableScreenshot();
+          }
+
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            navigatorKey: appNavigatorKey,
+            title: 'Reckon BIZ360',
+            theme: ThemeData(
           useMaterial3: true,
           // Using a sophisticated Teal/Blue seed
           colorScheme: ColorScheme.fromSeed(
@@ -62,8 +86,30 @@ class MyApp extends StatelessWidget {
           ),
         ),
         home: const AuthWrapper(),
+      );
+        },
       ),
     );
+  }
+
+  Future<void> _disableScreenshot() async {
+    try {
+      debugPrint('[MyApp] Invoking platform method: disableScreenshot');
+      await platform.invokeMethod('disableScreenshot');
+      debugPrint('[MyApp] ✅ Screenshot disabled successfully');
+    } catch (e) {
+      debugPrint('[MyApp] ❌ Error disabling screenshot: $e');
+    }
+  }
+
+  Future<void> _enableScreenshot() async {
+    try {
+      debugPrint('[MyApp] Invoking platform method: enableScreenshot');
+      await platform.invokeMethod('enableScreenshot');
+      debugPrint('[MyApp] ✅ Screenshot enabled successfully');
+    } catch (e) {
+      debugPrint('[MyApp] ❌ Error enabling screenshot: $e');
+    }
   }
 }
 

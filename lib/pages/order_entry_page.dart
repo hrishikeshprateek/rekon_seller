@@ -13,6 +13,7 @@ import 'select_account_page.dart';
 import 'item_filter_page.dart';
 import 'cart_page.dart';
 import 'product_detail_page.dart';
+import '../services/salesman_flags_service.dart';
 
 class OrderEntryPage extends StatefulWidget {
   const OrderEntryPage({super.key});
@@ -845,6 +846,14 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     final qty = _getCartQuantity(product);
     final bool hasStock = product.stockQuantity > 0;
 
+    final flags = context.watch<SalesmanFlagsService>().flags;
+    final showProductDesc = flags?.showProductDescSalesMan ?? false;
+    final showItemMfgComp = flags?.showItemMfgCompSalesMan ?? false;
+    final showItemComposition = flags?.showItemCompositionSalesMan ?? false;
+    final showItemCategory = flags?.showitemCategorySalesMan ?? false;
+    final showItemRefNumber = flags?.showItemRefNumberSalesMan ?? false;
+    final showItemRemark = flags?.showItemRemarkSalesMan ?? false;
+
     return GestureDetector(
       onTap: () {
         if (_selectedAccount != null) {
@@ -888,13 +897,30 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                 children: [
                   Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 6),
-                  if ((product.manufacturer ?? '').isNotEmpty)
+                  if (showItemMfgComp && (product.manufacturer ?? '').isNotEmpty)
                     Text(product.manufacturer ?? '', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
-                  if ((product.salt ?? '').isNotEmpty)
+                  if (showItemComposition && (product.salt ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4.0),
                       child: Text(product.salt!, style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
                     ),
+                  if (showProductDesc && (product.description ?? '').trim().isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text((product.description ?? ''), style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                    ),
+                  if (showItemCategory && product.category.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text(product.category, style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                    ),
+                  if (showItemRefNumber)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4.0),
+                      child: Text('Ref: ${product.code ?? product.id}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
+                    ),
+                  if (showItemRemark && false)
+                    const SizedBox.shrink(),
                 ],
               ),
             ),
@@ -1278,7 +1304,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           ),
         ),
       ),
-    );
+      );
   }
 
   Widget _buildCartDetailRow(String label, String value) {

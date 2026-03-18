@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
 import '../services/account_selection_service.dart';
+import '../services/salesman_flags_service.dart';
 import 'select_account_page.dart';
 import 'place_order_page.dart';
 
@@ -1083,6 +1084,32 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     final textTheme = Theme.of(context).textTheme;
     final int available = (widget.item.stock ?? 0).toInt();
 
+    // Get salesman flags from service
+    final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
+    final flags = flagsService.flags;
+
+    // Get visibility flags with defaults (show if flags not loaded)
+    final showFreeQty = flags?.showFreeQtySalesMan ?? true;
+    final showScheme = flags?.showSchemeSalesMan ?? true;
+    final showPrice = flags?.enablePriceSalesMan ?? true;
+    final showDiscPcs = flags?.showDiscPcsSalesMan ?? true;
+    final showDiscPer = flags?.showDiscPerSalesMan ?? true;
+    final showAddDiscPer = flags?.showdisc1perSalesman ?? true;
+    final showRemark = flags?.showItemRemarkSalesMan ?? true;
+    final showAddDetailsBottomSheet = flags?.showadddetailsbottomsheetSalesMan ?? true;
+
+    // Log flag visibility for debugging
+    debugPrint('[CartUpdateBottomSheet] === FIELD VISIBILITY FLAGS ===');
+    debugPrint('[CartUpdateBottomSheet] showFreeQty: $showFreeQty (ShowFreeQty_SalesMan)');
+    debugPrint('[CartUpdateBottomSheet] showScheme: $showScheme (ShowScheme_SalesMan)');
+    debugPrint('[CartUpdateBottomSheet] showPrice: $showPrice (EnablePrice_SalesMan)');
+    debugPrint('[CartUpdateBottomSheet] showDiscPcs: $showDiscPcs (ShowDiscPcs_SalesMan)');
+    debugPrint('[CartUpdateBottomSheet] showDiscPer: $showDiscPer (ShowDiscPer_SalesMan)');
+    debugPrint('[CartUpdateBottomSheet] showAddDiscPer: $showAddDiscPer (showdisc1per_Salesman)');
+    debugPrint('[CartUpdateBottomSheet] showRemark: $showRemark (ShowItemRemark_SalesMan)');
+    debugPrint('[CartUpdateBottomSheet] showAddDetailsBottomSheet: $showAddDetailsBottomSheet (Showadddetailsbottomsheet_SalesMan)');
+    debugPrint('[CartUpdateBottomSheet] ===========================');
+
     // Trigger preview on first open with existing values
     if (_firstBuild) {
       _firstBuild = false;
@@ -1212,46 +1239,65 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 sectionLabel('ORDER DETAILS'), const SizedBox(height: 14),
                 rowField('Quantity', qtyController, TextInputType.number), const SizedBox(height: 12),
-                rowField('Free Quantity', freeQtyController, TextInputType.number), const SizedBox(height: 12),
-                Row(children: [
-                  Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-                  SizedBox(width: 56, child: TextField(controller: schemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary))),
-                  SizedBox(width: 56, child: TextField(controller: dSchemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
-                ]),
-                const SizedBox(height: 12),
-                rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
-                const SizedBox(height: 20),
-                sectionLabel('DISCOUNTS'), const SizedBox(height: 14),
-                rowFieldWithAmt('Discount (Pcs)', discPcsController, widget.item.disc2Amt ?? 0.0), const SizedBox(height: 12),
-                rowFieldWithAmt('Discount (%)',   discPerController,  widget.item.discAmt  ?? 0.0), const SizedBox(height: 12),
-                rowFieldWithAmt('Add. Discount (%)', addDiscPerController, widget.item.disc1Amt ?? 0.0),
-                const SizedBox(height: 20),
-                Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                TextField(controller: remarkController, maxLength: 200, maxLines: 2, style: textTheme.bodyMedium,
-                  decoration: fieldDeco(cs).copyWith(hintText: 'Type here...', contentPadding: const EdgeInsets.all(12), counterText: '')),
-                const SizedBox(height: 24),
-                // Summary
-                Container(
-                  decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
-                  child: Column(children: [
-                    Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Column(children: [
-                      summaryRow('Goods Value',    '₹${_goodsValue.toStringAsFixed(2)}'),    const SizedBox(height: 8),
-                      summaryRow('Scheme Value',   '₹${_schemeValue.toStringAsFixed(2)}'),   const SizedBox(height: 8),
-                      summaryRow('Discount Value', '-₹${_discountValue.toStringAsFixed(2)}', isNegative: true), const SizedBox(height: 8),
-                      summaryRow('GST (Excl.)',    '₹${_gst.toStringAsFixed(2)}'),
-                    ])),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)), border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15)))),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
-                        Text('₹${_netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
-                      ]),
-                    ),
+                if (showFreeQty) ...[
+                  rowField('Free Quantity', freeQtyController, TextInputType.number), const SizedBox(height: 12),
+                ],
+                if (showScheme) ...[
+                  Row(children: [
+                    Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                    SizedBox(width: 56, child: TextField(controller: schemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
+                    Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary))),
+                    SizedBox(width: 56, child: TextField(controller: dSchemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
                   ]),
-                ),
+                  const SizedBox(height: 12),
+                ],
+                if (showPrice) ...[
+                  rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
+                  const SizedBox(height: 20),
+                ],
+                if (showDiscPcs || showDiscPer || showAddDiscPer) ...[
+                  sectionLabel('DISCOUNTS'), const SizedBox(height: 14),
+                  if (showDiscPcs) ...[
+                    rowFieldWithAmt('Discount (Pcs)', discPcsController, widget.item.disc2Amt ?? 0.0), const SizedBox(height: 12),
+                  ],
+                  if (showDiscPer) ...[
+                    rowFieldWithAmt('Discount (%)',   discPerController,  widget.item.discAmt  ?? 0.0), const SizedBox(height: 12),
+                  ],
+                  if (showAddDiscPer) ...[
+                    rowFieldWithAmt('Add. Discount (%)', addDiscPerController, widget.item.disc1Amt ?? 0.0),
+                  ],
+                  const SizedBox(height: 20),
+                ],
+                if (showRemark) ...[
+                  Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  TextField(controller: remarkController, maxLength: 200, maxLines: 2, style: textTheme.bodyMedium,
+                    decoration: fieldDeco(cs).copyWith(hintText: 'Type here...', contentPadding: const EdgeInsets.all(12), counterText: '')),
+                  const SizedBox(height: 24),
+                ],
+                // Summary - Conditional rendering based on flag
+                if (showAddDetailsBottomSheet) ...[
+                  Container(
+                    decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
+                    child: Column(children: [
+                      Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Column(children: [
+                        summaryRow('Goods Value',    '₹${_goodsValue.toStringAsFixed(2)}'),    const SizedBox(height: 8),
+                        summaryRow('Scheme Value',   '₹${_schemeValue.toStringAsFixed(2)}'),   const SizedBox(height: 8),
+                        summaryRow('Discount Value', '-₹${_discountValue.toStringAsFixed(2)}', isNegative: true), const SizedBox(height: 8),
+                        summaryRow('GST (Excl.)',    '₹${_gst.toStringAsFixed(2)}'),
+                      ])),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)), border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15)))),
+                        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                          Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
+                          Text('₹${_netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
+                        ]),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 24),
+                ],
                 if (_loading) ...[const SizedBox(height: 12), const LinearProgressIndicator(minHeight: 3)],
                 const SizedBox(height: 24),
                 Row(children: [

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
@@ -9,6 +8,7 @@ import '../models/product_model.dart';
 import 'cart_page.dart';
 import 'dart:async';
 import '../services/draft_order_service.dart';
+import '../services/salesman_flags_service.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final dynamic product;
@@ -1627,6 +1627,30 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
+    // Get salesman flags from service
+    final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
+    final flags = flagsService.flags;
+
+    // Get visibility flags with defaults (show if flags not loaded)
+    final showFreeQty = flags?.showFreeQtySalesMan ?? true;
+    final showScheme = flags?.showSchemeSalesMan ?? true;
+    final showPrice = flags?.enablePriceSalesMan ?? true;
+    final showDiscPcs = flags?.showDiscPcsSalesMan ?? true;
+    final showDiscPer = flags?.showDiscPerSalesMan ?? true;
+    final showAddDiscPer = flags?.showdisc1perSalesman ?? true;
+    final showRemark = flags?.showItemRemarkSalesMan ?? true;
+
+    // Log flag visibility for debugging
+    debugPrint('[AddToCartSheet] === FIELD VISIBILITY FLAGS ===');
+    debugPrint('[AddToCartSheet] showFreeQty: $showFreeQty (ShowFreeQty_SalesMan)');
+    debugPrint('[AddToCartSheet] showScheme: $showScheme (ShowScheme_SalesMan)');
+    debugPrint('[AddToCartSheet] showPrice: $showPrice (EnablePrice_SalesMan)');
+    debugPrint('[AddToCartSheet] showDiscPcs: $showDiscPcs (ShowDiscPcs_SalesMan)');
+    debugPrint('[AddToCartSheet] showDiscPer: $showDiscPer (ShowDiscPer_SalesMan)');
+    debugPrint('[AddToCartSheet] showAddDiscPer: $showAddDiscPer (showdisc1per_Salesman)');
+    debugPrint('[AddToCartSheet] showRemark: $showRemark (ShowItemRemark_SalesMan)');
+    debugPrint('[AddToCartSheet] ===========================');
+
     if (_firstBuild) {
       _firstBuild = false;
       if ((int.tryParse(qtyCtrl.text) ?? 0) > 0) {
@@ -1640,6 +1664,8 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     final price = p is Product ? p.price : (p is Map ? (double.tryParse(p['Rate']?.toString() ?? '') ?? 0.0) : 0.0);
     final mrp   = p is Product ? p.mrp   : (p is Map ? (double.tryParse(p['Mrp']?.toString()  ?? '') ?? 0.0) : 0.0);
     final stock = p is Product ? p.stockQuantity : (p is Map ? (int.tryParse(p['Stock']?.toString() ?? '') ?? 0) : 0);
+
+    // ...existing code...
 
     InputDecoration fieldDeco({String hint = '0'}) => InputDecoration(
       hintText: hint,
@@ -1715,23 +1741,43 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               sLabel('ORDER DETAILS'), const SizedBox(height: 14),
               rowField('Quantity', qtyCtrl, TextInputType.number), const SizedBox(height: 12),
-              rowField('Free Quantity', fQtyCtrl, TextInputType.number), const SizedBox(height: 12),
-              Row(children: [
-                Expanded(child: Text('Scheme', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-                SizedBox(width: 56, child: TextField(controller: schQtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(hint: '0'))),
-                Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('+', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary))),
-                SizedBox(width: 56, child: TextField(controller: dSchQtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(hint: '0'))),
-              ]),
-              const SizedBox(height: 12),
-              rowField('Price', priceCtrl, const TextInputType.numberWithOptions(decimal: true)),
-              const SizedBox(height: 20),
-              sLabel('DISCOUNTS'), const SizedBox(height: 14),
-              rowFieldAmt('Discount (Pcs)', discPcsCtrl, preview?.discAmt ?? 0.0), const SizedBox(height: 12),
-              rowFieldAmt('Discount (%)', discPerCtrl, preview?.disc1Amt ?? 0.0), const SizedBox(height: 12),
-              rowFieldAmt('Add. Discount (%)', addDiscPerCtrl, preview?.disc2Amt ?? 0.0),
-              const SizedBox(height: 20),
-              Text('Add Remark (Optional)', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
+              if (showFreeQty) ...[
+                rowField('Free Quantity', fQtyCtrl, TextInputType.number), const SizedBox(height: 12),
+              ],
+              if (showScheme) ...[
+                Row(children: [
+                  Expanded(child: Text('Scheme', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                  SizedBox(width: 56, child: TextField(controller: schQtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(hint: '0'))),
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('+', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary))),
+                  SizedBox(width: 56, child: TextField(controller: dSchQtyCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(hint: '0'))),
+                ]),
+                const SizedBox(height: 12),
+              ],
+              if (showPrice) ...[
+                rowField('Price', priceCtrl, const TextInputType.numberWithOptions(decimal: true)),
+                const SizedBox(height: 20),
+              ],
+              if (showDiscPcs || showDiscPer || showAddDiscPer) ...[
+                sLabel('DISCOUNTS'), const SizedBox(height: 14),
+                if (showDiscPcs) ...[
+                  rowFieldAmt('Discount (Pcs)', discPcsCtrl, preview?.discAmt ?? 0.0), const SizedBox(height: 12),
+                ],
+                if (showDiscPer) ...[
+                  rowFieldAmt('Discount (%)', discPerCtrl, preview?.disc1Amt ?? 0.0), const SizedBox(height: 12),
+                ],
+                if (showAddDiscPer) ...[
+                  rowFieldAmt('Add. Discount (%)', addDiscPerCtrl, preview?.disc2Amt ?? 0.0),
+                ],
+                const SizedBox(height: 20),
+              ],
+              if (showRemark) ...[
+                Text('Add Remark (Optional)', style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextField(controller: remarkCtrl, maxLength: 200, maxLines: 2, style: tt.bodyMedium,
+                  decoration: fieldDeco(hint: 'Type here...').copyWith(counterText: '', contentPadding: const EdgeInsets.all(12))),
+                const SizedBox(height: 24),
+              ],
+              // ...existing code...
               TextField(controller: remarkCtrl, maxLength: 200, maxLines: 2, style: tt.bodyMedium,
                 decoration: fieldDeco(hint: 'Type here...').copyWith(counterText: '', contentPadding: const EdgeInsets.all(12))),
               const SizedBox(height: 24),
