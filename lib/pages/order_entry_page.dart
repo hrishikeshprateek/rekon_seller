@@ -1644,8 +1644,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                             const SizedBox(height: 14),
                             rowField('Quantity', qtyController, TextInputType.number),
                             const SizedBox(height: 12),
-                            rowField('Free Quantity', freeQtyController, TextInputType.number),
-                            const SizedBox(height: 12),
+                            if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
+                              ...[
+                                rowField('Free Quantity', freeQtyController, TextInputType.number),
+                                const SizedBox(height: 12),
+                              ],
                             // Scheme (two boxes with +)
                             Row(
                               children: [
