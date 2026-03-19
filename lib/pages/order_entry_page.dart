@@ -914,11 +914,6 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                       padding: const EdgeInsets.only(top: 4.0),
                       child: Text(product.category, style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
                     ),
-                  if (showItemRefNumber)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text('Ref: ${product.code ?? product.id}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
-                    ),
                   if (showItemRemark && false)
                     const SizedBox.shrink(),
                 ],
@@ -1486,7 +1481,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               ],
             );
 
-            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType) => Row(
+            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true}) => Row(
               children: [
                 Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
                 SizedBox(
@@ -1495,6 +1490,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     controller: ctrl,
                     keyboardType: kbType,
                     textAlign: TextAlign.right,
+                    enabled: enabled,
                     onChanged: (_) => updateFields(),
                     style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                     decoration: _fieldDeco(colorScheme),
@@ -1650,68 +1646,94 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                 const SizedBox(height: 12),
                               ],
                             // Scheme (two boxes with +)
-                            Row(
-                              children: [
-                                Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-                                SizedBox(
-                                  width: 56,
-                                  child: TextField(
-                                    controller: schemeController,
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    onChanged: (_) => updateFields(),
-                                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                                    decoration: _fieldDeco(colorScheme),
-                                  ),
+                            if (context.watch<SalesmanFlagsService>().flags?.showSchemeSalesMan ?? false)
+                              ...[
+                                Row(
+                                  children: [
+                                    Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                                    SizedBox(
+                                      width: 56,
+                                      child: TextField(
+                                        controller: schemeController,
+                                        keyboardType: TextInputType.number,
+                                        textAlign: TextAlign.center,
+                                        onChanged: (_) => updateFields(),
+                                        style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                                        decoration: _fieldDeco(colorScheme),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                                      child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: colorScheme.primary)),
+                                    ),
+                                    SizedBox(
+                                      width: 56,
+                                      child: TextField(
+                                        controller: dSchemeController,
+                                        keyboardType: TextInputType.number,
+                                        textAlign: TextAlign.center,
+                                        onChanged: (_) => updateFields(),
+                                        style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                                        decoration: _fieldDeco(colorScheme),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                                  child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: colorScheme.primary)),
-                                ),
-                                SizedBox(
-                                  width: 56,
-                                  child: TextField(
-                                    controller: dSchemeController,
-                                    keyboardType: TextInputType.number,
-                                    textAlign: TextAlign.center,
-                                    onChanged: (_) => updateFields(),
-                                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-                                    decoration: _fieldDeco(colorScheme),
-                                  ),
-                                ),
+                                const SizedBox(height: 12),
                               ],
+                            // Price field - always visible, editable/disabled based on flag
+                            rowField(
+                              'Price',
+                              priceController,
+                              const TextInputType.numberWithOptions(decimal: true),
+                              enabled: context.watch<SalesmanFlagsService>().flags?.enablePriceSalesMan ?? false,
                             ),
-                            const SizedBox(height: 12),
-                            rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
                             const SizedBox(height: 20),
                             // DISCOUNTS
                             sectionLabel('DISCOUNTS'),
                             const SizedBox(height: 14),
-                            rowFieldWithAmt('Discount (Pcs)', discPcsController, preview?.discAmt ?? 0.0),
-                            const SizedBox(height: 12),
-                            rowFieldWithAmt('Discount (%)', discPerController, preview?.disc1Amt ?? 0.0),
-                            const SizedBox(height: 12),
-                            rowFieldWithAmt('Add. Discount (%)', addDiscPerController, preview?.disc2Amt ?? 0.0),
+                            if (context.watch<SalesmanFlagsService>().flags?.showDiscPcsSalesMan ?? false)
+                              ...[
+                                rowFieldWithAmt('Discount (Pcs)', discPcsController, preview?.discAmt ?? 0.0),
+                                const SizedBox(height: 12),
+                              ],
+                            if (context.watch<SalesmanFlagsService>().flags?.showDiscPerSalesMan ?? false)
+                              ...[
+                                rowFieldWithAmt('Discount (%)', discPerController, preview?.disc1Amt ?? 0.0),
+                                const SizedBox(height: 12),
+                              ],
+                            if (context.watch<SalesmanFlagsService>().flags?.showdisc1perSalesman ?? false)
+                              ...[
+                                rowFieldWithAmt('Add. Discount (%)', addDiscPerController, preview?.disc2Amt ?? 0.0),
+                                const SizedBox(height: 12),
+                              ],
                             const SizedBox(height: 20),
                             // Remark
-                            Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: remarkController,
-                              maxLength: 200,
-                              maxLines: 2,
-                              style: textTheme.bodyMedium,
-                              decoration: _fieldDeco(colorScheme).copyWith(
-                                hintText: 'Type here...',
-                                contentPadding: const EdgeInsets.all(12),
-                                counterText: '',
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            // Summary card
-                            Container(
-                              decoration: BoxDecoration(
-                                color: colorScheme.surfaceContainerLow,
+                            if (context.watch<SalesmanFlagsService>().flags?.showItemRemarkSalesMan ?? false)
+                              ...[
+                                Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: remarkController,
+                                  maxLength: 200,
+                                  maxLines: 2,
+                                  style: textTheme.bodyMedium,
+                                  decoration: _fieldDeco(colorScheme).copyWith(
+                                    hintText: 'Type here...',
+                                    contentPadding: const EdgeInsets.all(12),
+                                    counterText: '',
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                              ]
+                            else
+                              const SizedBox(height: 20),
+                            // Summary card - show/hide based on Showadddetailsbottomsheet_SalesMan flag
+                            if (context.watch<SalesmanFlagsService>().flags?.showadddetailsbottomsheetSalesMan ?? true)
+                              ...[
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.surfaceContainerLow,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
                               ),
@@ -1749,7 +1771,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 24),
+                                const SizedBox(height: 24),
+                              ],
+                            const SizedBox(height: 12),
                             if (isPreviewLoading) ...[
                               const SizedBox(height: 12),
                               const LinearProgressIndicator(minHeight: 3),

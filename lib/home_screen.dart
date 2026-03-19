@@ -12,6 +12,7 @@ import 'dart:async';
 
 import 'auth_service.dart';
 import 'dashboard_service.dart' as api;
+import 'services/salesman_flags_service.dart';
 import 'login_screen.dart';
 import 'receipt_entry.dart';
 import 'pages/order_entry_page.dart';
@@ -73,6 +74,22 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadConfig() async {
     try {
       final dashboardService = Provider.of<api.DashboardService>(context, listen: false);
+      final authService = Provider.of<AuthService>(context, listen: false);
+
+      // Reload salesman flags when dashboard opens
+      debugPrint('[HomeScreen] Reloading salesman flags...');
+      final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
+      final flagsSuccess = await flagsService.fetchAndCacheSalesmanFlags(
+        authService: authService,
+        packageName: authService.packageNameHeader,
+      );
+
+      if (flagsSuccess) {
+        debugPrint('[HomeScreen] ✅ Salesman flags reloaded successfully');
+      } else {
+        debugPrint('[HomeScreen] ⚠️ Failed to reload salesman flags: ${flagsService.error}');
+      }
+
       final response = await dashboardService.getDashboard();
 
       if (response.success && response.data != null) {

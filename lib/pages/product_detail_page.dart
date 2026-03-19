@@ -1679,10 +1679,10 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
     );
 
-    Widget rowField(String label, TextEditingController ctrl, TextInputType kb) => Row(
+    Widget rowField(String label, TextEditingController ctrl, TextInputType kb, {bool enabled = true}) => Row(
       children: [
         Expanded(child: Text(label, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-        SizedBox(width: 130, child: TextField(controller: ctrl, keyboardType: kb, textAlign: TextAlign.right, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco())),
+        SizedBox(width: 130, child: TextField(controller: ctrl, keyboardType: kb, textAlign: TextAlign.right, enabled: enabled, onChanged: (_) => _onChanged(), style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco())),
       ],
     );
 
@@ -1753,10 +1753,9 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
                 ]),
                 const SizedBox(height: 12),
               ],
-              if (showPrice) ...[
-                rowField('Price', priceCtrl, const TextInputType.numberWithOptions(decimal: true)),
-                const SizedBox(height: 20),
-              ],
+              // Price field - always visible, editable/disabled based on flag
+              rowField('Price', priceCtrl, const TextInputType.numberWithOptions(decimal: true), enabled: showPrice),
+              const SizedBox(height: 20),
               if (showDiscPcs || showDiscPer || showAddDiscPer) ...[
                 sLabel('DISCOUNTS'), const SizedBox(height: 14),
                 if (showDiscPcs) ...[
@@ -1776,31 +1775,34 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
                 TextField(controller: remarkCtrl, maxLength: 200, maxLines: 2, style: tt.bodyMedium,
                   decoration: fieldDeco(hint: 'Type here...').copyWith(counterText: '', contentPadding: const EdgeInsets.all(12))),
                 const SizedBox(height: 24),
-              ],
-              // ...existing code...
-              TextField(controller: remarkCtrl, maxLength: 200, maxLines: 2, style: tt.bodyMedium,
-                decoration: fieldDeco(hint: 'Type here...').copyWith(counterText: '', contentPadding: const EdgeInsets.all(12))),
-              const SizedBox(height: 24),
-              // Summary
-              Container(
-                decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
-                child: Column(children: [
-                  Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Column(children: [
-                    _sr(cs, tt, 'Goods Value',    '₹${goodsValue.toStringAsFixed(2)}'),   const SizedBox(height: 8),
-                    _sr(cs, tt, 'Scheme Value',   '₹${schemeValue.toStringAsFixed(2)}'),  const SizedBox(height: 8),
-                    _sr(cs, tt, 'Discount Value', '-₹${discountValue.toStringAsFixed(2)}', neg: true), const SizedBox(height: 8),
-                    _sr(cs, tt, 'GST (Excl.)',    '₹${gst.toStringAsFixed(2)}'),
-                  ])),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)), border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15)))),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                      Text('Net Value', style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
-                      Text('₹${netValue.toStringAsFixed(2)}', style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
-                    ]),
-                  ),
-                ]),
-              ),
+              ]
+              else
+                const SizedBox(height: 20),
+              // Summary - show/hide based on flag
+              if (flags?.showadddetailsbottomsheetSalesMan ?? true) ...[
+                Container(
+                  decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
+                  child: Column(children: [
+                    Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Column(children: [
+                      _sr(cs, tt, 'Goods Value',    '₹${goodsValue.toStringAsFixed(2)}'),   const SizedBox(height: 8),
+                      _sr(cs, tt, 'Scheme Value',   '₹${schemeValue.toStringAsFixed(2)}'),  const SizedBox(height: 8),
+                      _sr(cs, tt, 'Discount Value', '-₹${discountValue.toStringAsFixed(2)}', neg: true), const SizedBox(height: 8),
+                      _sr(cs, tt, 'GST (Excl.)',    '₹${gst.toStringAsFixed(2)}'),
+                    ])),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)), border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15)))),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                        Text('Net Value', style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
+                        Text('₹${netValue.toStringAsFixed(2)}', style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
+                      ]),
+                    ),
+                  ]),
+                ),
+                const SizedBox(height: 24),
+              ]
+              else
+                const SizedBox(height: 12),
               if (_loading) ...[const SizedBox(height: 12), const LinearProgressIndicator(minHeight: 3)],
               const SizedBox(height: 24),
               Row(children: [

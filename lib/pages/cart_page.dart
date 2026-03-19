@@ -1137,7 +1137,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       ],
     );
 
-    Widget rowField(String label, TextEditingController ctrl, TextInputType kbType) => Row(
+    Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true}) => Row(
       children: [
         Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
         SizedBox(
@@ -1146,6 +1146,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
             controller: ctrl,
             keyboardType: kbType,
             textAlign: TextAlign.right,
+            enabled: enabled,
             onChanged: (_) => _onChanged(),
             style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             decoration: fieldDeco(cs),
@@ -1251,10 +1252,9 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
                   ]),
                   const SizedBox(height: 12),
                 ],
-                if (showPrice) ...[
-                  rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true)),
-                  const SizedBox(height: 20),
-                ],
+                // Price field - always visible, editable/disabled based on flag
+                rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true), enabled: showPrice),
+                const SizedBox(height: 20),
                 if (showDiscPcs || showDiscPer || showAddDiscPer) ...[
                   sectionLabel('DISCOUNTS'), const SizedBox(height: 14),
                   if (showDiscPcs) ...[
