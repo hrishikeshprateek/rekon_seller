@@ -29,11 +29,16 @@ class _QuickQuantityAdjusterState extends State<QuickQuantityAdjuster> {
   bool _isLoading = false;
 
   Future<void> _addToCart(int newQuantity) async {
-    if (newQuantity <= 0) {
-      // Don't allow zero quantity
+    if (newQuantity < 0) {
+      // Don't allow negative quantity
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Quantity must be at least 1')),
+        const SnackBar(content: Text('Quantity cannot be negative')),
       );
+      return;
+    }
+
+    // If trying to set to 0, don't send to API
+    if (newQuantity == 0) {
       return;
     }
 
@@ -131,10 +136,6 @@ class _QuickQuantityAdjusterState extends State<QuickQuantityAdjuster> {
     final cs = colorScheme;
     final hasStock = widget.product.stockQuantity > 0;
 
-    // Only show adjuster if item is already in cart
-    if (widget.currentQuantity == 0) {
-      return const SizedBox.shrink();
-    }
 
     // Check flag: only show if ShowIncreaseDecreaseButton_SalesMan is true
     final showIncreaseDecreaseButton = context.watch<SalesmanFlagsService>().flags?.showIncreaseDecreaseButtonSalesMan ?? true;
@@ -159,7 +160,7 @@ class _QuickQuantityAdjusterState extends State<QuickQuantityAdjuster> {
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               icon: const Icon(Icons.remove, size: 14),
-              onPressed: _isLoading ? null : () {
+              onPressed: _isLoading || widget.currentQuantity <= 0 ? null : () {
                 final newQty = widget.currentQuantity - 1;
                 _addToCart(newQty);
               },

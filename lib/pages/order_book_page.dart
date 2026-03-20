@@ -411,6 +411,8 @@ class _OrderBookPageState extends State<OrderBookPage> {
                               ),
                               _buildInfoRow(Icons.shopping_bag_outlined, 'Total Items', '${order['NoOfItem'] ?? '0'}', cs),
                               _buildInfoRow(Icons.payment_outlined, 'Payment', order['PaymentMode'] ?? '-', cs),
+                              _buildInfoRow(Icons.account_circle_outlined, 'Account Code', order['Ac_ID_COL']?.toString() ?? '-', cs),
+                              _buildInfoRow(Icons.account_box_outlined, 'Account Name', order['Ac_Name'] ?? '-', cs),
                             ],
                           ),
                         ),

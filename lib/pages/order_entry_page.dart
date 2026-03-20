@@ -925,11 +925,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // If ShowIncreaseDecreaseButton_SalesMan is TRUE: Show only -/+ button, hide Add/Update
-                if (context.watch<SalesmanFlagsService>().flags?.showIncreaseDecreaseButtonSalesMan ?? false)
+                // If Showadddetailsbottomsheet_SalesMan is FALSE: Show only -/+ button, hide Add/Update
+                if (!(context.watch<SalesmanFlagsService>().flags?.showadddetailsbottomsheetSalesMan ?? false))
                   ...[
                     const SizedBox(height: 6),
-                    // Quick quantity adjuster (- / + buttons) - shown when flag is TRUE
+                    // Quick quantity adjuster (- / + buttons) - shown when flag is FALSE
                     QuickQuantityAdjuster(
                       product: product,
                       currentQuantity: qty,
@@ -942,7 +942,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     ),
                   ]
                 else
-                  // If ShowIncreaseDecreaseButton_SalesMan is FALSE: Show Add/Update button, hide -/+
+                  // If Showadddetailsbottomsheet_SalesMan is TRUE: Show Add/Update button, hide -/+
                   ...[
                     SizedBox(
                       height: 32,

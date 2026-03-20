@@ -98,7 +98,7 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
         'lSize': _pageSize,
         'lSearchFieldValue': _searchQuery,
         'lExecuteTotalRows': 1,
-        'FromDo': widget.fromDo,
+        'FromDo': 0,
       };
 
       final headers = {

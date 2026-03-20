@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
-import '../services/salesman_flags_service.dart';
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'order_confirmation_page.dart';
@@ -109,32 +108,6 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
 
   Future<void> _submitOrder() async {
     if (_isSubmitting) return;
-
-    // Get salesman flags to check minimum order value
-    final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
-    final flags = flagsService.flags;
-    final minOrderValue = flags?.minOrderValueSalesMan ?? 0.0;
-
-    debugPrint('[PlaceOrderPage] Minimum Order Value: ₹$minOrderValue');
-    debugPrint('[PlaceOrderPage] Total Amount: ₹${widget.totalAmount}');
-
-    // Check if total amount meets minimum order value requirement
-    if (widget.totalAmount < minOrderValue) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Order value must be at least ₹${minOrderValue.toStringAsFixed(2)}. Current: ₹${widget.totalAmount.toStringAsFixed(2)}',
-          ),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-      debugPrint('[PlaceOrderPage] ❌ Order rejected: Total (₹${widget.totalAmount}) < Minimum (₹$minOrderValue)');
-      return;
-    }
-
-    debugPrint('[PlaceOrderPage] ✅ Order validation passed: Total (₹${widget.totalAmount}) >= Minimum (₹$minOrderValue)');
-
     setState(() => _isSubmitting = true);
     final scaffold = ScaffoldMessenger.of(context);
     try {
@@ -218,69 +191,6 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
     }
 
     return parts.join(', ');
-  }
-
-  // Helper widget to display minimum order value indicator
-  Widget _buildMinimumOrderValueIndicator(ColorScheme cs) {
-    final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
-    final flags = flagsService.flags;
-    final minOrderValue = flags?.minOrderValueSalesMan ?? 0.0;
-
-    // Check if order meets minimum requirement
-    final isBelowMinimum = widget.totalAmount < minOrderValue;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isBelowMinimum
-              ? Colors.red.shade50
-              : Colors.green.shade50,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isBelowMinimum
-                ? Colors.red.shade300
-                : Colors.green.shade300,
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isBelowMinimum
-                        ? 'Minimum order value: ₹${minOrderValue.toStringAsFixed(2)}'
-                        : 'Minimum order value met',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: isBelowMinimum ? Colors.red.shade700 : Colors.green.shade700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (isBelowMinimum) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Add ₹${(minOrderValue - widget.totalAmount).toStringAsFixed(2)} more to place order',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.red.shade600,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 
   // --- UI HELPER WIDGETS ---
@@ -503,10 +413,6 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
                 // Base Total
                 _buildReceiptRow('Items Total', '₹${widget.totalAmount.toStringAsFixed(2)}', cs, isBold: true),
 
-                // Minimum Order Value Check
-                _buildMinimumOrderValueIndicator(cs),
-
-                const SizedBox(height: 12),
                 // Draft Order API Values
                 if (_isLoadingDraftOrderValue)
                   Padding(
