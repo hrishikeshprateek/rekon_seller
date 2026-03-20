@@ -9,6 +9,7 @@ import '../models/product_model.dart';
 import '../models/cart_item_model.dart';
 import '../models/item_model.dart';
 import '../services/draft_order_service.dart';
+import '../widgets/quick_quantity_adjuster.dart';
 import 'select_account_page.dart';
 import 'item_filter_page.dart';
 import 'cart_page.dart';
@@ -924,29 +925,49 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  height: 32,
-                  child: qty == 0
-                      ? OutlinedButton(
-                          onPressed: hasStock ? () => _showBulkAddBottomSheet(product, null) : null,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            side: BorderSide(color: hasStock ? colorScheme.primary : colorScheme.outlineVariant),
-                          ),
-                          child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
-                        )
-                      : FilledButton(
-                          onPressed: () => _showBulkAddBottomSheet(product, _cartMeta[product.id]),
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            backgroundColor: colorScheme.primary,
-                          ),
-                          child: Text("UPDATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colorScheme.onPrimary)),
-                        ),
-                ),
-                const SizedBox(height: 6),
+                // If ShowIncreaseDecreaseButton_SalesMan is TRUE: Show only -/+ button, hide Add/Update
+                if (context.watch<SalesmanFlagsService>().flags?.showIncreaseDecreaseButtonSalesMan ?? false)
+                  ...[
+                    const SizedBox(height: 6),
+                    // Quick quantity adjuster (- / + buttons) - shown when flag is TRUE
+                    QuickQuantityAdjuster(
+                      product: product,
+                      currentQuantity: qty,
+                      selectedAccount: _selectedAccount!,
+                      onQuantityChanged: () {
+                        _loadDraftOrder().then((_) {
+                          if (mounted) setState(() {});
+                        });
+                      },
+                    ),
+                  ]
+                else
+                  // If ShowIncreaseDecreaseButton_SalesMan is FALSE: Show Add/Update button, hide -/+
+                  ...[
+                    SizedBox(
+                      height: 32,
+                      child: qty == 0
+                          ? OutlinedButton(
+                              onPressed: hasStock ? () => _showBulkAddBottomSheet(product, null) : null,
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                side: BorderSide(color: hasStock ? colorScheme.primary : colorScheme.outlineVariant),
+                              ),
+                              child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
+                            )
+                          : FilledButton(
+                              onPressed: () => _showBulkAddBottomSheet(product, _cartMeta[product.id]),
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                backgroundColor: colorScheme.primary,
+                              ),
+                              child: Text("UPDATE", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colorScheme.onPrimary)),
+                            ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
                 Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
               ],
             ),
