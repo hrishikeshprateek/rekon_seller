@@ -9,6 +9,7 @@ import 'cart_page.dart';
 import 'dart:async';
 import '../services/draft_order_service.dart';
 import '../services/salesman_flags_service.dart';
+import '../widgets/quick_quantity_adjuster.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final dynamic product;
@@ -113,10 +114,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       );
 
       final parsed = _parseJson(response.data);
+      debugPrint('[fetchCartAndSetQty] Raw response: $parsed');
       int foundQty = 0;
 
       if (parsed['success'] == true && parsed['data'] != null) {
         final list = (parsed['data']['DraftOrder'] as List<dynamic>?) ?? [];
+        debugPrint('[fetchCartAndSetQty] Cart has ${list.length} items');
 
         // Extract product identifiers - handle both Product objects and Maps
         String productCode = '';
@@ -143,6 +146,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           } catch (_) {}
         }
 
+        debugPrint('[fetchCartAndSetQty] Looking for - Code: $productCode, IdCol: $productIdCol');
+
         for (final e in list) {
           final idCol = int.tryParse(
                   e['IdCol']?.toString() ?? e['Idcol']?.toString() ?? '') ??
@@ -152,24 +157,36 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               e['ItemCode']?.toString() ??
               '';
 
+          debugPrint('[fetchCartAndSetQty] Cart item - Code: $code, IdCol: $idCol, Qty: ${e['Qty']}');
+
           bool matches = false;
           if (productIdCol > 0 && idCol > 0) {
             matches = productIdCol == idCol;
+            if (matches) debugPrint('[fetchCartAndSetQty] ✓ Matched by IdCol');
           }
           if (!matches && productCode.isNotEmpty && code.isNotEmpty) {
             matches = productCode == code;
+            if (matches) debugPrint('[fetchCartAndSetQty] ✓ Matched by Code');
           }
 
           if (matches) {
-            foundQty = int.tryParse(e['Qty']?.toString() ?? '0') ?? 0;
+            // Parse as double first, then convert to int (handles both "1" and "1.0")
+            final qtyValue = double.tryParse(e['Qty']?.toString() ?? '0') ?? 0.0;
+            foundQty = qtyValue.toInt();
+            debugPrint('[fetchCartAndSetQty] Found quantity: $foundQty (raw: ${e['Qty']})');
             break;
           }
+        }
+
+        if (foundQty == 0) {
+          debugPrint('[fetchCartAndSetQty] ✗ Product NOT found in cart');
         }
       }
 
       if (mounted) {
         setState(() {
           cartQty = foundQty;
+          debugPrint('[fetchCartAndSetQty] Updated cartQty to: $cartQty');
         });
       }
     } catch (e) {
@@ -896,6 +913,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Widget _buildBottomAction(ColorScheme cs, double price) {
+    debugPrint('[_buildBottomAction] Building with cartQty = $cartQty');
     return Container(
       padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 12),
       decoration: BoxDecoration(
@@ -925,23 +943,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
           ),
           const SizedBox(width: 12),
-          SizedBox(
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: _showAddToCartBottomSheet,
-              style: FilledButton.styleFrom(
-                backgroundColor: cartQty > 0 ? cs.secondary : cs.primary,
-                foregroundColor: cartQty > 0 ? cs.onSecondary : cs.onPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          // If Showadddetailsbottomsheet_SalesMan is FALSE: Show only -/+ button, hide Add/Update
+          if (!(context.watch<SalesmanFlagsService>().flags?.showadddetailsbottomsheetSalesMan ?? false))
+            SizedBox(
+              height: 48,
+              child: QuickQuantityAdjuster(
+                product: product,
+                currentQuantity: cartQty,
+                selectedAccount: widget.selectedAccount,
+                onQuantityChanged: () async {
+                  debugPrint('[_buildBottomAction] QuickQuantityAdjuster onQuantityChanged called');
+                  await fetchCartAndSetQty();
+                  if (mounted) setState(() {
+                    debugPrint('[_buildBottomAction] setState called after QuickQuantityAdjuster');
+                  });
+                },
               ),
-              icon: Icon(cartQty > 0 ? Icons.edit_outlined : Icons.add_shopping_cart_outlined, size: 18),
-              label: Text(
-                cartQty > 0 ? 'UPDATE' : 'ADD TO CART',
-                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.5),
+            )
+          else
+            // If Showadddetailsbottomsheet_SalesMan is TRUE: Show Add/Update button, hide -/+
+            SizedBox(
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _showAddToCartBottomSheet,
+                style: FilledButton.styleFrom(
+                  backgroundColor: cartQty > 0 ? cs.secondary : cs.primary,
+                  foregroundColor: cartQty > 0 ? cs.onSecondary : cs.onPrimary,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                icon: Icon(cartQty > 0 ? Icons.edit_outlined : Icons.add_shopping_cart_outlined, size: 18),
+                label: Text(
+                  cartQty > 0 ? 'UPDATE' : 'ADD TO CART',
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.5),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -962,9 +999,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           cartDetails: cartDetails,
           cartQty: cartQty,
           onCartUpdated: () async {
+            debugPrint('[ProductDetailPage] onCartUpdated called');
             Navigator.pop(ctx);
             await fetchCartAndSetQty();
-            if (mounted) setState(() {});
+            debugPrint('[ProductDetailPage] After fetchCartAndSetQty, cartQty = $cartQty');
+            if (mounted) {
+              setState(() {
+                // Explicitly update state to reflect cartQty change
+                debugPrint('[ProductDetailPage] setState called, cartQty = $cartQty');
+              });
+            }
           },
         ),
       ),
@@ -1263,189 +1307,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
-  Widget _buildActionButtons(ColorScheme cs, TextTheme tt,
-      TextEditingController qtyCtrl, TextEditingController fQtyCtrl,
-      TextEditingController schQtyCtrl, TextEditingController dSchQtyCtrl,
-      TextEditingController priceCtrl, TextEditingController discPcsCtrl,
-      TextEditingController discPerCtrl, TextEditingController addDiscPerCtrl,
-      TextEditingController schNarrCtrl, TextEditingController remarkCtrl) {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              side: BorderSide(color: cs.outlineVariant),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text('CLOSE',
-                style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          flex: 2,
-          child: FilledButton(
-            onPressed: () => _addToCart(qtyCtrl, fQtyCtrl, schQtyCtrl, dSchQtyCtrl,
-                priceCtrl, discPcsCtrl, discPerCtrl, addDiscPerCtrl, schNarrCtrl, remarkCtrl),
-            style: FilledButton.styleFrom(
-              backgroundColor: cartQty > 0 ? cs.secondary : cs.primary,
-              foregroundColor: cartQty > 0 ? cs.onSecondary : cs.onPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: Text(
-              cartQty > 0 ? 'UPDATE CART' : 'ADD TO CART',
-              style: tt.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8,
-                  color: cartQty > 0 ? cs.onSecondary : cs.onPrimary),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
-  Future<void> _addToCart(
-    TextEditingController qtyCtrl,
-    TextEditingController fQtyCtrl,
-    TextEditingController schQtyCtrl,
-    TextEditingController dSchQtyCtrl,
-    TextEditingController priceCtrl,
-    TextEditingController discPcsCtrl,
-    TextEditingController discPerCtrl,
-    TextEditingController addDiscPerCtrl,
-    TextEditingController schNarrCtrl,
-    TextEditingController remarkCtrl,
-  ) async {
-    try {
-      final auth = Provider.of<AuthService>(context, listen: false);
-      final dio = auth.getDioClient();
-      final user = auth.currentUser;
-
-      // Get firmCode from user stores (same as order_entry_page)
-      String firmCode = '';
-      try {
-        final stores = user?.stores;
-        if (stores != null && stores.isNotEmpty) {
-          final primary = stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
-          firmCode = primary.firmCode;
-        }
-      } catch (_) {}
-
-      final acCode = widget.selectedAccount.code ??
-          (widget.selectedAccount.acIdCol != null
-              ? widget.selectedAccount.acIdCol.toString()
-              : widget.selectedAccount.id);
-
-      String itemCode = '';
-      int idCol = 0;
-      if (product is Product) {
-        itemCode = product.code ?? product.id;
-        idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
-      } else if (product is Map) {
-        itemCode = product['Icode']?.toString() ??
-            product['icode']?.toString() ??
-            product['Code']?.toString() ??
-            product['code']?.toString() ??
-            '';
-        idCol = int.tryParse(
-                product['i_id_col']?.toString() ??
-                    product['iidcol']?.toString() ??
-                    product['IdCol']?.toString() ??
-                    '') ??
-            0;
-      } else {
-        try {
-          itemCode = product.code ?? '';
-          idCol = product.iidcol ?? 0;
-        } catch (_) {}
-      }
-
-      final qty = int.tryParse(qtyCtrl.text) ?? 1;
-      final usedPrice = double.tryParse(priceCtrl.text) ?? 0.0;
-
-      final request = _buildDraftOrderRequest(
-        itemCode: itemCode,
-        idCol: idCol,
-        qty: qtyCtrl.text.trim(),
-        rate: usedPrice.toStringAsFixed(2),
-        freeQty: fQtyCtrl.text.trim(),
-        schemeQty: schQtyCtrl.text.trim(),
-        dSchemeQty: dSchQtyCtrl.text.trim(),
-        itemAmt: (usedPrice * qty).toStringAsFixed(2),
-        discountPer: discPerCtrl.text.trim(),
-        addDiscountPer: addDiscPerCtrl.text.trim(),
-        discountPcs: discPcsCtrl.text.trim(),
-        remark: remarkCtrl.text.trim(),
-        insertRecord: 1,
-      );
-
-      final result = await _draftOrderServiceFor(acCode).insert(request);
-      if (!result.success) {
-        throw Exception(result.message.isNotEmpty ? result.message : 'Failed to add item');
-      }
-
-      if (mounted) {
-        Navigator.pop(context);
-        await fetchCartAndSetQty();
-        if (mounted) {
-          setState(() {});
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Item added to cart')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to add: $e')),
-        );
-      }
-      debugPrint('Error adding to cart: $e');
-    }
-  }
-
-  DraftOrderService _draftOrderServiceFor(String acCode) {
-    final auth = Provider.of<AuthService>(context, listen: false);
-    return DraftOrderService(
-      dio: auth.getDioClient(),
-      context: DraftOrderContext.fromAuth(auth: auth, acCode: acCode),
-    );
-  }
-
-  DraftOrderRequest _buildDraftOrderRequest({
-    required String itemCode,
-    required int idCol,
-    required String qty,
-    required String rate,
-    required String freeQty,
-    required String schemeQty,
-    required String dSchemeQty,
-    required String itemAmt,
-    required String discountPer,
-    required String addDiscountPer,
-    required String discountPcs,
-    required String remark,
-    required int insertRecord,
-  }) {
-    return DraftOrderRequest(
-      itemCode: itemCode,
-      idCol: idCol,
-      itemQty: qty,
-      itemRate: rate,
-      itemFQty: freeQty.isEmpty ? '0' : freeQty,
-      itemSchQty: schemeQty.isEmpty ? '0' : schemeQty,
-      itemDSchQty: dSchemeQty.isEmpty ? '0' : dSchemeQty,
-      itemAmt: itemAmt,
-      discountPercentage: discountPer,
-      discountPercentage1: addDiscountPer,
-      discountPcs: discountPcs,
-      remark: remark,
-      insertRecord: insertRecord,
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1837,5 +1699,140 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
       Text(value, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: neg ? Colors.red.shade600 : cs.onSurface)),
     ],
   );
+
+  Future<void> _addToCart(
+    TextEditingController qtyCtrl,
+    TextEditingController fQtyCtrl,
+    TextEditingController schQtyCtrl,
+    TextEditingController dSchQtyCtrl,
+    TextEditingController priceCtrl,
+    TextEditingController discPcsCtrl,
+    TextEditingController discPerCtrl,
+    TextEditingController addDiscPerCtrl,
+    TextEditingController schNarrCtrl,
+    TextEditingController remarkCtrl,
+  ) async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final user = auth.currentUser;
+
+      String firmCode = '';
+      try {
+        final stores = user?.stores;
+        if (stores != null && stores.isNotEmpty) {
+          final primary = stores.firstWhere((s) => s.primary == true, orElse: () => stores.first);
+          firmCode = primary.firmCode;
+        }
+      } catch (_) {}
+
+      final acCode = widget.selectedAccount.code ??
+          (widget.selectedAccount.acIdCol != null
+              ? widget.selectedAccount.acIdCol.toString()
+              : widget.selectedAccount.id);
+
+      String itemCode = '';
+      int idCol = 0;
+      if (widget.product is Product) {
+        itemCode = widget.product.code ?? widget.product.id;
+        idCol = widget.product.iidcol ?? int.tryParse(widget.product.id) ?? 0;
+      } else if (widget.product is Map) {
+        itemCode = widget.product['Icode']?.toString() ??
+            widget.product['icode']?.toString() ??
+            widget.product['Code']?.toString() ??
+            widget.product['code']?.toString() ??
+            '';
+        idCol = int.tryParse(
+                widget.product['i_id_col']?.toString() ??
+                    widget.product['iidcol']?.toString() ??
+                    widget.product['IdCol']?.toString() ??
+                    '') ??
+            0;
+      } else {
+        try {
+          itemCode = widget.product.code ?? '';
+          idCol = widget.product.iidcol ?? 0;
+        } catch (_) {}
+      }
+
+      final qty = int.tryParse(qtyCtrl.text) ?? 1;
+      final usedPrice = double.tryParse(priceCtrl.text) ?? 0.0;
+
+      final request = _buildDraftOrderRequest(
+        itemCode: itemCode,
+        idCol: idCol,
+        qty: qtyCtrl.text.trim(),
+        rate: usedPrice.toStringAsFixed(2),
+        freeQty: fQtyCtrl.text.trim(),
+        schemeQty: schQtyCtrl.text.trim(),
+        dSchemeQty: dSchQtyCtrl.text.trim(),
+        itemAmt: (usedPrice * qty).toStringAsFixed(2),
+        discountPer: discPerCtrl.text.trim(),
+        addDiscountPer: addDiscPerCtrl.text.trim(),
+        discountPcs: discPcsCtrl.text.trim(),
+        remark: remarkCtrl.text.trim(),
+        insertRecord: 1,
+      );
+
+      final result = await _draftOrderServiceFor(acCode).insert(request);
+      if (!result.success) {
+        throw Exception(result.message.isNotEmpty ? result.message : 'Failed to add item');
+      }
+
+      debugPrint('[_AddToCartSheet._addToCart] Success! Calling onCartUpdated');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Item added to cart'), duration: Duration(milliseconds: 800)),
+        );
+        widget.onCartUpdated();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add: $e')),
+        );
+      }
+      debugPrint('Error adding to cart: $e');
+    }
+  }
+
+  DraftOrderService _draftOrderServiceFor(String acCode) {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    return DraftOrderService(
+      dio: auth.getDioClient(),
+      context: DraftOrderContext.fromAuth(auth: auth, acCode: acCode),
+    );
+  }
+
+  DraftOrderRequest _buildDraftOrderRequest({
+    required String itemCode,
+    required int idCol,
+    required String qty,
+    required String rate,
+    required String freeQty,
+    required String schemeQty,
+    required String dSchemeQty,
+    required String itemAmt,
+    required String discountPer,
+    required String addDiscountPer,
+    required String discountPcs,
+    required String remark,
+    required int insertRecord,
+  }) {
+    return DraftOrderRequest(
+      itemCode: itemCode,
+      idCol: idCol,
+      itemQty: qty,
+      itemRate: rate,
+      itemFQty: freeQty.isEmpty ? '0' : freeQty,
+      itemSchQty: schemeQty.isEmpty ? '0' : schemeQty,
+      itemDSchQty: dSchemeQty.isEmpty ? '0' : dSchemeQty,
+      itemAmt: itemAmt,
+      discountPercentage: discountPer,
+      discountPercentage1: addDiscountPer,
+      discountPcs: discountPcs,
+      remark: remark,
+      insertRecord: insertRecord,
+    );
+  }
 }
 

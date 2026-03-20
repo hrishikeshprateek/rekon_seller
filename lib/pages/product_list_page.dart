@@ -8,6 +8,8 @@ import '../models/cart_item_model.dart';
 import 'cart_page.dart';
 import '../auth_service.dart';
 import 'product_detail_page.dart';
+import '../services/salesman_flags_service.dart';
+import '../widgets/quick_quantity_adjuster.dart';
 
 class ProductListPage extends StatefulWidget {
   final Account selectedAccount;
@@ -268,6 +270,12 @@ class _ProductListPageState extends State<ProductListPage> {
       return _cart.firstWhere((item) => item.product.id == product.id).quantity;
     } catch (e) {
       return 0;
+    }
+  }
+
+  void _refreshCart() {
+    if (mounted) {
+      setState(() {});
     }
   }
 
@@ -535,19 +543,31 @@ class _ProductListPageState extends State<ProductListPage> {
               ),
             ),
 
-            // Add/Update Button
+            // Add/Update Button or Quick Quantity Adjuster based on flag
             const SizedBox(width: 8),
 
-            ElevatedButton.icon(
-              onPressed: product.isInStock ? () => _showEditBottomSheet(product, inCartQuantity) : null,
-              icon: Icon(isInCart ? Icons.edit : Icons.add_shopping_cart, size: 16),
-              label: Text(isInCart ? 'Update' : 'Add'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colorScheme.primary,
-                foregroundColor: colorScheme.onPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            // If Showadddetailsbottomsheet_SalesMan is FALSE: Show only -/+ button, hide Add/Update
+            if (!(context.watch<SalesmanFlagsService>().flags?.showadddetailsbottomsheetSalesMan ?? false))
+              QuickQuantityAdjuster(
+                product: product,
+                currentQuantity: inCartQuantity,
+                selectedAccount: widget.selectedAccount,
+                onQuantityChanged: () {
+                  _refreshCart();
+                },
+              )
+            else
+              // If Showadddetailsbottomsheet_SalesMan is TRUE: Show Add/Update button, hide -/+
+              ElevatedButton.icon(
+                onPressed: product.isInStock ? () => _showEditBottomSheet(product, inCartQuantity) : null,
+                icon: Icon(isInCart ? Icons.edit : Icons.add_shopping_cart, size: 16),
+                label: Text(isInCart ? 'Update' : 'Add'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
               ),
-            ),
           ],
         ),
       ),
