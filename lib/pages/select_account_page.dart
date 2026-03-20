@@ -72,9 +72,13 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   Position? _cachedPosition;
   bool _locationInitialized = false;
 
+  // Cancel token for API requests - cancels pending requests on dispose
+  late CancelToken _cancelToken;
+
   @override
   void initState() {
     super.initState();
+    _cancelToken = CancelToken();
     _scrollController = ScrollController()..addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAccounts(reset: true);
@@ -85,6 +89,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
   @override
   void dispose() {
+    _cancelToken.cancel();
     _searchDebounce?.cancel();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -169,18 +174,22 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
       debugPrint('[GetAccount] Payload sent with cached location: lat=${position?.latitude}, lon=${position?.longitude}');
 
-      final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(seconds: 30)));
-      final response = await dio.post(
-        '/GetAccount',
-        data: payload,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            'package_name': auth.packageNameHeader,
-            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-          },
-        ),
-      );
+      // Use singleton Dio client instead of creating new one on every request
+      final dio = auth.getDioClient();
+
+      try {
+        final response = await dio.post(
+          '/GetAccount',
+          data: payload,
+          options: Options(
+            headers: {
+              'Content-Type': 'application/json',
+              'package_name': auth.packageNameHeader,
+              if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+            },
+          ),
+          cancelToken: _cancelToken,  // Cancel previous requests on navigation
+        );
 
       dynamic raw = response.data;
       Map<String, dynamic> data;
@@ -211,14 +220,41 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         _allAccounts.addAll(fetched);
       }
 
-      _hasMore = fetched.length >= _pageSize;
-      _filteredAccounts = List<Account>.from(_allAccounts);
-      if (fetched.isNotEmpty) _pageNo += 1;
+        _hasMore = fetched.length >= _pageSize;
+        _filteredAccounts = List<Account>.from(_allAccounts);
+        if (fetched.isNotEmpty) _pageNo += 1;
 
+    } on DioException catch (e) {
+      // Silently ignore cancelled requests (user navigated away)
+      if (e.type == DioExceptionType.cancel) {
+        debugPrint('[GetAccount] Request cancelled (user navigated away)');
+        return;
+      }
+
+      debugPrint('Error loading accounts: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load accounts: ${e.message}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      if (reset) {
+        _allAccounts = [];
+        _filteredAccounts = [];
+        _hasMore = false;
+      }
     } catch (e) {
       debugPrint('Error loading accounts: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load accounts: $e'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load accounts: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       }
       if (reset) {
         _allAccounts = [];

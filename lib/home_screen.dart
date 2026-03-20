@@ -1011,8 +1011,9 @@ class DraftOrderHandler extends StatelessWidget {
     );
 
     if (selectedAccount != null) {
-      Navigator.push(
-        context,
+      // Replace the DraftOrderHandler page with CartPage instead of pushing
+      // This prevents DoAccountSelectorPage from being visible in the back stack
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (context) => CartPage(
             acCode: selectedAccount.code ?? selectedAccount.id,
