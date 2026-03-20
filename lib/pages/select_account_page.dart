@@ -68,12 +68,18 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
   // Applied filters from AccountFilterPage; sent as `filters` in payload
   List<Map<String, dynamic>> _appliedFilters = [];
 
+  // Cache location to avoid repeated geolocation calls on every API request
+  Position? _cachedPosition;
+  bool _locationInitialized = false;
+
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAccounts(reset: true);
+      // Initialize location in background (doesn't block API calls)
+      _initializeLocationInBackground();
     });
   }
 
@@ -112,20 +118,26 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       final auth = Provider.of<AuthService>(context, listen: false);
       if (auth.currentUser == null) throw 'User not logged in';
 
-      Position? position;
-      try {
-        var permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
+      // Use cached position instead of blocking on geolocation each time
+      // This avoids the 10-second timeout on every API request
+      Position? position = _cachedPosition;
+
+      if (position == null && !_locationInitialized) {
+        // If location not initialized yet, try with shorter timeout
+        try {
+          var permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            permission = await Geolocator.requestPermission();
+          }
+          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+            position = await Future.any([
+              Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.medium),
+              Future.delayed(const Duration(seconds: 2), () => null),
+            ]);
+          }
+        } catch (e) {
+          debugPrint('[GetAccount] Quick location failed: $e');
         }
-        if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-          position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high,
-            timeLimit: const Duration(seconds: 10),
-          );
-        }
-      } catch (e) {
-        debugPrint('Location error: $e');
       }
 
       String mobile = auth.currentUser!.mobileNumber.replaceAll(RegExp(r'[^0-9]'), '');
@@ -155,7 +167,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
         'filters': _appliedFilters,
       };
 
-      debugPrint('GetAccount payload: ${jsonEncode(payload)}');
+      debugPrint('[GetAccount] Payload sent with cached location: lat=${position?.latitude}, lon=${position?.longitude}');
 
       final dio = Dio(BaseOptions(baseUrl: AuthService.baseUrl, connectTimeout: const Duration(seconds: 30), receiveTimeout: const Duration(seconds: 30)));
       final response = await dio.post(
@@ -826,5 +838,29 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       case 'Cash': return Colors.green;
       default: return Colors.grey;
     }
+  }
+
+  // Initialize location once in background without blocking API calls
+  Future<void> _initializeLocationInBackground() async {
+    if (_locationInitialized) return; // Only initialize once
+
+    try {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        // Use medium accuracy and 5 second timeout for quick location
+        _cachedPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 5),
+        );
+        debugPrint('[GetAccount] Location initialized: ${_cachedPosition?.latitude}, ${_cachedPosition?.longitude}');
+      }
+    } catch (e) {
+      debugPrint('[GetAccount] Location initialization failed (non-blocking): $e');
+      // Don't block - just use empty location
+    }
+    _locationInitialized = true;
   }
 }
