@@ -98,7 +98,7 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
         'lSize': _pageSize,
         'lSearchFieldValue': _searchQuery,
         'lExecuteTotalRows': 1,
-        'FromDo': 0,
+        'FromDo': widget.fromDo,
       };
 
       final headers = {
@@ -112,6 +112,10 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
         data: payload,
         options: Options(headers: headers),
       );
+
+      debugPrint('===== GetDoAccount API RESPONSE =====');
+      debugPrint('RAW RESPONSE: ${response.data}');
+      debugPrint('=====================================');
 
       dynamic raw = response.data;
       Map<String, dynamic> parsed = {};
@@ -128,6 +132,13 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
           (parsed['data'] is Map && parsed['data']['Account'] is List)
               ? parsed['data']['Account'] as List
               : [];
+
+      debugPrint('[GetDoAccount] PARSED RESPONSE: $parsed');
+      debugPrint('[GetDoAccount] Total Accounts Found: ${items.length}');
+      for (int i = 0; i < items.length; i++) {
+        final item = items[i];
+        debugPrint('[GetDoAccount] Account $i: ${item['Name']} (${item['Code']})');
+      }
 
       final newAccounts = items.map((e) {
         final m = e is Map<String, dynamic> ? e : Map<String, dynamic>.from(e as Map);

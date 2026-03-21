@@ -987,42 +987,81 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class DraftOrderHandler extends StatelessWidget {
+class DraftOrderHandler extends StatefulWidget {
   const DraftOrderHandler({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    // Directly open account selection when this page is opened
+  State<DraftOrderHandler> createState() => _DraftOrderHandlerState();
+}
+
+class _DraftOrderHandlerState extends State<DraftOrderHandler> {
+  @override
+  void initState() {
+    super.initState();
+    // Open account selector immediately after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _handleAccountSelection(context);
     });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Show loading while account selection is happening
     return Scaffold(
       appBar: AppBar(
         title: const Text('Draft Order Handler'),
       ),
-      body: const Center(child: CircularProgressIndicator()), // Show loading while selecting account
+      body: const Center(child: CircularProgressIndicator()),
     );
   }
 
   Future<void> _handleAccountSelection(BuildContext context) async {
+    debugPrint('[DraftOrderHandler] ===== ACCOUNT SELECTION STARTED =====');
+    debugPrint('[DraftOrderHandler] Opening DoAccountSelectorPage');
     final selectedAccount = await DoAccountSelectorPage.show(
       context,
       fromDo: 1,
     );
 
+    debugPrint('[DraftOrderHandler] Selected Account Details:');
     if (selectedAccount != null) {
-      // Replace the DraftOrderHandler page with CartPage instead of pushing
-      // This prevents DoAccountSelectorPage from being visible in the back stack
+      debugPrint('[DraftOrderHandler]   - Name: ${selectedAccount.name}');
+      debugPrint('[DraftOrderHandler]   - ID: ${selectedAccount.id}');
+      debugPrint('[DraftOrderHandler]   - Code: ${selectedAccount.code}');
+      debugPrint('[DraftOrderHandler]   - Phone: ${selectedAccount.phone}');
+      debugPrint('[DraftOrderHandler]   - Address: ${selectedAccount.address}');
+      debugPrint('[DraftOrderHandler]   - Type: ${selectedAccount.type}');
+    } else {
+      debugPrint('[DraftOrderHandler]   - No account selected (null)');
+    }
+
+    if (!mounted) {
+      debugPrint('[DraftOrderHandler] Widget not mounted, cannot proceed');
+      return;
+    }
+
+    if (selectedAccount != null) {
+      final acCode = selectedAccount.code ?? selectedAccount.id;
+      debugPrint('[DraftOrderHandler] Navigating to CartPage with acCode: $acCode');
+
+      // Use Navigator.pushReplacement to replace DraftOrderHandler with CartPage
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => CartPage(
-            acCode: selectedAccount.code ?? selectedAccount.id,
-            selectedAccount: selectedAccount,
-          ),
+          builder: (context) {
+            debugPrint('[DraftOrderHandler] Building CartPage for account: $acCode');
+            return CartPage(
+              acCode: acCode,
+              selectedAccount: selectedAccount,
+            );
+          },
         ),
       );
+      debugPrint('[DraftOrderHandler] ===== ACCOUNT SELECTION COMPLETED =====');
     } else {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      debugPrint('[DraftOrderHandler] No account selected, popping to home');
+      // Pop back to home if no account was selected
+      Navigator.of(context).pop();
+      debugPrint('[DraftOrderHandler] ===== ACCOUNT SELECTION CANCELLED =====');
     }
   }
 }
