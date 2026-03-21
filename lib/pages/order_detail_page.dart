@@ -525,7 +525,7 @@ class OrderDetailPage extends StatelessWidget {
             ),
 
             // --- SECTION 4: ACCOUNT & FIRM ---
-            _buildCard(
+            /*_buildCard(
               cs: cs,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -561,7 +561,7 @@ class OrderDetailPage extends StatelessWidget {
                   _buildDetailRow('Firm Address', firmAddress, cs),
                 ],
               ),
-            ),
+            ),*/
 
             const SizedBox(height: 24),
           ],

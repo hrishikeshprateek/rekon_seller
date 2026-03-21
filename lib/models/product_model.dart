@@ -15,6 +15,7 @@ class Product {
   final String? salt;
   final String? code; // Icode
   final int? iidcol; // i_id_col
+  final String? refNumber; // RefNumber from API
 
   Product({
     required this.id,
@@ -32,6 +33,7 @@ class Product {
     this.salt,
     this.code,
     this.iidcol,
+    this.refNumber,
   });
 
   // Discount percentage
@@ -64,6 +66,7 @@ class Product {
     'salt': salt,
     'code': code,
     'iidcol': iidcol,
+    'RefNumber': refNumber,
   };
 
   // Create from JSON
@@ -85,6 +88,7 @@ class Product {
     salt: json['salt'] as String?,
     code: json['code'] as String?,
     iidcol: json['iidcol'] as int?,
+    refNumber: json['refNumber'] as String? ?? json['RefNumber'] as String?,
   );
 
   @override

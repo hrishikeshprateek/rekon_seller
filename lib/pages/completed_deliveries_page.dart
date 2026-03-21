@@ -398,7 +398,7 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
       return Scaffold(
         backgroundColor: colorScheme.surface,
         appBar: AppBar(
-          title: const Text('Completed Deliveries'),
+          title: const Text('Delivery Book'),
           backgroundColor: const Color(0xFF1A237E),
           foregroundColor: Colors.white,
         ),

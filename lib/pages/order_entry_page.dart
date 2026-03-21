@@ -308,6 +308,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       final response = await dio.post('/GetItemList', data: payload, options: Options(headers: headers));
       dynamic raw = response.data;
 
+      print('===== GetItemList API RESPONSE (_loadMoreProducts) =====');
+      print(jsonEncode(raw));
+      print('========================================================');
+
       List<dynamic> items = [];
       if (raw is List) {
         items = raw;
@@ -371,6 +375,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       imageUrl: null,
       code: item.code, // <-- set Icode
       iidcol: item.iidcol, // <-- set i_id_col
+      refNumber: item.refNumber, // <-- set RefNumber from API
     );
   }
 
@@ -896,6 +901,20 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Reference Number - shown if flag is true
+                  if (showItemRefNumber && (product.refNumber ?? '').isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4.0),
+                      child: Text(
+                        '${product.refNumber}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.primary,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
                   Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                   const SizedBox(height: 6),
                   if (showItemMfgComp && (product.manufacturer ?? '').isNotEmpty)

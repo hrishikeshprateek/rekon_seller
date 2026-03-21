@@ -12,6 +12,7 @@ class ItemModel {
   final String stockType;
   final String firmName;
   final String salt;
+  final String? refNumber; // RefNumber from API
 
   ItemModel({
     required this.iidcol,
@@ -26,6 +27,7 @@ class ItemModel {
     required this.stockType,
     required this.firmName,
     required this.salt,
+    this.refNumber,
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
@@ -55,6 +57,7 @@ class ItemModel {
       stockType: (json['StockType'] ?? '').toString(),
       firmName: (json['FirmName'] ?? '').toString(),
       salt: (json['Salt'] ?? json['Salt '] ?? '').toString(),
+      refNumber: (json['RefNumber'] ?? '').toString().isEmpty ? null : (json['RefNumber'] ?? '').toString(),
     );
   }
 }

@@ -130,6 +130,47 @@ class _QuickQuantityAdjusterState extends State<QuickQuantityAdjuster> {
     }
   }
 
+  void _showQuantityInputDialog() {
+    final TextEditingController controller = TextEditingController(text: '${widget.currentQuantity}');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter Quantity'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Enter quantity',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final qty = int.tryParse(controller.text) ?? widget.currentQuantity;
+              if (qty > 0 && qty <= widget.product.stockQuantity) {
+                _addToCart(qty);
+                Navigator.pop(ctx);
+              } else if (qty > widget.product.stockQuantity) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Max available quantity is ${widget.product.stockQuantity}')),
+                );
+              }
+            },
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -172,16 +213,19 @@ class _QuickQuantityAdjusterState extends State<QuickQuantityAdjuster> {
             ),
           ),
           const SizedBox(width: 6),
-          // Quantity display
-          SizedBox(
-            width: 28,
-            child: Center(
-              child: Text(
-                '${widget.currentQuantity}',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
+          // Quantity display - clickable to input quantity
+          GestureDetector(
+            onTap: () => _showQuantityInputDialog(),
+            child: SizedBox(
+              width: 28,
+              child: Center(
+                child: Text(
+                  '${widget.currentQuantity}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ),
             ),
