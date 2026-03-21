@@ -381,6 +381,43 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
+  void _showQuantityInputDialog(DraftOrderItem item) {
+    final TextEditingController controller = TextEditingController(text: '${item.qty}');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Enter Quantity'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: 'Enter quantity',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final qty = int.tryParse(controller.text) ?? item.qty;
+              if (qty > 0) {
+                _updateQuantity(item, qty);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Set'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -598,24 +635,69 @@ class _CartPageState extends State<CartPage> {
                     ),
                     const SizedBox(height: 10),
 
-                    // Row 3: Qty | FQty | UPDATE
+                    // Row 3: Qty | FQty | UPDATE or -/+ counter
                     Row(
                       children: [
                         _metricCell(cs, 'Qty',  '${it.qty}'),
                         _metricCell(cs, 'FQty', '${it.freeQty ?? 0}'),
-                        Expanded(
+                        Flexible(
                           child: Align(
                             alignment: Alignment.centerRight,
-                            child: SizedBox(
-                              height: 34,
-                              child: FilledButton(
-                                onPressed: () => _showUpdateBottomSheet(it, cs),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                child: const Text('UPDATE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-                              ),
+                            child: Consumer<SalesmanFlagsService>(
+                              builder: (context, flagsService, _) {
+                                // Check if we should show add/update button or -/+ counter
+                                final showBottomSheet = flagsService.flags?.showadddetailsbottomsheetSalesMan ?? true;
+
+                                if (showBottomSheet) {
+                                  // Show UPDATE button
+                                  return SizedBox(
+                                    height: 34,
+                                    child: FilledButton(
+                                      onPressed: () => _showUpdateBottomSheet(it, cs),
+                                      style: FilledButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      child: const Text('UPDATE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                  );
+                                } else {
+                                  // Show -/+ counter (compact) with input button
+                                  return SizedBox(
+                                    height: 32,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        GestureDetector(
+                                          onTap: it.qty > 1 ? () => _updateQuantity(it, it.qty - 1) : null,
+                                          child: Opacity(
+                                            opacity: it.qty > 1 ? 1.0 : 0.5,
+                                            child: Icon(Icons.remove_circle_outline, size: 20, color: cs.primary),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap: () => _showQuantityInputDialog(it),
+                                          child: SizedBox(
+                                            width: 30,
+                                            child: Center(
+                                              child: Text(
+                                                '${it.qty}',
+                                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: cs.primary),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        GestureDetector(
+                                          onTap: () => _updateQuantity(it, it.qty + 1),
+                                          child: Icon(Icons.add_circle_outline, size: 20, color: cs.primary),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+                              },
                             ),
                           ),
                         ),
@@ -1328,7 +1410,4 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   }
 
 }
-
-
-
 
