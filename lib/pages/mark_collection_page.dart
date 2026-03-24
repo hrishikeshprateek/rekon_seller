@@ -68,7 +68,7 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please enter additional remarks if needed'),
-              backgroundColor: Colors.orange,
+              backgroundColor: Colors.blue,
             ),
           );
         }
@@ -91,7 +91,7 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Collection marked as not received for ${widget.task.partyName}'),
-        backgroundColor: Colors.orange,
+        backgroundColor: const Color(0xFF4CAF50), // Green instead of orange
       ),
     );
     Navigator.pop(context, true);
@@ -102,9 +102,18 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Pending for Collection', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: const Text(
+          'Pending for Collection',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+        ),
         centerTitle: true,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
+        scrolledUnderElevation: 0,
+        elevation: 0,
+        surfaceTintColor: colorScheme.surface,
       ),
       body: Form(
         key: _formKey,
@@ -222,8 +231,8 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
                         onSelected: (selected) {
                           setState(() => _isCollected = false);
                         },
-                        selectedColor: Colors.orange.withOpacity(0.2),
-                        checkmarkColor: Colors.orange,
+                        selectedColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.8),
+                        checkmarkColor: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -343,7 +352,7 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
               child: ElevatedButton(
                 onPressed: _submitCollection,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isCollected ? Colors.green : Colors.orange,
+                  backgroundColor: const Color(0xFF4CAF50), // Green color for both states
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(

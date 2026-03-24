@@ -5,12 +5,13 @@ import 'app_navigator.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'dart:io';
 import 'auth_service.dart';
 import 'dashboard_service.dart';
 import 'services/account_selection_service.dart';
 import 'services/salesman_flags_service.dart';
 
-// Platform channel for screenshot prevention
+// Platform channel for screenshot prevention (mobile only)
 const platform = MethodChannel('com.reckon.reckonbiz/screenshot');
 
 void main() {
@@ -42,7 +43,7 @@ class _MyAppState extends State<MyApp> {
 
           debugPrint('[MyApp] enable_screenshot flag: $enableScreenshot');
 
-          // Apply screenshot protection immediately
+          // Apply screenshot protection immediately (skip on web)
           if (!enableScreenshot) {
             debugPrint('[MyApp] Disabling screenshots...');
             _disableScreenshot();
@@ -93,6 +94,12 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _disableScreenshot() async {
+    // Skip on web platform
+    if (!_isNativePlatform()) {
+      debugPrint('[MyApp] Skipping screenshot disable on web platform');
+      return;
+    }
+
     try {
       debugPrint('[MyApp] Invoking platform method: disableScreenshot');
       await platform.invokeMethod('disableScreenshot');
@@ -103,12 +110,28 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _enableScreenshot() async {
+    // Skip on web platform
+    if (!_isNativePlatform()) {
+      debugPrint('[MyApp] Skipping screenshot enable on web platform');
+      return;
+    }
+
     try {
       debugPrint('[MyApp] Invoking platform method: enableScreenshot');
       await platform.invokeMethod('enableScreenshot');
       debugPrint('[MyApp] ✅ Screenshot enabled successfully');
     } catch (e) {
       debugPrint('[MyApp] ❌ Error enabling screenshot: $e');
+    }
+  }
+
+  /// Check if running on native platform (not web)
+  bool _isNativePlatform() {
+    try {
+      return !(identical(0, 0.0)) && (Platform.isAndroid || Platform.isIOS || Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+    } catch (e) {
+      // If any error, assume web
+      return false;
     }
   }
 }

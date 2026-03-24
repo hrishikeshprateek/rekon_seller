@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
 
 // --- YOUR EXISTING IMPORTS ---
@@ -31,17 +32,26 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
   // API Filters
   List<Map<String, dynamic>> _apiFilters = [];
   bool _sortByLocation = true;
+  String _searchQuery = '';
+  Timer? _searchDebounceTimer;
+  late TextEditingController _searchController;
+
 
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
+    _searchController.addListener(_onSearchChanged);
     _scrollController.addListener(_onScroll);
+
     _loadBills(reset: true);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchDebounceTimer?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -51,6 +61,209 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         !_isLoading &&
         _hasMore) {
       _loadBills();
+    }
+  }
+
+  void _onSearchChanged() {
+    final newQuery = _searchController.text.trim();
+
+    // Apply local filtering immediately for smooth typing (no UI jank)
+    if (mounted) {
+      setState(() {
+        _filterBillsLocally(newQuery);
+      });
+    }
+
+    // Cancel previous timer
+    _searchDebounceTimer?.cancel();
+
+    debugPrint('[DeliveryBook] Search typed: "$newQuery"');
+
+    // Debounce API call - wait 500ms before making API call to backend
+    _searchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted && _searchQuery != newQuery) {
+        _searchQuery = newQuery;
+        debugPrint('[DeliveryBook] Search query finalized: $_searchQuery');
+        // Call API search with reset - only refreshes results, not header
+        _loadBillsViaAPI(reset: true);
+      }
+    });
+  }
+
+  // Local filtering - instant, no API call
+  void _filterBillsLocally(String query) {
+    if (query.isEmpty) {
+      _filteredBills = List.from(_bills);
+    } else {
+      final lowerQuery = query.toLowerCase();
+      _filteredBills = _bills.where((bill) {
+        return bill.acname.toLowerCase().contains(lowerQuery) ||
+            bill.billno.toLowerCase().contains(lowerQuery) ||
+            bill.area.toLowerCase().contains(lowerQuery) ||
+            bill.station.toLowerCase().contains(lowerQuery) ||
+            bill.acno.toLowerCase().contains(lowerQuery) ||
+            bill.mobile.toLowerCase().contains(lowerQuery);
+      }).toList();
+    }
+    debugPrint('[DeliveryBook] Local filter applied: ${_filteredBills.length}/${_bills.length} bills match "$query"');
+  }
+
+  // Load bills via API - only refreshes results container
+  Future<void> _loadBillsViaAPI({bool reset = false}) async {
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      if (reset) {
+        _pageNo = 1;
+        _bills.clear();
+        _hasMore = true;
+      }
+
+      List<int> areaIds = [];
+      List<int> routeIds = [];
+
+      for (final filter in _apiFilters) {
+        final categoryId = filter['id'] as int;
+        final items = filter['items'] as List<dynamic>;
+
+        if (categoryId == 2 && items.isNotEmpty) {
+          areaIds = items
+              .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+              .toList();
+        } else if (categoryId == 3 && items.isNotEmpty) {
+          routeIds = items
+              .map((e) => e is int ? e : int.tryParse(e.toString()) ?? 0)
+              .toList();
+        }
+      }
+
+      // Payload with search query from API
+      final payload = jsonEncode({
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'luserid':
+            auth.currentUser?.mobileNumber ?? auth.currentUser?.userId ?? '',
+        'lPageNo': _pageNo,
+        'lSize': _pageSize,
+        'laid': areaIds,
+        'lrtid': routeIds,
+        'ldeliveryStatus': [1],
+        'lSearch': _searchQuery,
+        'lExecuteTotalRows': 1,
+      });
+
+      debugPrint('[DeliveryBook-API] ===== API SEARCH REQUEST =====');
+      debugPrint('[DeliveryBook-API] Endpoint: /getdeleveredbillList');
+      debugPrint('[DeliveryBook-API] Search Query: $_searchQuery');
+      debugPrint('[DeliveryBook-API] Payload: $payload');
+      debugPrint('[DeliveryBook-API] ===================================');
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': auth.getAuthHeader() ?? '',
+        'package_name': auth.packageNameHeader,
+      };
+
+      final response = await dio.post('/getdeleveredbillList',
+          data: payload, options: Options(headers: headers));
+
+      debugPrint('[DeliveryBook-API] ===== RAW RESPONSE =====');
+      debugPrint('[DeliveryBook-API] Status Code: ${response.statusCode}');
+      debugPrint('[DeliveryBook-API] Raw Data: ${response.data}');
+      debugPrint('[DeliveryBook-API] ======================');
+
+      String cleanJson = response.data
+          .toString()
+          .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
+          .trim();
+      final decoded = jsonDecode(cleanJson);
+
+      final Map<String, dynamic> root =
+          decoded is Map<String, dynamic> ? decoded : {};
+      final Map<String, dynamic> container =
+          root['data'] is Map<String, dynamic>
+              ? root['data'] as Map<String, dynamic>
+              : root;
+
+      final bool apiSuccess = root['success'] == true ||
+          root['Status'] == true ||
+          container['Status'] == true;
+      if (!apiSuccess) {
+        debugPrint('[DeliveryBook-API] ❌ API returned false/null success');
+        throw Exception(root['message'] ?? root['Message'] ?? 'Server failure');
+      }
+
+      debugPrint('[DeliveryBook-API] ✅ API Search Success detected');
+
+      List rawList = [];
+      if (container['data'] is List) {
+        rawList = container['data'] as List;
+      } else if (container['DBILL'] is List) {
+        rawList = container['DBILL'] as List;
+      } else if (container['DeliverBills'] is List) {
+        rawList = container['DeliverBills'] as List;
+      } else if (root['data'] is List) {
+        rawList = root['data'] as List;
+      }
+
+      debugPrint('[DeliveryBook-API] Total items from API: ${rawList.length}');
+
+      final newBills = rawList.map((e) {
+        if (e is Map<String, dynamic>) {
+          return DeliveryBill.fromJson(e);
+        }
+        try {
+          final parsed = (e is String)
+              ? jsonDecode(e) as Map<String, dynamic>
+              : Map<String, dynamic>.from(e);
+          return DeliveryBill.fromJson(parsed);
+        } catch (ex) {
+          debugPrint('[DeliveryBook-API] ❌ Failed to parse: $ex');
+          return DeliveryBill(
+              acname: 'Unknown',
+              address: 'NA',
+              mobile: 'NA',
+              billno: 'NA',
+              billdate: 'NA',
+              billamt: 0.0,
+              item: 0,
+              qty: 0,
+              station: 'NA',
+              acno: 'NA',
+              remark: 'NA',
+              area: 'NA',
+              route: 'NA',
+              statusName: 'NA',
+              status: 'NA',
+              keyno: 'NA',
+              latitude: null,
+              longitude: null);
+        }
+      }).toList();
+
+      debugPrint('[DeliveryBook-API] Parsed ${newBills.length} bills from API search');
+
+      // Only update the results container, NOT the header
+      if (mounted) {
+        setState(() {
+          _bills.addAll(newBills);
+          _filteredBills = _bills;  // Show all API results
+
+          _hasMore = newBills.length >= _pageSize;
+          if (_hasMore) _pageNo++;
+          _isLoading = false;
+
+          debugPrint('[DeliveryBook-API] Results container updated: ${_filteredBills.length} bills');
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Search error: $e')),
+        );
+        setState(() => _isLoading = false);
+      }
+      debugPrint('[DeliveryBook-API] ❌ Error: $e');
     }
   }
 
@@ -90,7 +303,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         }
       }
 
-      // Payload (Keeping deliveryStatus empty as per original logic for Pending)
+      // Payload with search query
       final payload = jsonEncode({
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'luserid':
@@ -99,10 +312,21 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         'lSize': _pageSize,
         'laid': areaIds,
         'lrtid': routeIds,
-        'ldeliveryStatus': [],
-        'lSearch': '',
+        'ldeliveryStatus': [1],
+        'lSearch': _searchQuery,
         'lExecuteTotalRows': 1,
       });
+
+      debugPrint('[DeliveryBook] ===== API REQUEST =====');
+      debugPrint('[DeliveryBook] Endpoint: /getdeleveredbillList');
+      debugPrint('[DeliveryBook] Payload: $payload');
+      debugPrint('[DeliveryBook] License: ${auth.currentUser?.licenseNumber}');
+      debugPrint('[DeliveryBook] UserId: ${auth.currentUser?.mobileNumber}');
+      debugPrint('[DeliveryBook] Page: $_pageNo, Size: $_pageSize');
+      debugPrint('[DeliveryBook] Search Query: $_searchQuery');
+      debugPrint('[DeliveryBook] Area IDs: $areaIds');
+      debugPrint('[DeliveryBook] Route IDs: $routeIds');
+      debugPrint('[DeliveryBook] ========================');
 
       final headers = {
         'Content-Type': 'application/json',
@@ -113,11 +337,22 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
       final response = await dio.post('/getdeleveredbillList',
           data: payload, options: Options(headers: headers));
 
+      debugPrint('[DeliveryBook] ===== RAW RESPONSE =====');
+      debugPrint('[DeliveryBook] Status Code: ${response.statusCode}');
+      debugPrint('[DeliveryBook] Raw Data: ${response.data}');
+      debugPrint('[DeliveryBook] ========================');
+
       String cleanJson = response.data
           .toString()
           .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
           .trim();
       final decoded = jsonDecode(cleanJson);
+
+      debugPrint('[DeliveryBook] ===== DECODED RESPONSE =====');
+      debugPrint('[DeliveryBook] Decoded: $decoded');
+      debugPrint('[DeliveryBook] Decoded Type: ${decoded.runtimeType}');
+      debugPrint('[DeliveryBook] ============================');
+
       final Map<String, dynamic> root =
       decoded is Map<String, dynamic> ? decoded : {};
       final Map<String, dynamic> container =
@@ -125,28 +360,49 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           ? root['data'] as Map<String, dynamic>
           : root;
 
+      debugPrint('[DeliveryBook] ===== PARSED DATA =====');
+      debugPrint('[DeliveryBook] Root Keys: ${root.keys.toList()}');
+      debugPrint('[DeliveryBook] Container Keys: ${container.keys.toList()}');
+      debugPrint('[DeliveryBook] Success: ${root['success']}');
+      debugPrint('[DeliveryBook] Status: ${root['Status']}');
+      debugPrint('[DeliveryBook] Message: ${root['message']}');
+      debugPrint('[DeliveryBook] =======================');
+
       final bool apiSuccess = root['success'] == true ||
           root['Status'] == true ||
           container['Status'] == true;
       if (!apiSuccess) {
+        debugPrint('[DeliveryBook] ❌ API returned false/null success');
         throw Exception(root['message'] ?? root['Message'] ?? 'Server failure');
       }
+
+      debugPrint('[DeliveryBook] ✅ API Success detected');
 
       List rawList = [];
       if (container['data'] is List) {
         rawList = container['data'] as List;
+        debugPrint('[DeliveryBook] Found data in container[data]');
       } else if (container['DBILL'] is List) {
         rawList = container['DBILL'] as List;
+        debugPrint('[DeliveryBook] Found data in container[DBILL]');
       } else if (container['DeliverBills'] is List) {
         rawList = container['DeliverBills'] as List;
+        debugPrint('[DeliveryBook] Found data in container[DeliverBills]');
       } else if (root['data'] is List) {
         rawList = root['data'] as List;
+        debugPrint('[DeliveryBook] Found data in root[data]');
+      } else {
+        debugPrint('[DeliveryBook] ❌ No valid data list found!');
+        debugPrint('[DeliveryBook] Container type: ${container.runtimeType}');
+        debugPrint('[DeliveryBook] Root[data] type: ${root['data'].runtimeType}');
       }
+
+      debugPrint('[DeliveryBook] Total items from API: ${rawList.length}');
 
       final newBills = rawList.map((e) {
         if (e is Map<String, dynamic>) {
           final bill = DeliveryBill.fromJson(e);
-          debugPrint('[DeliveryBook] Bill: ${bill.acname}, Lat: ${bill.latitude}, Lng: ${bill.longitude}');
+          debugPrint('[DeliveryBook] ✓ Parsed bill: ${bill.acname} (${bill.billno})');
           return bill;
         }
         try {
@@ -154,9 +410,10 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
               ? jsonDecode(e) as Map<String, dynamic>
               : Map<String, dynamic>.from(e);
           final bill = DeliveryBill.fromJson(parsed);
-          debugPrint('[DeliveryBook] Bill: ${bill.acname}, Lat: ${bill.latitude}, Lng: ${bill.longitude}');
+          debugPrint('[DeliveryBook] ✓ Parsed bill from string: ${bill.acname}');
           return bill;
-        } catch (_) {
+        } catch (ex) {
+          debugPrint('[DeliveryBook] ❌ Failed to parse bill: $ex');
           return DeliveryBill(
               acname: 'Unknown',
               address: 'NA',
@@ -179,9 +436,15 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         }
       }).toList();
 
+      debugPrint('[DeliveryBook] ===== PARSING RESULTS =====');
+      debugPrint('[DeliveryBook] Successfully parsed: ${newBills.length} bills');
+      debugPrint('[DeliveryBook] =============================');
+
       if (mounted) {
         setState(() {
+          debugPrint('[DeliveryBook] Adding ${newBills.length} bills to _bills (current size: ${_bills.length})');
           _bills.addAll(newBills);
+          debugPrint('[DeliveryBook] _bills size after add: ${_bills.length}');
 
           // SORTING
           if (_sortByLocation) {
@@ -190,14 +453,21 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
               if (areaCompare != 0) return areaCompare;
               return a.acname.compareTo(b.acname);
             });
+            debugPrint('[DeliveryBook] Sorted by location');
           } else {
             _bills.sort((a, b) => a.acname.compareTo(b.acname));
+            debugPrint('[DeliveryBook] Sorted by name');
           }
 
-          // FILTER: STRICTLY PENDING ONLY
-          _filteredBills = _bills
-              .where((bill) => _statusFromBill(bill) == TaskStatus.pending)
-              .toList();
+          // FILTER: Don't filter by status - show all bills returned by API
+          debugPrint('[DeliveryBook] NOT filtering - showing all ${_bills.length} bills');
+          _filteredBills = _bills;  // Show all bills, don't filter
+
+          debugPrint('[DeliveryBook] ===== FINAL RESULTS =====');
+          debugPrint('[DeliveryBook] Total _bills: ${_bills.length}');
+          debugPrint('[DeliveryBook] Filtered _filteredBills: ${_filteredBills.length}');
+          debugPrint('[DeliveryBook] _hasMore: $_hasMore (newBills.length=${newBills.length} >= _pageSize=$_pageSize)');
+          debugPrint('[DeliveryBook] =======================');
 
           _hasMore = newBills.length >= _pageSize;
           if (_hasMore) _pageNo++;
@@ -205,6 +475,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         });
       }
     } catch (e) {
+      debugPrint('[DeliveryBook] ❌ ERROR in _loadBills: $e');
       if (mounted) {
         setState(() => _isLoading = false);
         if (_bills.isEmpty) {
@@ -259,31 +530,20 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
     }
 
     final bool hasActiveFilters = _apiFilters.isNotEmpty;
-    final userName = (Provider.of<AuthService>(context, listen: false)
-        .currentUser
-        ?.fullName ??
-        '')
-        .trim();
-    final displayName = userName.isEmpty ? 'Driver' : userName;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A237E), // Navy Blue
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              displayName,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              '${_filteredBills.length} Pending Tasks',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
-            ),
-          ],
+        title: const Text(
+          'Assigned Deliveries',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        ),
+        centerTitle: true,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
+          onPressed: () => Navigator.pop(context),
         ),
         actions: [
           Stack(
@@ -312,27 +572,84 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           const SizedBox(width: 8),
         ],
       ),
-      body: _filteredBills.isEmpty
-          ? _buildEmptyState(colorScheme)
-          : ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.all(16),
-        itemCount: _filteredBills.length +
-            (_hasMore && _filteredBills.isNotEmpty ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index == _filteredBills.length) {
-            return _filteredBills.isNotEmpty && _isLoading && _hasMore
-                ? const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: CircularProgressIndicator(strokeWidth: 2),
+      body: Column(
+        children: [
+          // Search Bar
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search deliveries (Account, Bill No, Area)...',
+                hintStyle: TextStyle(
+                  fontSize: 14,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: colorScheme.onSurfaceVariant,
+                  size: 20,
+                ),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _searchController.clear();
+                          if (mounted) {
+                            setState(() {
+                              _searchQuery = '';
+                              _filterBillsLocally('');
+                            });
+                          }
+                          _searchDebounceTimer?.cancel();
+                          // Call API to fetch all bills without search filter
+                          _loadBillsViaAPI(reset: true);
+                        },
+                      )
+                    : null,
+                filled: true,
+                fillColor: colorScheme.surfaceContainerHighest,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
               ),
-            )
-                : const SizedBox.shrink();
-          }
-          return _buildModernTaskCard(
-              _filteredBills[index], index + 1, colorScheme);
-        },
+              style: TextStyle(
+                fontSize: 14,
+                color: colorScheme.onSurface,
+              ),
+            ),
+          ),
+          // Bills List
+          Expanded(
+            child: _filteredBills.isEmpty
+                ? _buildEmptyState(colorScheme)
+                : ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              itemCount: _filteredBills.length +
+                  (_hasMore && _filteredBills.isNotEmpty ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _filteredBills.length) {
+                  return _filteredBills.isNotEmpty && _isLoading && _hasMore
+                      ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                      : const SizedBox.shrink();
+                }
+                return _buildModernTaskCard(
+                    _filteredBills[index], index + 1, colorScheme);
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -556,12 +873,12 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                       side: BorderSide(
                           color: (bill.latitude != null && bill.longitude != null &&
                                   bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
-                              ? Colors.grey.shade300
+                              ? const Color(0xFF07666A)
                               : Colors.grey.shade200,
                           width: 1.5),
                       foregroundColor: (bill.latitude != null && bill.longitude != null &&
                                        bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
-                          ? Colors.black
+                          ? const Color(0xFF07666A)
                           : Colors.grey.shade400, // Grey out when disabled
                     ),
                     child: const Icon(Icons.near_me_outlined),
@@ -574,7 +891,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                     child: ElevatedButton.icon(
                       onPressed: () => _navigateToDetails(bill),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1A237E),
+                        backgroundColor: const Color(0xFF07666A),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -891,3 +1208,10 @@ class DeliveryBill {
     );
   }
 }
+
+
+
+
+
+
+

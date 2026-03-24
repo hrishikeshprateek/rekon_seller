@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'models/user_model.dart';
 import 'app_navigator.dart';
 import 'pages/mpin_entry_page.dart';
@@ -12,12 +13,27 @@ class AuthService with ChangeNotifier {
   // API configuration
   // Updated base URL (new API host + path)
   static const String baseUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder';
+  // Proxy URL for web (to bypass CORS issues during development)
+  static const String proxyUrl = 'http://localhost:3000';
   static const String tenantId = 'com.reckon.reckonbiz';
   // Updated API header package name
   static const String packageName = 'com.reckon.reckonbiz';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final Dio _dio = Dio();
+
+  /// Get the appropriate API base URL based on platform
+  /// On web: Uses proxy (http://localhost:3000) for development/testing
+  /// On mobile: Uses direct backend URL
+  String get apiBaseUrl {
+    if (kIsWeb) {
+      debugPrint('[AuthService] Using PROXY URL for web: $proxyUrl');
+      return proxyUrl;
+    }
+    debugPrint('[AuthService] Using DIRECT backend URL for mobile: $baseUrl');
+    return baseUrl;
+  }
+
 
   // package name used in API header
   String get packageNameHeader => packageName;
@@ -50,7 +66,7 @@ class AuthService with ChangeNotifier {
   }
 
   AuthService() {
-    _dio.options.baseUrl = baseUrl;
+    _dio.options.baseUrl = apiBaseUrl; // Uses proxy on web, direct URL on mobile
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
 

@@ -135,6 +135,7 @@ class DeliveryDetailPage extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
+
                         Text(
                           _getString('acname', 'Delivery Details'),
                           style: const TextStyle(
