@@ -1,0 +1,6 @@
+{
+  "buildCommand": "curl https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.24.0_stable.tar.xz -o flutter.tar.xz && tar xf flutter.tar.xz && export PATH=$PATH:$(pwd)/flutter/bin && flutter pub get && flutter build web --release",
+  "outputDirectory": "build/web",
+  "installCommand": "echo 'Flutter installed in build command'"
+}
+
