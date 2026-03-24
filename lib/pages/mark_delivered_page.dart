@@ -837,643 +837,565 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // Modern App Bar with gradient
+          // Modern App Bar - Light Theme
           SliverAppBar(
-            expandedHeight: 160.0,
+            expandedHeight: 56.0,
             floating: false,
             pinned: true,
-            backgroundColor: const Color(0xFF1A237E),
-            iconTheme: const IconThemeData(color: Colors.white),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF1A237E), // Deep Blue
-                      Color(0xFFFF6F00), // Orange
-                    ],
-                  ),
-                ),
-                child: Stack(
-                  children: [
-                    // Decorative circles
-                    Positioned(
-                      top: -50,
-                      right: -50,
-                      child: Container(
-                        width: 200,
-                        height: 200,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.05),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: -30,
-                      left: -30,
-                      child: Container(
-                        width: 150,
-                        height: 150,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.05),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                    // Content
-                    Padding(
-                      padding: const EdgeInsets.only(left: 20, right: 20, top: 80, bottom: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.local_shipping,
-                                  color: Colors.white,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _isDelivered ? 'Mark Delivery' : 'Return Entry',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      widget.task.billNo ?? 'N/A',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(alpha: 0.9),
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            backgroundColor: colorScheme.surface,
+            iconTheme: IconThemeData(color: colorScheme.onSurface),
+            title: Text(
+              'Mark Delivery',
+              style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w700, fontSize: 18),
             ),
-            title: const Text(
-              'Delivery Details',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 18),
-            ),
-            centerTitle: true,
+            centerTitle: false,
           ),
 
           // Content
           SliverPadding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16),
             sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    children: [
-            // Party Details Card
-            _buildSectionCard(
-              'Party Details',
-              Icons.people_rounded,
-              colorScheme,
-              [
-                _buildDetailRow('Party Name', widget.task.partyName, isBold: true),
-                const SizedBox(height: 8),
-                _buildDetailRow('Address', '${widget.task.station}, ${widget.task.area}'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDetailRow('Contact Person', 'Shop Manager'),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.call, color: colorScheme.primary),
-                      onPressed: _makePhoneCall,
-                      tooltip: 'Call',
-                    ),
-                  ],
-                ),
-                _buildDetailRow('Mobile', widget.task.mobile ?? 'N/A'),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            // Bill Details Card
-            _buildSectionCard(
-              'Bill Details',
-              Icons.receipt_long,
-              colorScheme,
-              [
-                Row(
-                  children: [
-                    Expanded(child: _buildDetailRow('Bill No', widget.task.billNo ?? 'N/A')),
-                    Expanded(
-                      child: _buildDetailRow(
-                        'Bill Date & Time',
-                        widget.task.billDate != null
-                            ? DateFormat('dd MMM yy, hh:mm a').format(widget.task.billDate!)
-                            : 'N/A',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDetailRow(
-                        'Bill Amount',
-                        '₹${widget.task.billAmount?.toStringAsFixed(2) ?? '0.00'}',
-                        valueColor: colorScheme.primary,
-                        isBold: true,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildDetailRow('No of Items', '${widget.task.itemCount ?? 0}'),
-                    ),
-                    Expanded(
-                      child: _buildDetailRow('Total Quantity', '90'), // Mock quantity
-                    ),
-                  ],
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            // Delivered / Return Toggle
-            _buildSectionCard(
-              'Status',
-              Icons.check_circle_outline,
-              colorScheme,
-              [
-                // Single dropdown controls the status; choosing 'Not delivered' will switch to the Return UI
-                DropdownButtonFormField<String>(
-                  initialValue: _deliveryStatus,
-                  decoration: InputDecoration(
-                    labelText: 'Delivery Status',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              delegate: SliverChildListDelegate.fixed([
+                // Header Card - Below Toolbar
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  items: const [
-                    DropdownMenuItem(value: 'Delivered', child: Text('Delivered')),
-                    DropdownMenuItem(value: 'Part delivered', child: Text('Part delivered')),
-                    DropdownMenuItem(value: 'Not delivered', child: Text('Not delivered')),
-                  ],
-                  onChanged: (v) => setState(() {
-                    _deliveryStatus = v ?? 'Delivered';
-                    // if status is Not delivered, treat as Return (same UI as previous Return capsule)
-                    _isDelivered = _deliveryStatus != 'Not delivered';
-                  }),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Select delivery outcome. Choosing "Not delivered" will open the Return form.',
-                  style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 10),
-
-            // Conditional Forms
-            if (_isDelivered) ...[
-              // Delivered Flow
-              _buildSectionCard(
-                'Payment Mode',
-                Icons.payment,
-                colorScheme,
-                [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Cash'),
-                          value: 'Cash',
-                          groupValue: _paymentMode,
-                          onChanged: (value) {
-                            setState(() => _paymentMode = value!);
-                          },
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                      Expanded(
-                        child: RadioListTile<String>(
-                          title: const Text('Credit'),
-                          value: 'Credit',
-                          groupValue: _paymentMode,
-                          onChanged: (value) {
-                            setState(() => _paymentMode = value!);
-                          },
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // OTP Section - Modern PIN Style (Optional)
-              _buildSectionCard(
-                'OTP Verification (Optional)',
-                Icons.security,
-                colorScheme,
-                [
-                  // Info text about optional OTP
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
-                        Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
-                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(Icons.local_shipping, color: colorScheme.primary, size: 24),
+                        ),
+                        const SizedBox(width: 12),
                         Expanded(
-                          child: Text(
-                            'OTP verification is optional. You can proceed without it.',
-                            style: TextStyle(
-                              color: Colors.blue.shade700,
-                              fontSize: 12,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _isDelivered ? 'Mark Delivery' : 'Return Entry',
+                                style: TextStyle(color: colorScheme.onSurface, fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(widget.task.billNo ?? 'N/A', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 12),
+                ),
 
-                  // OTP Status Header
-                  if (_otpVerified)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green, width: 1),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check_circle, color: Colors.green, size: 24),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              'OTP Verified Successfully',
-                              style: TextStyle(
-                                color: Colors.green.shade700,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
+                const SizedBox(height: 16),
+
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      // Party Details Card
+                      _buildSectionCard(
+                        'Party Details',
+                        Icons.people_rounded,
+                        colorScheme,
+                        [
+                          _buildDetailRow('Party Name', widget.task.partyName, isBold: true),
+                          const SizedBox(height: 8),
+                          _buildDetailRow('Address', '${widget.task.station}, ${widget.task.area}'),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDetailRow('Contact Person', 'Shop Manager'),
                               ),
-                            ),
+                              IconButton(
+                                icon: Icon(Icons.call, color: colorScheme.primary),
+                                onPressed: _makePhoneCall,
+                                tooltip: 'Call',
+                              ),
+                            ],
+                          ),
+                          _buildDetailRow('Mobile', widget.task.mobile ?? 'N/A'),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+
+                      // Bill Details Card
+                      _buildSectionCard(
+                        'Bill Details',
+                        Icons.receipt_long,
+                        colorScheme,
+                        [
+                          Row(
+                            children: [
+                              Expanded(child: _buildDetailRow('Bill No', widget.task.billNo ?? 'N/A')),
+                              Expanded(
+                                child: _buildDetailRow(
+                                  'Bill Date & Time',
+                                  widget.task.billDate != null
+                                      ? DateFormat('dd MMM yy, hh:mm a').format(widget.task.billDate!)
+                                      : 'N/A',
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDetailRow(
+                                  'Bill Amount',
+                                  '₹${widget.task.billAmount?.toStringAsFixed(2) ?? '0.00'}',
+                                  valueColor: colorScheme.primary,
+                                  isBold: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDetailRow('No of Items', '${widget.task.itemCount ?? 0}'),
+                              ),
+                              Expanded(
+                                child: _buildDetailRow('Total Quantity', '0'),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    )
-                  else ...[
-                    // Send OTP Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: (_otpSent || _isRequestingOTP) ? null : _requestOTP,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _otpSent ? Colors.green : colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        icon: _isRequestingOTP
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : Icon(_otpSent ? Icons.check : Icons.send),
-                        label: Text(_isRequestingOTP ? 'Sending...' : _otpSent ? 'OTP Sent' : 'Send OTP to Customer'),
-                      ),
-                    ),
 
-                    if (_otpSent) ...[
-                      const SizedBox(height: 16),
-                      // Info text
-                      Text(
-                        'Enter 6-digit OTP received by customer',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorScheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
 
-                      // PIN Style OTP Input
-                      GestureDetector(
-                        onTap: () {
-                          // Focus the hidden text field when user taps on PIN boxes
-                          FocusScope.of(context).requestFocus(FocusNode());
-                          Future.delayed(const Duration(milliseconds: 100), () {
-                            if (mounted) {
-                              FocusScope.of(context).requestFocus(_otpFocusNode);
-                            }
-                          });
-                        },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: List.generate(6, (index) {
-                            final currentLength = _otpController.text.length;
-                            final isFilled = index < currentLength;
-                            final isCurrent = index == currentLength;
-
-                            return Container(
-                              width: 45,
-                              height: 55,
-                              decoration: BoxDecoration(
-                                color: isFilled
-                                    ? colorScheme.primaryContainer.withOpacity(0.3)
-                                    : colorScheme.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isCurrent
-                                      ? colorScheme.primary
-                                      : isFilled
-                                          ? colorScheme.primary.withOpacity(0.5)
-                                          : colorScheme.outlineVariant,
-                                  width: isCurrent ? 2 : 1,
-                                ),
-                                boxShadow: isCurrent ? [
-                                  BoxShadow(
-                                    color: colorScheme.primary.withOpacity(0.2),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ] : null,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  isFilled ? _otpController.text[index] : '',
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: colorScheme.onSurface,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                      ),
-
-                      // Hidden text field for OTP input
-                      SizedBox(
-                        height: 0,
-                        width: 0,
-                        child: TextField(
-                          controller: _otpController,
-                          focusNode: _otpFocusNode,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          autofocus: true,
-                          onChanged: (value) {
-                            setState(() {});
-                          },
-                        ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Verify Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isVerifyingOTP ? null : _verifyOTP,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      // Delivered / Return Toggle
+                      _buildSectionCard(
+                        'Status',
+                        Icons.check_circle_outline,
+                        colorScheme,
+                        [
+                          DropdownButtonFormField<String>(
+                            initialValue: _deliveryStatus,
+                            decoration: InputDecoration(
+                              labelText: 'Delivery Status',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                            items: const [
+                              DropdownMenuItem(value: 'Delivered', child: Text('Delivered')),
+                              DropdownMenuItem(value: 'Part delivered', child: Text('Part delivered')),
+                              DropdownMenuItem(value: 'Not delivered', child: Text('Not delivered')),
+                            ],
+                            onChanged: (v) => setState(() {
+                              _deliveryStatus = v ?? 'Delivered';
+                              _isDelivered = _deliveryStatus != 'Not delivered';
+                            }),
                           ),
-                          child: _isVerifyingOTP
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Text('Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Resend OTP option
-                      Center(
-                        child: TextButton(
-                          onPressed: _isRequestingOTP ? null : _requestOTP,
-                          child: Text(
-                            'Resend OTP',
-                            style: TextStyle(
-                              color: colorScheme.primary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Select delivery outcome.',
+                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ],
-                ],
-              ),
 
-              const SizedBox(height: 10),
+                      const SizedBox(height: 10),
 
-              // Person Name
-              _buildSectionCard(
-                'Handover Details',
-                Icons.person_pin,
-                colorScheme,
-                [
-                  TextFormField(
-                    controller: _personNameController,
-                    decoration: InputDecoration(
-                      labelText: 'Goods handed over to',
-                      hintText: 'Enter person name',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // Photo Upload
-              _buildSectionCard(
-                'Photo Upload (Bill and Goods)',
-                Icons.photo_camera,
-                colorScheme,
-                [
-                  if (_uploadedPhotos.isEmpty)
-                    Text(
-                      'Upload 2 photos required',
-                      style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-                    ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      ..._uploadedPhotos.asMap().entries.map((entry) {
-                        final raw = entry.value;
-                        File? file;
-                        if (raw is File) file = raw;
-                        else if (raw is XFile) file = File(raw.path);
-                        else if (raw is String) file = File(raw);
-
-                        return Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                width: 100,
-                                height: 100,
-                                color: colorScheme.surfaceContainerHighest,
-                                child: (file != null && file.existsSync())
-                                    ? Image.file(file, fit: BoxFit.cover, width: 100, height: 100)
-                                    : Center(child: Icon(Icons.image, color: colorScheme.primary, size: 32)),
-                              ),
-                            ),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () => _removePhoto(entry.key),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.close, color: Colors.white, size: 16),
-                                ),
-                              ),
-                            ),
-                          ],
-                        );
-                      }),
-                      if (_uploadedPhotos.length < 2)
-                        GestureDetector(
-                          onTap: _pickPhoto,
-                          child: Container(
-                            width: 100,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              color: colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: colorScheme.primary,
-                                style: BorderStyle.solid,
-                                width: 2,
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                      // Conditional Forms
+                      if (_isDelivered) ...[
+                        // Delivered Flow
+                        _buildSectionCard(
+                          'Payment Mode',
+                          Icons.payment,
+                          colorScheme,
+                          [
+                            Row(
                               children: [
-                                Icon(Icons.add_a_photo, color: colorScheme.primary, size: 32),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Add Photo',
-                                  style: TextStyle(fontSize: 10, color: colorScheme.primary),
+                                Expanded(
+                                  child: RadioListTile<String>(
+                                    title: const Text('Cash'),
+                                    value: 'Cash',
+                                    groupValue: _paymentMode,
+                                    onChanged: (value) {
+                                      setState(() => _paymentMode = value!);
+                                    },
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                ),
+                                Expanded(
+                                  child: RadioListTile<String>(
+                                    title: const Text('Credit'),
+                                    value: 'Credit',
+                                    groupValue: _paymentMode,
+                                    onChanged: (value) {
+                                      setState(() => _paymentMode = value!);
+                                    },
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
                         ),
-                    ],
-                  ),
-                ],
-              ),
 
-              const SizedBox(height: 10),
+                        const SizedBox(height: 10),
 
-              // Remark
-              _buildSectionCard(
-                'Remark',
-                Icons.note,
-                colorScheme,
-                [
-                  TextFormField(
-                    controller: _remarkController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      hintText: 'Enter any remarks (optional)',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ] else ...[
-              // Return Flow
-              _buildSectionCard(
-                'Return Reason',
-                Icons.undo,
-                colorScheme,
-                [
-                  TextFormField(
-                    controller: _remarkController,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      labelText: 'Reason for Return',
-                      hintText: 'Enter reason why goods are being returned',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    validator: (value) {
-                      if (!_isDelivered && (value == null || value.isEmpty)) {
-                        return 'Please enter return reason';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ],
+                        // OTP Section
+                        _buildSectionCard(
+                          'OTP Verification (Optional)',
+                          Icons.security,
+                          colorScheme,
+                          [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'OTP verification is optional. You can proceed without it.',
+                                      style: TextStyle(
+                                        color: Colors.blue.shade700,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (_otpVerified)
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.green, width: 1),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'OTP Verified Successfully',
+                                        style: TextStyle(
+                                          color: Colors.green.shade700,
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else ...[
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: (_otpSent || _isRequestingOTP) ? null : _requestOTP,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _otpSent ? Colors.green : colorScheme.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  ),
+                                  icon: _isRequestingOTP
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                      : Icon(_otpSent ? Icons.check : Icons.send),
+                                  label: Text(_isRequestingOTP ? 'Sending...' : _otpSent ? 'OTP Sent' : 'Send OTP to Customer'),
+                                ),
+                              ),
+                              if (_otpSent) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Enter 6-digit OTP received by customer',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colorScheme.onSurfaceVariant,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 12),
+                                GestureDetector(
+                                  onTap: () {
+                                    FocusScope.of(context).requestFocus(FocusNode());
+                                    Future.delayed(const Duration(milliseconds: 100), () {
+                                      if (mounted) {
+                                        FocusScope.of(context).requestFocus(_otpFocusNode);
+                                      }
+                                    });
+                                  },
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                    children: List.generate(6, (index) {
+                                      final currentLength = _otpController.text.length;
+                                      final isFilled = index < currentLength;
+                                      final isCurrent = index == currentLength;
+
+                                      return Container(
+                                        width: 45,
+                                        height: 55,
+                                        decoration: BoxDecoration(
+                                          color: isFilled
+                                              ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                                              : colorScheme.surface,
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: isCurrent
+                                                ? colorScheme.primary
+                                                : isFilled
+                                                    ? colorScheme.primary.withValues(alpha: 0.5)
+                                                    : colorScheme.outlineVariant,
+                                            width: isCurrent ? 2 : 1,
+                                          ),
+                                          boxShadow: isCurrent ? [
+                                            BoxShadow(
+                                              color: colorScheme.primary.withValues(alpha: 0.2),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ] : null,
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            isFilled ? _otpController.text[index] : '',
+                                            style: TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold,
+                                              color: colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 0,
+                                  width: 0,
+                                  child: TextField(
+                                    controller: _otpController,
+                                    focusNode: _otpFocusNode,
+                                    keyboardType: TextInputType.number,
+                                    maxLength: 6,
+                                    autofocus: true,
+                                    onChanged: (value) {
+                                      setState(() {});
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _isVerifyingOTP ? null : _verifyOTP,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: colorScheme.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                    ),
+                                    child: _isVerifyingOTP
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                          )
+                                        : const Text('Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Center(
+                                  child: TextButton(
+                                    onPressed: _isRequestingOTP ? null : _requestOTP,
+                                    child: Text(
+                                      'Resend OTP',
+                                      style: TextStyle(
+                                        color: colorScheme.primary,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // Person Name
+                        _buildSectionCard(
+                          'Handover Details',
+                          Icons.person_pin,
+                          colorScheme,
+                          [
+                            TextFormField(
+                              controller: _personNameController,
+                              decoration: InputDecoration(
+                                labelText: 'Goods handed over to',
+                                hintText: 'Enter person name',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // Photo Upload
+                        _buildSectionCard(
+                          'Photo Upload (Bill and Goods)',
+                          Icons.photo_camera,
+                          colorScheme,
+                          [
+                            if (_uploadedPhotos.isEmpty)
+                              Text(
+                                'Upload 2 photos required',
+                                style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                              ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ..._uploadedPhotos.asMap().entries.map((entry) {
+                                  final raw = entry.value;
+                                  File? file;
+                                  if (raw is File) file = raw;
+                                  else if (raw is XFile) file = File(raw.path);
+                                  else if (raw is String) file = File(raw);
+
+                                  return Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: Container(
+                                          width: 100,
+                                          height: 100,
+                                          color: colorScheme.surfaceContainerHighest,
+                                          child: (file != null && file.existsSync())
+                                              ? Image.file(file, fit: BoxFit.cover, width: 100, height: 100)
+                                              : Center(child: Icon(Icons.image, color: colorScheme.primary, size: 32)),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () => _removePhoto(entry.key),
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(
+                                              color: Colors.red,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                }),
+                                if (_uploadedPhotos.length < 2)
+                                  GestureDetector(
+                                    onTap: _pickPhoto,
+                                    child: Container(
+                                      width: 100,
+                                      height: 100,
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: colorScheme.primary,
+                                          style: BorderStyle.solid,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.add_a_photo, color: colorScheme.primary, size: 32),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Add Photo',
+                                            style: TextStyle(fontSize: 10, color: colorScheme.primary),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        // Remark
+                        _buildSectionCard(
+                          'Remark',
+                          Icons.note,
+                          colorScheme,
+                          [
+                            TextFormField(
+                              controller: _remarkController,
+                              maxLines: 3,
+                              decoration: InputDecoration(
+                                hintText: 'Enter any remarks (optional)',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else ...[
+                        // Return Flow
+                        _buildSectionCard(
+                          'Return Reason',
+                          Icons.undo,
+                          colorScheme,
+                          [
+                            TextFormField(
+                              controller: _remarkController,
+                              maxLines: 4,
+                              decoration: InputDecoration(
+                                labelText: 'Reason for Return',
+                                hintText: 'Enter reason why goods are being returned',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              validator: (value) {
+                                if (!_isDelivered && (value == null || value.isEmpty)) {
+                                  return 'Please enter return reason';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      const SizedBox(height: 100), // Space for bottom button
                     ],
                   ),
                 ),
-                const SizedBox(height: 100), // Space for bottom button
               ]),
             ),
           ),
@@ -1496,7 +1418,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           child: ElevatedButton(
             onPressed: _submitDelivery,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1A237E),
+              backgroundColor: Colors.green,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(

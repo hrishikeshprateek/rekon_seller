@@ -1,21 +1,16 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
-import 'package:dio/dio.dart';
 import 'auth_service.dart';
 
 class DashboardService {
   // Updated base URL to match new API host/path used by ValidateLicense
   static const String baseUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder';
-  // Proxy URL for web (to bypass CORS issues during development)
-  static const String proxyUrl = 'http://localhost:3000';
 
   final Dio _dio;
   final AuthService authService;
 
   DashboardService(this.authService) : _dio = Dio() {
-    // Use proxy on web, direct URL on mobile
-    final apiUrl = kIsWeb ? proxyUrl : baseUrl;
-    _dio.options.baseUrl = apiUrl;
+    // Use direct API URL for both mobile and web (CORS handled on backend)
+    _dio.options.baseUrl = baseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
 
