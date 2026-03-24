@@ -23,14 +23,9 @@ class AuthService with ChangeNotifier {
   final Dio _dio = Dio();
 
   /// Get the appropriate API base URL based on platform
-  /// On web: Uses proxy (http://localhost:3000) for development/testing
-  /// On mobile: Uses direct backend URL
+  /// Uses direct backend URL for both web and mobile
   String get apiBaseUrl {
-    if (kIsWeb) {
-      debugPrint('[AuthService] Using PROXY URL for web: $proxyUrl');
-      return proxyUrl;
-    }
-    debugPrint('[AuthService] Using DIRECT backend URL for mobile: $baseUrl');
+    debugPrint('[AuthService] Using DIRECT backend URL: $baseUrl');
     return baseUrl;
   }
 
