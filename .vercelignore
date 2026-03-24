@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Node modules
+node_modules/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.gradle/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Cache
+.cache/
+*.log
+
+# Dependencies cache
+pubspec.lock
