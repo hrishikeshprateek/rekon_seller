@@ -12,7 +12,7 @@ import 'pages/mpin_entry_page.dart';
 class AuthService with ChangeNotifier {
   // API configuration
   // Updated base URL (new API host + path)
-  static const String baseUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder';
+  static const String baseUrl = 'https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/reckonpwsorder';
   // Proxy URL for web (to bypass CORS issues during development)
   static const String proxyUrl = 'http://localhost:3000';
   static const String tenantId = 'com.reckon.reckonbiz';
@@ -963,7 +963,7 @@ class AuthService with ChangeNotifier {
     }
 
     try {
-      final refreshUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/refresh';
+      final refreshUrl = 'https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/refresh';
       final payload = {'refresh_token': _refreshToken};
       debugPrint('[AuthService] Refresh URL: $refreshUrl');
       debugPrint('[AuthService] Refresh payload: {refresh_token: ***}');

@@ -5,7 +5,7 @@
   "rewrites": [
     {
       "source": "/reckon-biz/api/reckonpwsorder/:path*",
-      "destination": "http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder/:path*"
+      "destination": "https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/reckonpwsorder/:path*"
     }
   ]
 }

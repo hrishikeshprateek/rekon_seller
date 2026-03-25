@@ -4,7 +4,7 @@ import 'auth_service.dart';
 
 class DashboardService {
   // Updated base URL to match new API host/path used by ValidateLicense
-  static const String baseUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder';
+  static const String baseUrl = 'https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/reckonpwsorder';
 
   final Dio _dio;
   final AuthService authService;

@@ -7,7 +7,7 @@ import '../models/salesman_flags_model.dart';
 import '../auth_service.dart';
 
 class SalesmanFlagsService with ChangeNotifier {
-  static const String baseUrl = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder';
+  static const String baseUrl = 'https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/reckonpwsorder';
   static const String _storageKey = 'salesman_flags';
   static const String tenantId = '456';
 
