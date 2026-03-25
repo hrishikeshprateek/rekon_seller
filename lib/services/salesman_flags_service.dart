@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
 import '../models/salesman_flags_model.dart';
@@ -22,7 +23,9 @@ class SalesmanFlagsService with ChangeNotifier {
   String? get error => _error;
 
   SalesmanFlagsService() {
-    _dio.options.baseUrl = baseUrl;
+    // Use Vercel proxy for web, direct URL for mobile
+    final apiUrl = kIsWeb ? '/reckon-biz/api/reckonpwsorder' : baseUrl;
+    _dio.options.baseUrl = apiUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
   }

@@ -312,7 +312,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         'lSize': _pageSize,
         'laid': areaIds,
         'lrtid': routeIds,
-        'ldeliveryStatus': [1],
+        'ldeliveryStatus': [0],
         'lSearch': _searchQuery,
         'lExecuteTotalRows': 1,
       });

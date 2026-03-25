@@ -19,7 +19,6 @@ class ReceiptDetailsPage extends StatefulWidget {
 
 class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
   bool _isLoadingPdf = false;
-  final dio = Dio();
 
   Future<void> _shareReceiptPdf() async {
     final auth = Provider.of<AuthService>(context, listen: false);
@@ -42,16 +41,15 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
 
       debugPrint('[ReceiptDetails] GetReceiptDetail payload: $payload');
 
+      final dio = auth.getDioClient();
       final response = await dio.post(
-        'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder/GetReceiptDetail',
+        '/GetReceiptDetail',
         data: payload,
         options: Options(
           responseType: ResponseType.bytes,
           headers: {
             'Content-Type': 'application/json',
             'package_name': auth.packageNameHeader,
-            if (auth.getAuthHeader() != null)
-              'Authorization': auth.getAuthHeader(),
           },
         ),
       );

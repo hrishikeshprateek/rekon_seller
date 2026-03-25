@@ -142,11 +142,7 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
         'acIdCol': widget.account.acIdCol,
       };
 
-      final dio = Dio(BaseOptions(
-        baseUrl: 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder',
-        connectTimeout: const Duration(seconds: 30),
-        receiveTimeout: const Duration(seconds: 30),
-      ));
+      final dio = auth.getDioClient();
 
       final response = await dio.post(
         '/UpdateLocation',
@@ -155,7 +151,6 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
           headers: {
             'Content-Type': 'application/json',
             'package_name': auth.packageNameHeader,
-            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
           },
         ),
       );

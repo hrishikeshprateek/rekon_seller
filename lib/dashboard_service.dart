@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
 
 class DashboardService {
@@ -9,8 +10,9 @@ class DashboardService {
   final AuthService authService;
 
   DashboardService(this.authService) : _dio = Dio() {
-    // Use direct API URL for both mobile and web (CORS handled on backend)
-    _dio.options.baseUrl = baseUrl;
+    // Use Vercel proxy for web, direct URL for mobile
+    final apiUrl = kIsWeb ? '/reckon-biz/api/reckonpwsorder' : baseUrl;
+    _dio.options.baseUrl = apiUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
 

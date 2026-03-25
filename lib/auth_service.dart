@@ -1263,8 +1263,18 @@ class AuthService with ChangeNotifier {
   /// Get a Dio client configured with the 401 interceptor
   /// Use this in all API calls to automatically handle token expiration
   Dio getDioClient({String? customBaseUrl}) {
+    // Use Vercel proxy for web, direct URL for mobile
+    String resolvedBaseUrl;
+    if (customBaseUrl != null) {
+      resolvedBaseUrl = customBaseUrl;
+    } else if (kIsWeb) {
+      resolvedBaseUrl = '/reckon-biz/api/reckonpwsorder';
+    } else {
+      resolvedBaseUrl = baseUrl;
+    }
+
     final dio = Dio(BaseOptions(
-      baseUrl: customBaseUrl ?? baseUrl,
+      baseUrl: resolvedBaseUrl,
       connectTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
       responseType: ResponseType.plain,
