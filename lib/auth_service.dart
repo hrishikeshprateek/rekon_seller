@@ -23,9 +23,14 @@ class AuthService with ChangeNotifier {
   final Dio _dio = Dio();
 
   /// Get the appropriate API base URL based on platform
-  /// Uses direct backend URL for both web and mobile
+  /// On web: Uses Vercel proxy (/reckon-biz/api/reckonpwsorder) to handle CORS
+  /// On mobile: Uses direct backend URL
   String get apiBaseUrl {
-    debugPrint('[AuthService] Using DIRECT backend URL: $baseUrl');
+    if (kIsWeb) {
+      debugPrint('[AuthService] Using VERCEL PROXY for web: /reckon-biz/api/reckonpwsorder');
+      return '/reckon-biz/api/reckonpwsorder';
+    }
+    debugPrint('[AuthService] Using DIRECT backend URL for mobile: $baseUrl');
     return baseUrl;
   }
 
