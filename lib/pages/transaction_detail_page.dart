@@ -3,7 +3,7 @@ import '../models/ledger_entry_model.dart';
 
 /// Full-screen transaction detail page that fetches detail via provided callback
 /// Matches the Android app SaleVoucherFragment UI structure
-class TransactionDetailPage extends StatefulWidget {
+class  TransactionDetailPage extends StatefulWidget {
   final LedgerEntry entry;
   final Future<Map<String, dynamic>?> Function(LedgerEntry) fetchDetail;
   final ColorScheme colorScheme;

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -831,8 +832,11 @@ class _StatementPageState extends State<StatementPage> {
         debugPrint('GetTranDetail payload: $payload');
       }
 
-      // Use full URL as provided in the curl. If your Dio base is set to different host, this will still work.
-      final url = 'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder/GetTranDetail';
+      // Use the relative endpoint path - Dio client already has the correct baseUrl configured
+      final url = '/GetTranDetail';
+
+      debugPrint('[GetTranDetail] Platform: ${kIsWeb ? 'WEB' : 'MOBILE'}');
+      debugPrint('[GetTranDetail] Calling endpoint: $url');
 
       final response = await dio.post(
         url,
@@ -844,6 +848,7 @@ class _StatementPageState extends State<StatementPage> {
         }),
       );
 
+      debugPrint('[GetTranDetail] Response status: ${response.statusCode}');
       debugPrint('GetTranDetail raw response type: ${response.data.runtimeType}');
 
       dynamic raw = response.data;
