@@ -147,6 +147,8 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   bool _isChecking = true;
   bool _isPromptingMpin = false; // debounce to avoid multiple prompts
+  DateTime? _appPausedAt; // Track when app was paused
+  static const int _mpinPromptDelaySeconds = 30; // Minimum 30 seconds before showing MPIN
 
   @override
   void initState() {
@@ -164,7 +166,14 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.resumed) {
+
+    if (state == AppLifecycleState.paused) {
+      // App is being minimized/paused
+      _appPausedAt = DateTime.now();
+      debugPrint('[AppLifecycle] App paused at: $_appPausedAt');
+    } else if (state == AppLifecycleState.resumed) {
+      // App is being resumed
+      debugPrint('[AppLifecycle] App resumed at: ${DateTime.now()}');
       _handleAppResume();
     }
   }
@@ -178,12 +187,28 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
       final authService = Provider.of<AuthService>(context, listen: false);
       if (!authService.isAuthenticated) return;
 
+      // Check if app was paused for at least 30 seconds
+      if (_appPausedAt != null) {
+        final pausedDuration = DateTime.now().difference(_appPausedAt!);
+        debugPrint('[AppLifecycle] App was paused for: ${pausedDuration.inSeconds} seconds');
+
+        if (pausedDuration.inSeconds < _mpinPromptDelaySeconds) {
+          debugPrint('[AppLifecycle] App paused for less than $_mpinPromptDelaySeconds seconds, skipping MPIN prompt');
+          _appPausedAt = null; // Reset the pause time
+          return;
+        }
+      } else {
+        debugPrint('[AppLifecycle] No pause timestamp recorded, skipping MPIN prompt');
+        return;
+      }
+
       _isPromptingMpin = true;
       // Try to get mobile from currentUser or stored token payload
       String mobile = authService.currentUser?.mobileNumber ?? '';
       mobile = mobile.replaceAll(RegExp(r'[^0-9]'), '');
       if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
 
+      debugPrint('[AppLifecycle] Prompting MPIN after ${ _mpinPromptDelaySeconds}s+ pause');
       // Only validate MPIN on resume/start. Refresh should happen only when token is actually expired (handled by interceptors).
       final ok = await authService.promptForMpinAndRefresh(mobile: mobile, refreshOnSuccess: false);
       if (!ok) {
@@ -195,6 +220,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Error during resume MPIN check: $e');
     } finally {
+      _appPausedAt = null; // Reset the pause time
       _isPromptingMpin = false;
     }
   }
