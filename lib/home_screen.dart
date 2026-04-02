@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:reckon_seller_2_0/pages/account_statement_wrapper.dart';
 import 'package:reckon_seller_2_0/pages/cart_page.dart';
 import 'package:reckon_seller_2_0/pages/completed_deliveries_page.dart';
-import 'package:reckon_seller_2_0/pages/outstanding_details_page.dart';
 import 'package:reckon_seller_2_0/pages/account_outstanding_list_page.dart';
 import 'package:reckon_seller_2_0/receipt_book.dart';
 import 'dart:async';
@@ -19,7 +18,6 @@ import 'pages/order_entry_page.dart';
 import 'pages/my_cart_page.dart';
 import 'pages/order_book_page.dart';
 import 'pages/order_status_page.dart';
-import 'pages/statement_page.dart';
 import 'pages/outstanding_page.dart';
 import 'pages/trial_balance_page.dart';
 import 'pages/bank_page.dart';
@@ -39,7 +37,6 @@ import 'pages/contact_support_page.dart';
 import 'widgets/spotlight_search.dart';
 import 'models/dashboard_config_model.dart';
 import 'pages/settings_page.dart';
-import 'pages/select_account_page.dart';
 import 'pages/do_account_selector_page.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -50,7 +47,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedBottomIndex = 0;
   int _currentBannerIndex = 0;
   DashboardConfig? _config;
   bool _isLoading = true;
@@ -158,13 +154,12 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }).toList();
 
-    final apiBanners = apiData.bannerList.banners ?? <dynamic>[];
-    final banners = apiBanners.map((banner) {
-      final apId = (banner is Map && banner.containsKey('Ap_Id')) ? banner['Ap_Id'] : (banner?.apId ?? 0);
+    // Map API banners (from dashboard_service) to config banners (dashboard_config_model)
+    final banners = apiData.bannerList.banners.map((banner) {
       return BannerItem(
-        id: apId is int ? apId : (int.tryParse(apId.toString()) ?? 0),
-        image: 'https://via.placeholder.com/800x300?text=Banner+${apId}',
-        title: 'Banner ${apId}',
+        id: banner.apId,
+        image: 'https://via.placeholder.com/800x300?text=Banner+${banner.apId}',
+        title: 'Banner ${banner.apId}',
         visible: true,
         link: '',
       );
@@ -629,48 +624,71 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    final appBarBg = _parseColor(_config!.appBar?.bgColor ?? _config!.bgColor);
-    final appBarText = _parseColor(_config!.appBar?.textColor ?? '#000000');
-
     return Scaffold(
-      backgroundColor: _parseColor(_config!.bgColor),
+      backgroundColor: const Color(0xFFF8F9FA),
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          // --- PINNED SLIVER APP BAR ---
+          // --- MATERIAL DESIGN SLIVER APP BAR WITH APP LOGO ---
           SliverAppBar(
             pinned: true,
             floating: false,
             snap: false,
             elevation: 0,
-            scrolledUnderElevation: 0,
+            scrolledUnderElevation: 1,
             toolbarHeight: 70,
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                color: appBarBg,
+                color: Colors.white,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    height: 1,
+                    color: Colors.grey.shade200,
+                  ),
+                ),
               ),
             ),
             title: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: Row(
                 children: [
+                  // Reckon Logo
                   Container(
+                    width: 44,
+                    height: 44,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(10),
                       boxShadow: [
                         BoxShadow(
-                          color: colorScheme.shadow.withOpacity(0.08),
+                          color: Colors.black.withValues(alpha: 0.08),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: CircleAvatar(
-                      radius: 20,
-                      backgroundColor: colorScheme.primaryContainer,
-                      child: Icon(Icons.person, size: 22, color: colorScheme.onPrimaryContainer),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.asset(
+                        'assets/images/reckon.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: const Color(0xFF1E88E5),
+                            child: const Icon(
+                              Icons.business_rounded,
+                              size: 22,
+                              color: Colors.white,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
+                  // App Title and User Info
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -678,22 +696,25 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Text(
                           _config!.appTitle,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: appBarText,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF212121),
+                            letterSpacing: 0.2,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: [
-                            _buildProfileBadge(theme, _config!.userInfo.loginLabel, colorScheme.secondaryContainer, colorScheme.onSecondaryContainer),
-                            _buildProfileBadge(theme, _config!.userInfo.roleLabel, colorScheme.tertiaryContainer, colorScheme.onTertiaryContainer),
-                          ],
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_config!.userInfo.loginLabel} • ${_config!.userInfo.roleLabel}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -705,42 +726,83 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_config!.appBar?.showSearch ?? true)
                 IconButton(
                   onPressed: _openSpotlightSearch,
-                  icon: const Icon(Icons.search),
-                  color: colorScheme.onSurfaceVariant,
+                  icon: const Icon(Icons.search_rounded),
+                  color: Colors.black87,
                   tooltip: 'Search',
+                  splashRadius: 24,
                 ),
               Consumer<AuthService>(
                 builder: (context, authService, child) {
                   final user = authService.currentUser;
                   return PopupMenuButton(
-                    icon: Icon(Icons.more_vert, color: colorScheme.onSurfaceVariant),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    icon: const Icon(Icons.more_vert_rounded, color: Colors.black87),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    color: Colors.white,
+                    elevation: 2,
                     offset: const Offset(0, 50),
                     itemBuilder: (context) => [
                       if (user != null)
                         PopupMenuItem(
                           enabled: false,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                user.fullName.isNotEmpty ? user.fullName : 'User',
-                                style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                          child: Container(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(
+                                  color: Colors.grey.shade200,
+                                  width: 1,
+                                ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(user.mobileNumber, style: theme.textTheme.bodySmall),
-                              Text('License: ${user.licenseNumber}', style: theme.textTheme.bodySmall),
-                              const Divider(height: 16),
-                            ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.fullName.isNotEmpty ? user.fullName : 'User',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF212121),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  user.mobileNumber,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'License: ${user.licenseNumber}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w400,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       PopupMenuItem(
                         onTap: () => _handleLogout(context, authService),
                         child: Row(
                           children: [
-                            Icon(Icons.logout, size: 18, color: Colors.grey.shade700),
+                            const Icon(Icons.logout_rounded, size: 18, color: Colors.redAccent),
                             const SizedBox(width: 12),
-                            Text('Logout', style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w600)),
+                            const Text(
+                              'Logout',
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -776,10 +838,39 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
-        icon: const Icon(Icons.settings),
-        label: const Text('Settings'),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1E88E5),
+              Color(0xFF1565C0),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1E88E5).withValues(alpha: 0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: FloatingActionButton.extended(
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsPage())),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          icon: const Icon(Icons.settings, color: Colors.white),
+          label: const Text(
+            'Settings',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
@@ -792,7 +883,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: [
         SizedBox(
-          height: 150,
+          height: 160,
           child: PageView.builder(
             controller: _bannerPageController,
             itemCount: visibleBanners.length,
@@ -800,98 +891,148 @@ class _HomeScreenState extends State<HomeScreen> {
             itemBuilder: (context, index) {
               final banner = visibleBanners[index];
               return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 4.0),
+                margin: const EdgeInsets.symmetric(horizontal: 6.0, vertical: 8.0),
                 decoration: BoxDecoration(
                   color: _parseColor(_config!.bannerList.bgColor),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).colorScheme.shadow.withOpacity(0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    )
+                      color: const Color(0xFF1E88E5).withValues(alpha: 0.12),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFFFF6F00).withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 3),
+                    ),
                   ],
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: CachedNetworkImage(
-                    imageUrl: banner.image,
-                    fit: BoxFit.cover,
-                    placeholder: (c, u) => Container(color: Theme.of(context).colorScheme.surfaceContainerHighest, child: const Center(child: CircularProgressIndicator())),
-                    errorWidget: (c, u, e) => Container(
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                      child: Center(child: Icon(Icons.broken_image_outlined, color: Theme.of(context).colorScheme.outline)),
-                    ),
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    children: [
+                      CachedNetworkImage(
+                        imageUrl: banner.image,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        placeholder: (c, u) => Container(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          child: const Center(child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (c, u, e) => Container(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          child: Center(
+                            child: Icon(
+                              Icons.broken_image_outlined,
+                              color: Theme.of(context).colorScheme.outline,
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Overlay gradient for better text readability
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.2),
+                              Colors.transparent,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
             },
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
+        // Enhanced indicator dots
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: List.generate(visibleBanners.length, (i) {
             final active = i == _currentBannerIndex;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              width: active ? 24 : 8,
-              height: 6,
-              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: active ? 28 : 8,
+              height: 8,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(3),
-                color: active ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+                color: active
+                    ? const Color(0xFF1E88E5)
+                    : const Color(0xFF1E88E5).withValues(alpha: 0.3),
+                boxShadow: active
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF1E88E5).withValues(alpha: 0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : [],
               ),
             );
           }),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 16),
       ],
     );
   }
 
-  Widget _buildProfileBadge(ThemeData theme, String text, Color bg, Color fg) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: bg.withOpacity(0.8), width: 0.5),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: fg),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
-  }
-
   Widget _buildSectionHeader(BuildContext context, String title, {String? bgColor, String? levelColor}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final headerColor = levelColor != null ? _parseColor(levelColor) : colorScheme.primary;
+    // Default to blue for primary sections, orange for secondary
+    Color headerColor;
+    if (levelColor != null) {
+      headerColor = _parseColor(levelColor);
+    } else {
+      // Alternate between blue and orange for visual interest
+      headerColor = const Color(0xFF1E88E5); // Default blue
+    }
+
     return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      padding: const EdgeInsets.only(top: 16, bottom: 12),
       child: Row(
         children: [
-          // Restored horizontal line
-          Container(width: 3, height: 14, decoration: BoxDecoration(color: headerColor, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(width: 8),
+          // Colored accent bar
+          Container(
+            width: 4,
+            height: 18,
+            decoration: BoxDecoration(
+              color: headerColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 12),
           Text(
             title.toUpperCase(),
             style: TextStyle(
               fontSize: 13,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
               color: headerColor,
-              letterSpacing: 0.8,
+              letterSpacing: 1.0,
             ),
           ),
           const SizedBox(width: 12),
-          // Expanded Title Line (Overflow Safe)
+          // Expanded decorative line
           Expanded(
             child: Container(
-              height: 1,
-              color: headerColor.withOpacity(0.15),
+              height: 1.5,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [
+                    headerColor.withValues(alpha: 0.3),
+                    headerColor.withValues(alpha: 0.05),
+                  ],
+                ),
+              ),
             ),
           ),
         ],
@@ -934,52 +1075,82 @@ class _HomeScreenState extends State<HomeScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final cardBgColor = _parseColor(item.bgCard);
-    final titleColor = _parseColor(item.colorTitle);
 
+    // Modern color palette - alternate between blue and orange accents
+    final accentColor = item.label.length % 2 == 0 ? const Color(0xFF1E88E5) : const Color(0xFFFF6F00);
+
+    // Determine card background - use subtle gradient if white
     final cardColor = cardBgColor == const Color(0xFFFFFFFF)
-        ? colorScheme.surfaceContainerLow
+        ? const Color(0xFFFAFBFC)
         : cardBgColor;
 
     return Material(
-      color: cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.4), width: 1),
-      ),
+      color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
           final widget = _getRouteWidget(item.route, label: item.label);
           if (widget != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => widget));
         },
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: titleColor.withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(_getIconData(item.icon), size: 22, color: titleColor),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item.label,
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                  height: 1.1,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: accentColor.withValues(alpha: 0.15),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: accentColor.withValues(alpha: 0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
               ),
             ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Icon container with gradient background
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        accentColor.withValues(alpha: 0.15),
+                        accentColor.withValues(alpha: 0.05),
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _getIconData(item.icon),
+                    size: 24,
+                    color: accentColor,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  item.label,
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         ),
       ),

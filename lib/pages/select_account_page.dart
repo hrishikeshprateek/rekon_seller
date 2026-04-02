@@ -12,7 +12,6 @@ import 'package:share_plus/share_plus.dart'; // Ensure share_plus is in pubspec.
 import '../models/account_model.dart';
 import '../auth_service.dart';
 import 'location_picker_sheet.dart';
-import 'account_filter_page.dart';
 class SelectAccountPage extends StatefulWidget {
   final String title;
   final String? accountType;
@@ -428,42 +427,16 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F4F7),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+        title: const Text('Select Account', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
         centerTitle: true,
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
+        backgroundColor: colorScheme.surface,
+        scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Color(0xFF1E88E5)),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black87),
-            onPressed: () => _loadAccounts(reset: true),
-          ),
-          IconButton(
-            icon: const Icon(Icons.filter_list, color: Colors.black87),
-            onPressed: () async {
-              // open filter page and wait for List<Map<String,dynamic>> result
-              final result = await Navigator.of(context).push<List<Map<String, dynamic>>>(
-                MaterialPageRoute(builder: (_) => AccountFilterPage(initialSelectedFilters: _appliedFilters)),
-              );
-              if (result != null) {
-                // store applied filters and reload accounts
-                setState(() {
-                  _appliedFilters = result;
-                });
-                debugPrint('Filters applied: ${jsonEncode(_appliedFilters)}');
-                await _loadAccounts(reset: true);
-              } else {
-                // If user returned without selection (null) do nothing
-                debugPrint('Filter page dismissed');
-              }
-            },
-          ),
-        ],
       ),
       body: SafeArea(
         child: Column(
@@ -501,25 +474,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
               ),
             ),
 
-            if (widget.accountType == null) ...[
-              const SizedBox(height: 4),
-              SizedBox(
-                height: 36,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                  children: [
-                    _buildFilterChip('All', null),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Parties', 'Party'),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Banks', 'Bank'),
-                    const SizedBox(width: 8),
-                    _buildFilterChip('Cash', 'Cash'),
-                  ],
-                ),
-              ),
-            ],
+
 
             const SizedBox(height: 8),
 
@@ -595,7 +550,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: isSelected ? Theme.of(context).primaryColor : const Color(0xFFE0E0E0), width: isSelected ? 2 : 1),
+        side: BorderSide(color: isSelected ? const Color(0xFF1E88E5) : const Color(0xFFE0E0E0), width: isSelected ? 2 : 1),
       ),
       child: InkWell(
         onTap: () => _selectAccount(account),
@@ -608,14 +563,14 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: _getTypeColor(account.type).withOpacity(0.1),
-                    child: Text(
-                      account.name.isNotEmpty ? account.name[0].toUpperCase() : '?',
-                      style: TextStyle(fontWeight: FontWeight.bold, color: _getTypeColor(account.type)),
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: _getTypeColor(account.type).withValues(alpha: 0.1),
+                      child: Text(
+                        account.name.isNotEmpty ? account.name[0].toUpperCase() : '?',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: _getTypeColor(account.type)),
+                      ),
                     ),
-                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -711,9 +666,9 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.map_outlined, size: 16, color: Color(0xFF0366D6)),
+                      Icon(Icons.map_outlined, size: 16, color: Color(0xFF1E88E5)),
                       SizedBox(width: 8),
-                      Text("View location on map", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF0366D6))),
+                      Text("View location on map", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E88E5))),
                     ],
                   ),
                 ),
@@ -749,17 +704,17 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       child: InkWell(
         onTap: isEnabled ? onTap : null,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: isEnabled ? Colors.black54 : Colors.grey[300]),
-              const SizedBox(width: 8),
-              Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isEnabled ? Colors.black87 : Colors.grey[300])),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: isEnabled ? const Color(0xFF1E88E5) : Colors.grey[300]),
+                const SizedBox(width: 8),
+                Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isEnabled ? const Color(0xFF1E88E5) : Colors.grey[300])),
+              ],
+            ),
           ),
-        ),
       ),
     );
   }
@@ -805,7 +760,11 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                         },
                         icon: const Icon(Icons.share_outlined),
                         label: const Text('Share Details'),
-                        style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          side: const BorderSide(color: Color(0xFFFF6F00), width: 1.5),
+                          foregroundColor: const Color(0xFFFF6F00),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -832,8 +791,6 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     );
   }
 
-  Widget _buildLoadingState(BuildContext context) => const Center(child: CircularProgressIndicator());
-  Widget _buildEmptyState(BuildContext context) => const Center(child: Text("No accounts found"));
 
   Color _getTypeColor(String type) {
     switch (type) {

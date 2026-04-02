@@ -542,7 +542,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         backgroundColor: Theme.of(context).colorScheme.surface,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Color(0xFFFF6F00)),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -550,7 +550,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.tune),
+                icon: const Icon(Icons.tune, color: Color(0xFFFF6F00)),
                 onPressed: _openFilterPage,
                 tooltip: 'Filters',
               ),
@@ -585,14 +585,14 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                   fontSize: 14,
                   color: colorScheme.onSurfaceVariant,
                 ),
-                prefixIcon: Icon(
+                prefixIcon: const Icon(
                   Icons.search,
-                  color: colorScheme.onSurfaceVariant,
+                  color: Color(0xFFFF6F00),
                   size: 20,
                 ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear),
+                        icon: const Icon(Icons.clear, color: Color(0xFFFF6F00)),
                         onPressed: () {
                           _searchController.clear();
                           if (mounted) {
@@ -668,7 +668,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -698,7 +698,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: typeColor.withOpacity(0.1),
+                        color: typeColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -854,60 +854,64 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
 
           // Actions
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: OutlinedButton(
-                    onPressed: (bill.latitude != null && bill.longitude != null &&
-                                 bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
-                        ? () => _openMapsNavigation(bill)
-                        : null, // Disable if no coordinates
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      side: BorderSide(
-                          color: (bill.latitude != null && bill.longitude != null &&
-                                  bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
-                              ? const Color(0xFF07666A)
-                              : Colors.grey.shade200,
-                          width: 1.5),
-                      foregroundColor: (bill.latitude != null && bill.longitude != null &&
-                                       bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
-                          ? const Color(0xFF07666A)
-                          : Colors.grey.shade400, // Grey out when disabled
-                    ),
-                    child: const Icon(Icons.near_me_outlined),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 48,
                     height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _navigateToDetails(bill),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF07666A),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
+                    child: OutlinedButton(
+                      onPressed: (bill.latitude != null && bill.longitude != null &&
+                                   bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
+                          ? () => _openMapsNavigation(bill)
+                          : null,
+                      style: OutlinedButton.styleFrom(
+                        padding: EdgeInsets.zero,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
+                        side: BorderSide(
+                            color: (bill.latitude != null && bill.longitude != null &&
+                                    bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
+                                ? const Color(0xFFFF6F00)
+                                : Colors.grey.shade200,
+                            width: 1.5),
+                        foregroundColor: (bill.latitude != null && bill.longitude != null &&
+                                         bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
+                            ? const Color(0xFFFF6F00)
+                            : Colors.grey.shade400,
                       ),
-                      icon: const Icon(Icons.check_circle_outline, size: 20),
-                      label: const Text(
-                        "Mark Delivered",
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14),
+                      child: const Icon(Icons.near_me_outlined, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _navigateToDetails(bill),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6F00),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.check_circle_outline, size: 20),
+                        label: const Text(
+                          "Mark Delivered",
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
