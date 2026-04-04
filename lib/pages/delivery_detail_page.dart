@@ -105,60 +105,30 @@ class DeliveryDetailPage extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
-          // App Bar
+          // Clean Material Design App Bar
           SliverAppBar(
-            expandedHeight: 120,
+            expandedHeight: 0,
             pinned: true,
-            backgroundColor: const Color(0xFF1976D2),
-            foregroundColor: Colors.white,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFE65100),
-                      Color(0xFFFF6F00),
-                      Color(0xFF1976D2),
-                    ],
-                    stops: [0.0, 0.5, 1.0],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 40, 16, 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-
-                        Text(
-                          _getString('acname', 'Delivery Details'),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Bill No: ${_getString('billno')}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+            backgroundColor: Colors.white,
+            foregroundColor: Colors.black,
+            elevation: 0,
+            scrolledUnderElevation: 1,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Color(0xFF1E88E5)),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              _getString('billno', 'Delivery Details'),
+              style: const TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF212121),
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
 
@@ -168,7 +138,33 @@ class DeliveryDetailPage extends StatelessWidget {
             sliver: SliverList(
               delegate: SliverChildListDelegate([
 
-                // Bill Information Card
+                // Account Name and Bill Info - Top Section
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _getString('acname', 'Account'),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E88E5),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Bill No: ${_getString('billno')}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFFFF6F00),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
                 // Delivery Details Card
                 _buildSectionCard(
                   'Delivery Details',
@@ -252,7 +248,7 @@ class DeliveryDetailPage extends StatelessWidget {
                     child: ElevatedButton.icon(
                       onPressed: () => _openMapsNavigation(context),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1976D2),
+                        backgroundColor: const Color(0xFFFF6F00),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -264,7 +260,7 @@ class DeliveryDetailPage extends StatelessWidget {
                         'Navigate to Location',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -282,13 +278,17 @@ class DeliveryDetailPage extends StatelessWidget {
   Widget _buildSectionCard(String title, List<Widget> children, ColorScheme colorScheme) {
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -299,14 +299,17 @@ class DeliveryDetailPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onSurface,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF212121),
               ),
             ),
           ),
-          const Divider(height: 1),
+          Divider(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -365,13 +368,17 @@ class DeliveryDetailPage extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade200,
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -382,14 +389,17 @@ class DeliveryDetailPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               'Delivery Images',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: colorScheme.onSurface,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF212121),
               ),
             ),
           ),
-          const Divider(height: 1),
+          Divider(
+            height: 1,
+            color: Colors.grey.shade200,
+          ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: GridView.builder(

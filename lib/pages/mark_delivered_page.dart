@@ -42,7 +42,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   @override
   void initState() {
     super.initState();
-    _paymentMode = widget.task.paymentType == PaymentType.cash ? 'Cash' : 'Credit';
+    _paymentMode = 'Credit'; // Default to Credit payment mode
   }
 
   @override
