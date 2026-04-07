@@ -165,7 +165,6 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
   final Map<int, String> _deliveryStatusMap = {
     1: 'Delivered',
     2: 'Part Delivered',
-    3: 'Cancel',
     4: 'Not delivered',
     5: 'Return',
   };

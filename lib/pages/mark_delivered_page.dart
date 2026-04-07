@@ -35,7 +35,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   List<dynamic> _uploadedPhotos = [];
   String _paymentMode = 'Credit'; // Cash or Credit
   // Delivery status when in Delivered mode
-  String _deliveryStatus = 'Delivered'; // options: Delivered, Part delivered, Not delivered
+  String _deliveryStatus = 'Delivered'; // options: Delivered, Part delivered, Not delivered, Return
 
   final ImagePicker _picker = ImagePicker();
 
@@ -436,12 +436,12 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   void _submitDelivery() {
     if (_formKey.currentState!.validate()) {
       if (_isDelivered) {
-        // If outcome is Not delivered, treat as a return/undelivered flow
-        if (_deliveryStatus == 'Not delivered') {
+        // If outcome is Not delivered or Return, treat as a return/undelivered flow
+        if (_deliveryStatus == 'Not delivered' || _deliveryStatus == 'Return') {
           if (_remarkController.text.isEmpty) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Please enter reason for non-delivery'),
+              SnackBar(
+                content: Text('Please enter reason for ${_deliveryStatus == 'Return' ? 'return' : 'non-delivery'}'),
                 backgroundColor: Colors.red,
               ),
             );
@@ -500,15 +500,17 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
     final dio = auth.getDioClient();
     dio.options.connectTimeout = const Duration(seconds: 60);
 
-    // Delivery status code: "1"=Delivered, "2"=Part delivered, "3"=Not delivered
+    // Delivery status code: "1"=Delivered, "2"=Part delivered, "3"=Not delivered, "5"=Return
     String statusCode = "1";
     if (_deliveryStatus == 'Part delivered') statusCode = "2";
     else if (_deliveryStatus == 'Not delivered') statusCode = "3";
+    else if (_deliveryStatus == 'Return') statusCode = "5";
 
     try {
       // Build the request JSON object
       final requestJson = {
         'keyno': widget.task.id ?? '', // Use task.id as keyno (bill key)
+        'acNo': widget.task.partyId ?? '', // Add account number for receipt upload
         'deliveryStatus': statusCode,
         'remark': _remarkController.text.trim().isEmpty ? 'Delivered successfully' : _remarkController.text.trim(),
         'deliveryDateTime': DateTime.now().toUtc().toIso8601String(),
@@ -584,10 +586,15 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
     dio.options.connectTimeout = const Duration(seconds: 30);
 
     try {
+      // Determine status code: "3"=Not delivered, "5"=Return
+      String statusCode = "3"; // Default to Not delivered
+      if (_deliveryStatus == 'Return') statusCode = "5";
+
       // Build the request JSON object for return/not delivered
       final requestJson = {
         'keyno': widget.task.id ?? '', // Use task.id as keyno (bill key)
-        'deliveryStatus': "3", // 3 = Return/Not delivered
+        'acNo': widget.task.partyId ?? '', // Add account number for receipt upload
+        'deliveryStatus': statusCode, // 3 = Not delivered, 5 = Return
         'remark': _remarkController.text.trim(),
         'deliveryDateTime': DateTime.now().toUtc().toIso8601String(),
       };
@@ -991,10 +998,11 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                               DropdownMenuItem(value: 'Delivered', child: Text('Delivered')),
                               DropdownMenuItem(value: 'Part delivered', child: Text('Part delivered')),
                               DropdownMenuItem(value: 'Not delivered', child: Text('Not delivered')),
+                              DropdownMenuItem(value: 'Return', child: Text('Return')),
                             ],
                             onChanged: (v) => setState(() {
                               _deliveryStatus = v ?? 'Delivered';
-                              _isDelivered = _deliveryStatus != 'Not delivered';
+                              _isDelivered = _deliveryStatus != 'Not delivered' && _deliveryStatus != 'Return';
                             }),
                           ),
                           const SizedBox(height: 8),
@@ -1350,26 +1358,56 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
                         const SizedBox(height: 10),
 
-                        // Remark
-                        _buildSectionCard(
-                          'Remark',
-                          Icons.note,
-                          colorScheme,
-                          [
-                            TextFormField(
-                              controller: _remarkController,
-                              maxLines: 3,
-                              decoration: InputDecoration(
-                                hintText: 'Enter any remarks (optional)',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        // Remark - Show only for Delivered, Part delivered, and Not delivered (not for Return)
+                        if (_deliveryStatus != 'Return') ...[
+                          _buildSectionCard(
+                            'Remark',
+                            Icons.note,
+                            colorScheme,
+                            [
+                              TextFormField(
+                                controller: _remarkController,
+                                maxLines: 3,
+                                decoration: InputDecoration(
+                                  hintText: 'Enter any remarks (optional)',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
+                        // Reason - Show for both "Not delivered" and "Return" statuses
+                        if (_deliveryStatus == 'Not delivered' || _deliveryStatus == 'Return') ...[
+                          if (_deliveryStatus != 'Return') const SizedBox(height: 10),
+                          _buildSectionCard(
+                            _deliveryStatus == 'Return' ? 'Reason for Return' : 'Reason for Non-Delivery',
+                            Icons.undo,
+                            colorScheme,
+                            [
+                              TextFormField(
+                                controller: _remarkController,
+                                maxLines: 4,
+                                decoration: InputDecoration(
+                                  labelText: _deliveryStatus == 'Return' ? 'Reason for Return' : 'Reason for Non-Delivery',
+                                  hintText: _deliveryStatus == 'Return'
+                                    ? 'Enter reason why goods are being returned'
+                                    : 'Enter reason why goods could not be delivered',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                                validator: (value) {
+                                  if ((_deliveryStatus == 'Not delivered' || _deliveryStatus == 'Return') && (value == null || value.isEmpty)) {
+                                    return 'Please enter reason';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
                       ] else ...[
-                        // Return Flow
+                        // Return Flow - Show reason field for non-delivered items
                         _buildSectionCard(
-                          'Return Reason',
+                          'Reason for Return',
                           Icons.undo,
                           colorScheme,
                           [
@@ -1383,7 +1421,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                               ),
                               validator: (value) {
                                 if (!_isDelivered && (value == null || value.isEmpty)) {
-                                  return 'Please enter return reason';
+                                  return 'Please enter reason';
                                 }
                                 return null;
                               },
