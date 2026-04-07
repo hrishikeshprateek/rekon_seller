@@ -5,9 +5,10 @@
 *.swp
 .DS_Store
 .atom/
-.build/
+#.build/
 .buildlog/
 .history
+node_modules
 .svn/
 .swiftpm/
 migrate_working_dir/
