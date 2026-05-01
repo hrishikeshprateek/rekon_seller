@@ -12,6 +12,7 @@ import 'dart:typed_data';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cross_file/cross_file.dart';
+import 'constants/api_constants.dart';
 
 class CreateReceiptScreen extends StatefulWidget {
   final String? accountNo;
@@ -1007,7 +1008,7 @@ class _ReceiptSubmissionConfirmationState
       debugPrint('[ReceiptConfirmation] GetReceiptDetail payload: $payload');
 
       final response = await dio.post(
-        'http://mobileappsandbox.reckonsales.com:8080/reckon-biz/api/reckonpwsorder/GetReceiptDetail',
+        ApiConstants.getReceiptDetailUrl,
         data: payload,
         options: Options(
           responseType: ResponseType.bytes,

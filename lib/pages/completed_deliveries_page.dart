@@ -168,12 +168,14 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
     4: 'Not delivered',
     5: 'Return',
   };
-  List<int> _selectedDeliveryStatus = [1]; // Default to Delivered
+  late List<int> _selectedDeliveryStatus;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+
+    _selectedDeliveryStatus = _deliveryStatusMap.keys.toList();
 
     // Set default to Today's date
     final now = DateTime.now();
@@ -411,9 +413,7 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
         }
       }
 
-      final List<int> deliveryStatus = _selectedDeliveryStatus.isEmpty
-          ? [1]  // Default to Delivered if empty
-          : List<int>.from(Set<int>.from(_selectedDeliveryStatus));  // Remove duplicates
+      final List<int> deliveryStatus = List<int>.from(Set<int>.from(_selectedDeliveryStatus));
 
       debugPrint('[CompletedDeliveries] Delivery Status Array (deduplicated): $deliveryStatus');
 

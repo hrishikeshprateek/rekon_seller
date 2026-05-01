@@ -8,14 +8,12 @@ import 'package:flutter/foundation.dart';
 import 'models/user_model.dart';
 import 'app_navigator.dart';
 import 'pages/mpin_entry_page.dart';
+import 'constants/api_constants.dart';
 
 class AuthService with ChangeNotifier {
-  // API configuration
-  // Updated base URL (new API host + path)
-  static const String baseUrl = 'https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/reckonpwsorder';
-  // Proxy URL for web (to bypass CORS issues during development)
-  static const String proxyUrl = 'http://localhost:3000';
-  static const String tenantId = 'com.reckon.reckonbiz';
+  // API configuration is now centralized in ApiConstants
+  static String get baseUrl => ApiConstants.baseUrl;
+  static String get tenantId => ApiConstants.tenantId;
   // Updated API header package name
   static const String packageName = 'com.reckon.reckonbiz';
 
@@ -23,14 +21,10 @@ class AuthService with ChangeNotifier {
   final Dio _dio = Dio();
 
   /// Get the appropriate API base URL based on platform
-  /// On web: Uses Vercel proxy (/reckon-biz/api/reckonpwsorder) to handle CORS
+  /// On web: Uses direct backend URL (HTTPS recommended for production)
   /// On mobile: Uses direct backend URL
   String get apiBaseUrl {
-    if (kIsWeb) {
-      debugPrint('[AuthService] Using VERCEL PROXY for web: /reckon-biz/api/reckonpwsorder');
-      return '/reckon-biz/api/reckonpwsorder';
-    }
-    debugPrint('[AuthService] Using DIRECT backend URL for mobile: $baseUrl');
+    debugPrint('[AuthService] Using DIRECT backend URL: $baseUrl');
     return baseUrl;
   }
 
@@ -66,7 +60,7 @@ class AuthService with ChangeNotifier {
   }
 
   AuthService() {
-    _dio.options.baseUrl = apiBaseUrl; // Uses proxy on web, direct URL on mobile
+    _dio.options.baseUrl = apiBaseUrl; // Uses direct HTTP for both web and mobile
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
 
@@ -449,8 +443,10 @@ class AuthService with ChangeNotifier {
       }
 
       // If API returns AccessToken, consider it successful login
-      final hasAccessToken = (data['AccessToken'] != null && data['AccessToken'].toString().isNotEmpty);
-      final statusTrue = data['Status'] == true || (data['Status']?.toString().toLowerCase() == 'true');
+      final accessTokenValue = data['AccessToken'];
+      final hasAccessToken = (accessTokenValue != null && accessTokenValue.toString().trim().isNotEmpty);
+      final statusValue = data['Status'];
+      final statusTrue = (statusValue == true) || (statusValue != null && statusValue.toString().toLowerCase() == 'true');
 
       if (hasAccessToken || statusTrue) {
         // Only persist tokens if user doesn't need to create password/mpin
@@ -490,8 +486,14 @@ class AuthService with ChangeNotifier {
             debugPrint('[AuthService] Refresh token saved to secure storage: $_refreshToken');
           }
           if (_currentUser != null) {
-            await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
-            debugPrint('[AuthService] User data saved to secure storage');
+            try {
+              await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+              debugPrint('[AuthService] User data saved to secure storage');
+            } catch (e) {
+              debugPrint('[AuthService] Error saving user data: $e');
+            }
+          } else {
+            debugPrint('[AuthService] Warning: _currentUser is null after profile parsing');
           }
 
           notifyListeners();
@@ -705,7 +707,13 @@ class AuthService with ChangeNotifier {
         if (profile != null) _currentUser = UserModel.fromProfileJson(profile, storesData: data);
         if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
         if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
-        if (_currentUser != null) await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+        if (_currentUser != null) {
+          try {
+            await _storage.write(key: 'user_data', value: jsonEncode(_currentUser!.toJson()));
+          } catch (e) {
+            debugPrint('[AuthService] Error saving user data in loginWithMpinOnly: $e');
+          }
+        }
         notifyListeners();
         return {'success': true, 'message': data['Message'] ?? 'OTP Verified', 'data': data, 'raw': response.data};
       }
@@ -1263,14 +1271,12 @@ class AuthService with ChangeNotifier {
   /// Get a Dio client configured with the 401 interceptor
   /// Use this in all API calls to automatically handle token expiration
   Dio getDioClient({String? customBaseUrl}) {
-    // Use Vercel proxy for web, direct URL for mobile
+    // Use direct HTTP URL for both web and mobile
     String resolvedBaseUrl;
     if (customBaseUrl != null) {
       resolvedBaseUrl = customBaseUrl;
-    } else if (kIsWeb) {
-      resolvedBaseUrl = '/reckon-biz/api/reckonpwsorder';
     } else {
-      resolvedBaseUrl = baseUrl;
+      resolvedBaseUrl = baseUrl; // Always use direct HTTP URL
     }
 
     final dio = Dio(BaseOptions(

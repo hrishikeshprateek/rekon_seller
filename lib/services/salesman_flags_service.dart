@@ -3,11 +3,13 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
+import '../constants/api_constants.dart';
 import '../models/salesman_flags_model.dart';
 import '../auth_service.dart';
 
 class SalesmanFlagsService with ChangeNotifier {
-  static const String baseUrl = 'https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/reckonpwsorder';
+  // API configuration is now centralized in ApiConstants
+  static String get baseUrl => ApiConstants.baseUrl;
   static const String _storageKey = 'salesman_flags';
   static const String tenantId = '456';
 
@@ -23,9 +25,8 @@ class SalesmanFlagsService with ChangeNotifier {
   String? get error => _error;
 
   SalesmanFlagsService() {
-    // Use Vercel proxy for web, direct URL for mobile
-    final apiUrl = kIsWeb ? '/reckon-biz/api/reckonpwsorder' : baseUrl;
-    _dio.options.baseUrl = apiUrl;
+    // Use direct backend URL for all platforms (web and mobile)
+    _dio.options.baseUrl = baseUrl;
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
   }

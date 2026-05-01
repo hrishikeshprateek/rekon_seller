@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import 'package:geocoding/geocoding.dart' as geocoding;
+import 'dart:convert';
 import '../auth_service.dart';
 import '../models/account_model.dart';
 
@@ -142,21 +143,51 @@ class _LocationPickerSheetState extends State<LocationPickerSheet> {
         'acIdCol': widget.account.acIdCol,
       };
 
+      debugPrint('===== UpdateLocation Payload =====');
+      debugPrint('$payload');
+      debugPrint('===================================');
+
       final dio = auth.getDioClient();
 
-      final response = await dio.post(
-        '/UpdateLocation',
-        data: payload,
-        options: Options(
-          headers: {
-            'Content-Type': 'application/json',
-            'package_name': auth.packageNameHeader,
-          },
-        ),
-      );
+       final response = await dio.post(
+         '/UpdateLocation',
+         data: payload,
+         options: Options(
+           headers: {
+             'Content-Type': 'application/json',
+             'package_name': auth.packageNameHeader,
+             if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+           },
+         ),
+       );
 
-      final responseData = response.data is Map ? response.data : {'success': false};
+      debugPrint('===== UpdateLocation Response =====');
+      debugPrint('Raw response: ${response.data}');
+      debugPrint('Response type: ${response.data.runtimeType}');
+      debugPrint('====================================');
+
+      // Parse response - may be String or Map
+      dynamic raw = response.data;
+      Map<String, dynamic> responseData;
+
+      if (raw is String) {
+        try {
+          final decoded = jsonDecode(raw);
+          responseData = decoded is Map<String, dynamic> ? decoded : {'success': false};
+        } catch (e) {
+          debugPrint('Error decoding JSON: $e');
+          responseData = {'success': false};
+        }
+      } else if (raw is Map<String, dynamic>) {
+        responseData = raw;
+      } else {
+        responseData = {'success': false};
+      }
+
       final success = responseData['success'] ?? false;
+
+      debugPrint('Parsed success: $success');
+      debugPrint('Response data: $responseData');
 
       if (mounted) {
         if (success) {

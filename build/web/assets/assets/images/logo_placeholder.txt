@@ -1,3 +1,0 @@
-This is a placeholder for the logo.
-Please replace this folder with your actual logo file (logo.png or logo.svg)
-For now, we'll use an icon from Flutter's material icons in the login screen.

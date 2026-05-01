@@ -2,11 +2,6 @@
   "buildCommand": "git clone https://github.com/flutter/flutter.git --depth 1 -b stable && export PATH=$PATH:$(pwd)/flutter/bin && flutter config --enable-web && flutter pub get && flutter build web --release",
   "outputDirectory": "build/web",
   "installCommand": "echo 'Flutter will be cloned during build'",
-  "rewrites": [
-    {
-      "source": "/reckon-biz/api/reckonpwsorder/:path*",
-      "destination": "https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/reckonpwsorder/:path*"
-    }
-  ]
+  "rewrites": []
 }
 
