@@ -245,7 +245,7 @@ class _ItemFilterPageState extends State<ItemFilterPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("${filteredItems.length} items", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text("${filteredItems.length} ${activeCat.title}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                 TextButton(
                     onPressed: () {
                       setState(() {

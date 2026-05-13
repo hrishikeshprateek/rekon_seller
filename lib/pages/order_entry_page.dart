@@ -46,6 +46,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   int _currentPage = 1;
   final int _pageSize = 20;
   String _searchQuery = '';
+  // Flips to true only when we're intentionally popping the page (e.g. after
+  // the user cancels the back-press SelectAccountPage). Lets PopScope.canPop
+  // allow that one pop without re-triggering onPopInvoked.
+  bool _allowPop = false;
 
   @override
   void initState() {
@@ -71,12 +75,13 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     }
   }
 
-  Future<void> _openSelectAccount() async {
+  Future<void> _openSelectAccount({bool popOnCancel = false}) async {
     // Loop the account selection so that when a user picks an account that the
     // server rejects (Status=false), we return them to the selector instead of
     // popping back to the Home page. If the user cancels the selector and we
-    // have no previously selected account, then close this page.
-    while (mounted && !_hasSelectedAccount) {
+    // have no previously selected account (initState path) OR the caller asked
+    // us to (back-press path), close this page.
+    while (mounted) {
       final models.Account? result = await SelectAccountPage.show(
         context,
         title: 'Select Party',
@@ -87,7 +92,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
       // User cancelled the selector
       if (result == null) {
-        if (!_hasSelectedAccount && mounted) Navigator.of(context).pop();
+        if (mounted && (popOnCancel || !_hasSelectedAccount)) {
+          setState(() => _allowPop = true);
+          Navigator.of(context).pop();
+        }
         return;
       }
 
@@ -96,6 +104,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       if (!mounted) return;
 
       if (statusCheck['ok'] == true) {
+        final bool isFirstSelection = !_hasSelectedAccount;
         setState(() {
           _selectedAccount = result;
           _hasSelectedAccount = true;
@@ -104,7 +113,18 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           // Load any existing draft order (cart) for this account first
           await _loadDraftOrder();
           // Then load product list
-          await _loadProducts();
+          if (isFirstSelection) {
+            await _loadProducts();
+          } else {
+            // Switching party: reset and reload products for the new context.
+            setState(() {
+              _allProducts = [];
+              _displayedProducts = [];
+              _currentPage = 1;
+              _hasMoreData = true;
+            });
+            await _loadProducts();
+          }
         }
         return; // done
       }
@@ -657,7 +677,14 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return PopScope(
+      // Block the default pop and route back through the party selector.
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _openSelectAccount(popOnCancel: true);
+      },
+      child: Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text('New Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
@@ -842,6 +869,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

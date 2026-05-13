@@ -283,6 +283,35 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     );
   }
 
+  Future<void> _dialPhone(String rawPhone) async {
+    // Strip everything except digits and +, then prepend +91 for bare 10-digit numbers.
+    String tel = rawPhone.replaceAll(RegExp(r'[^0-9+]'), '');
+    if (tel.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No phone number to call'), backgroundColor: Colors.orange),
+        );
+      }
+      return;
+    }
+    if (!tel.startsWith('+') && tel.length == 10) tel = '+91$tel';
+    final uri = Uri(scheme: 'tel', path: tel);
+    try {
+      final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open dialer for $tel'), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open dialer: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _openMapsNavigation(Account account) async {
     if (account.latitude == null || account.longitude == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Location not available'), backgroundColor: Colors.orange));
@@ -290,19 +319,31 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     }
     final lat = account.latitude!;
     final lng = account.longitude!;
-    final googleMapsUrl = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
-    final webMapsUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
 
-    try {
-      if (await canLaunchUrl(googleMapsUrl)) {
-        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-      } else if (await canLaunchUrl(webMapsUrl)) {
-        await launchUrl(webMapsUrl, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not open maps';
+    // Try multiple URL schemes in order. canLaunchUrl needs `<queries>` in the
+    // Android manifest to return true for non-https schemes, so we just attempt
+    // each launch and move on if it throws.
+    final urlSchemes = <String>[
+      'google.navigation:q=$lat,$lng&mode=d',                            // Google Maps turn-by-turn (Android)
+      'comgooglemaps://?daddr=$lat,$lng&directionsmode=driving',         // Google Maps app (iOS)
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',    // Google Maps directions (universal)
+      'geo:$lat,$lng?q=$lat,$lng',                                       // Generic Android maps intent
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',       // Google Maps location (universal fallback)
+    ];
+
+    for (final scheme in urlSchemes) {
+      try {
+        final ok = await launchUrl(Uri.parse(scheme), mode: LaunchMode.externalApplication);
+        if (ok) return;
+      } catch (_) {
+        // try next scheme
       }
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Google Maps'), backgroundColor: Colors.red),
+      );
     }
   }
 
@@ -675,13 +716,13 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
               ),
             Row(
               children: [
-                _buildGridAction(context, icon: Icons.call, label: "Call", isEnabled: account.phone != null, onTap: () async {
-                  final raw = account.phone!.replaceAll(RegExp(r'[^0-9+]'), '');
-                  String tel = raw;
-                  if (!tel.startsWith('+') && tel.length == 10) tel = '+91$tel';
-                  final uri = Uri.parse('tel:$tel');
-                  if (await canLaunchUrl(uri)) launchUrl(uri);
-                }),
+                _buildGridAction(
+                  context,
+                  icon: Icons.call,
+                  label: "Call",
+                  isEnabled: account.phone != null && account.phone!.trim().isNotEmpty,
+                  onTap: () => _dialPhone(account.phone!),
+                ),
                 _buildVerticalDivider(),
                 if (hasLocation)
                   _buildGridAction(context, icon: Icons.directions, label: "Navigate", isEnabled: true, onTap: () => _openMapsNavigation(account))
@@ -742,10 +783,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     const SizedBox(height: 8),
                     Center(child: Chip(label: Text(account.type))),
                     const SizedBox(height: 32),
+                    if (account.address != null) _detailRow("Address", account.address!),
                     _detailRow("Account ID", account.id),
                     if (account.phone != null) _detailRow("Phone Number", account.phone!),
                     if (account.email != null) _detailRow("Email", account.email!),
-                    if (account.address != null) _detailRow("Address", account.address!),
                     if (account.pincode != null) _detailRow("Pincode", account.pincode!),
                     if (account.gstNumber != null) _detailRow("GSTIN", account.gstNumber!),
                     if (account.accountCreditDays != null) _detailRow("Credit Days", account.accountCreditDays.toString()),

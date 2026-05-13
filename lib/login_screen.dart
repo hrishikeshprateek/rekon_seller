@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'dart:convert';
 import 'auth_service.dart';
 import 'create_password_screen.dart';
 import 'create_mpin_screen.dart';
@@ -27,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -66,7 +66,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _sendOTP() async {
     if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
 
       final authService = Provider.of<AuthService>(context, listen: false);
 
@@ -173,16 +176,11 @@ class _LoginScreenState extends State<LoginScreen> {
         );
         return;
        } else {
-         // Login failed - show error
-         debugPrint('[LoginScreen] ValidateLicense FAILED');
-         debugPrint('[LoginScreen] Full result: $result');
-         debugPrint('[LoginScreen] Message: ${result['message']}');
-         debugPrint('[LoginScreen] Data: ${result['data']}');
-         debugPrint('[LoginScreen] Raw: ${result['raw']}');
+         // Login failed - show a clean inline error
+         debugPrint('[LoginScreen] ValidateLicense FAILED: $result');
 
-         // Extract message with fallback
-         String message = 'Failed to login';
-         if (result['message'] != null && result['message'].toString().isNotEmpty) {
+         String message = '';
+         if (result['message'] != null && result['message'].toString().trim().isNotEmpty) {
            message = result['message'].toString();
          } else if (result['data'] is Map && result['data']['Message'] != null) {
            message = result['data']['Message'].toString();
@@ -190,38 +188,37 @@ class _LoginScreenState extends State<LoginScreen> {
            message = result['data']['message'].toString();
          }
 
-         debugPrint('[LoginScreen] Final error message: $message');
-
-         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(
-             content: Text(message),
-             backgroundColor: Colors.red,
-             duration: const Duration(seconds: 4),
-           ),
-         );
-
-         // Also show a dialog with full debug JSON so the developer can copy it
-         if (result['raw'] != null || result['data'] != null) {
-           showDialog<void>(
-             context: context,
-             builder: (ctx) {
-               return AlertDialog(
-                 title: const Text('Login debug info'),
-                 content: SingleChildScrollView(
-                   child: SelectableText(
-                     const JsonEncoder.withIndent('  ').convert(result),
-                     style: const TextStyle(fontSize: 12),
-                   ),
-                 ),
-                 actions: [
-                   TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Close')),
-                 ],
-               );
-             },
-           );
+         if (mounted) {
+           setState(() => _errorMessage = _humanizeLoginError(message));
          }
        }
     }
+  }
+
+  /// Strips noise (license code, role prefix) the API tacks onto error
+  /// messages like "ONS97131SalesManInvalid Password, try again!".
+  String _humanizeLoginError(String raw) {
+    var msg = raw.trim();
+    final lic = _licenseController.text.trim();
+    if (lic.isNotEmpty && msg.toUpperCase().startsWith(lic.toUpperCase())) {
+      msg = msg.substring(lic.length).trim();
+    }
+    msg = msg.replaceFirst(RegExp(r'^\s*sales\s*man\s*', caseSensitive: false), '').trim();
+    return msg.isEmpty ? 'Login failed. Please try again.' : msg;
+  }
+
+  void _openResetPassword() {
+    FocusScope.of(context).unfocus();
+    final lic = _licenseController.text.trim();
+    final mob = _mobileController.text.trim();
+    if (lic.isEmpty || mob.length != 10) {
+      setState(() => _errorMessage = 'Enter your license number and 10-digit mobile to reset password.');
+      return;
+    }
+    setState(() => _errorMessage = null);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => CreatePasswordScreen(mobile: mob, licenseNumber: lic)),
+    );
   }
 
   @override
@@ -337,6 +334,55 @@ class _LoginScreenState extends State<LoginScreen> {
                               icon: Icons.lock_outline
                           ),
                         ),
+
+                        // --- FORGOT PASSWORD LINK ---
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _isLoading ? null : _openResetPassword,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              minimumSize: const Size(0, 32),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: colorScheme.primary,
+                            ),
+                            child: const Text(
+                              'Forgot password?',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+
+                        // --- ERROR BANNER ---
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 20),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: colorScheme.errorContainer,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: colorScheme.error.withValues(alpha: 0.3)),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(Icons.error_outline_rounded, size: 20, color: colorScheme.error),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.35,
+                                      color: colorScheme.onErrorContainer,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
 
                         const SizedBox(height: 32),
 
