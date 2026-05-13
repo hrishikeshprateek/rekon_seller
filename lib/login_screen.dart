@@ -251,18 +251,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         // --- 1. CENTERED HEADER ---
                         Column(
                           children: [
-                            Container(
-                              width: 52,
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: colorScheme.primaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.storefront,
-                                size: 26,
-                                color: colorScheme.onPrimaryContainer,
-                              ),
+                            Image.asset(
+                              'assets/images/reckon.png',
+                              width: 96,
+                              height: 96,
+                              fit: BoxFit.contain,
                             ),
                             const SizedBox(height: 20),
                             Text(

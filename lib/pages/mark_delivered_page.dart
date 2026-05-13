@@ -10,6 +10,20 @@ import 'dart:convert';
 import '../models/delivery_task_model.dart';
 import '../auth_service.dart';
 
+class DeliveryStatus {
+  final int code;
+  final String name;
+
+  DeliveryStatus({required this.code, required this.name});
+
+  factory DeliveryStatus.fromJson(Map<String, dynamic> json) {
+    return DeliveryStatus(
+      code: json['code'] as int? ?? 0,
+      name: json['code1'] as String? ?? 'Unknown',
+    );
+  }
+}
+
 class MarkDeliveredPage extends StatefulWidget {
   final DeliveryTask task;
 
@@ -34,8 +48,11 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   // Store picked image files. Accepts File, XFile or String paths for robustness.
   List<dynamic> _uploadedPhotos = [];
   String _paymentMode = 'Credit'; // Cash or Credit
-  // Delivery status when in Delivered mode
-  String _deliveryStatus = 'Delivered'; // options: Delivered, Part delivered, Not delivered, Return
+
+  // Delivery status list and code
+  List<DeliveryStatus> _deliveryStatusList = [];
+  int _selectedStatusCode = 1; // Default to Delivered (code 1)
+  bool _isLoadingStatuses = true;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -43,6 +60,93 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
   void initState() {
     super.initState();
     _paymentMode = 'Credit'; // Default to Credit payment mode
+    _fetchDeliveryStatuses();
+  }
+
+  /// Fetch delivery statuses from API
+  Future<void> _fetchDeliveryStatuses() async {
+    if (!mounted) return;
+
+    try {
+      debugPrint('[MarkDeliveredPage] Fetching delivery statuses from API...');
+
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': auth.getAuthHeader() ?? '',
+        'package_name': auth.packageNameHeader,
+      };
+
+      final response = await dio.get(
+        '/getDeliveryStatusList',
+        options: Options(headers: headers),
+      );
+
+      debugPrint('[MarkDeliveredPage] Delivery statuses response: ${response.statusCode}');
+      debugPrint('[MarkDeliveredPage] Delivery statuses data: ${response.data}');
+
+      String cleanJson = response.data
+          .toString()
+          .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
+          .trim();
+      final decoded = jsonDecode(cleanJson);
+
+      final Map<String, dynamic> root = decoded is Map<String, dynamic> ? decoded : {};
+      final bool apiSuccess = root['success'] == true || root['Status'] == true;
+
+      if (!apiSuccess) {
+        throw Exception(root['message'] ?? root['Message'] ?? 'Failed to fetch delivery statuses');
+      }
+
+      // Extract the data array
+      List rawList = root['data'] is List ? root['data'] as List : [];
+
+      debugPrint('[MarkDeliveredPage] Found ${rawList.length} delivery statuses');
+
+      if (mounted) {
+        setState(() {
+          _deliveryStatusList = rawList
+              .map((e) {
+                try {
+                  if (e is Map<String, dynamic>) {
+                    return DeliveryStatus.fromJson(e);
+                  }
+                  final parsed = (e is String)
+                      ? jsonDecode(e) as Map<String, dynamic>
+                      : Map<String, dynamic>.from(e);
+                  return DeliveryStatus.fromJson(parsed);
+                } catch (_) {
+                  return DeliveryStatus(code: 0, name: 'Unknown');
+                }
+              })
+              .toList();
+
+          // Set default to 1 (Delivered)
+          _selectedStatusCode = 1;
+          _isLoadingStatuses = false;
+
+          debugPrint('[MarkDeliveredPage] Delivery statuses loaded: ${_deliveryStatusList.map((s) => '${s.code}:${s.name}').toList()}');
+        });
+      }
+    } catch (e) {
+      debugPrint('[MarkDeliveredPage] Error fetching delivery statuses: $e');
+
+      if (mounted) {
+        setState(() {
+          _isLoadingStatuses = false;
+          // Set default statuses on error
+          _deliveryStatusList = [
+            DeliveryStatus(code: 1, name: 'Delivered'),
+            DeliveryStatus(code: 2, name: 'Part Delivered'),
+            DeliveryStatus(code: 3, name: 'Not Delivered'),
+            DeliveryStatus(code: 5, name: 'Return'),
+          ];
+          _selectedStatusCode = 1;
+        });
+      }
+    }
   }
 
   @override
@@ -435,25 +539,8 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
   void _submitDelivery() {
     if (_formKey.currentState!.validate()) {
-      if (_isDelivered) {
-        // If outcome is Not delivered or Return, treat as a return/undelivered flow
-        if (_deliveryStatus == 'Not delivered' || _deliveryStatus == 'Return') {
-          if (_remarkController.text.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Please enter reason for ${_deliveryStatus == 'Return' ? 'return' : 'non-delivery'}'),
-                backgroundColor: Colors.red,
-              ),
-            );
-            return;
-          }
-          _completeReturn();
-          return;
-        }
-
-        // Delivered or Part delivered flow
-        // OTP is now optional - removed mandatory verification check
-
+      if (_selectedStatusCode == 1 || _selectedStatusCode == 2) {
+        // Delivered (code 1) or Part Delivered (code 2) - requires payment, handover, and photos
         if (_personNameController.text.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -464,26 +551,25 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
           return;
         }
 
-        // For Part delivered we may allow 1 photo minimum; keep existing requirement of 2 for full delivered
-        final minPhotos = _deliveryStatus == 'Part delivered' ? 1 : 2;
+        // For code 1 (Delivered) require 2 photos, for code 2 (Part Delivered) require 1 photo
+        final minPhotos = _selectedStatusCode == 2 ? 1 : 2;
         if (_uploadedPhotos.length < minPhotos) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Please upload $minPhotos photo(s) (Bill and Goods)'),
+              content: Text('Please upload $minPhotos photo(s)'),
               backgroundColor: Colors.red,
             ),
           );
           return;
         }
 
-        // Complete delivery for both Cash and Credit
         _completeDelivery();
       } else {
-        // Return flow (explicit Return selected)
+        // Not Delivered (code 3) or Return (code 5) - requires reason
         if (_remarkController.text.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please enter reason for return'),
+              content: Text('Please enter reason'),
               backgroundColor: Colors.red,
             ),
           );
@@ -496,23 +582,18 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
   Future<void> _completeDelivery() async {
     final auth = Provider.of<AuthService>(context, listen: false);
-    // Use auth.getDioClient() for automatic 401 handling with longer timeout
     final dio = auth.getDioClient();
     dio.options.connectTimeout = const Duration(seconds: 60);
 
-    // Delivery status code: "1"=Delivered, "2"=Part delivered, "3"=Not delivered, "5"=Return
-    String statusCode = "1";
-    if (_deliveryStatus == 'Part delivered') statusCode = "2";
-    else if (_deliveryStatus == 'Not delivered') statusCode = "3";
-    else if (_deliveryStatus == 'Return') statusCode = "5";
+    // Handles Delivered (code 1) and Part Delivered (code 2)
+    String statusCode = _selectedStatusCode.toString();
 
     try {
-      // Build the request JSON object
       final requestJson = {
-        'keyno': widget.task.id ?? '', // Use task.id as keyno (bill key)
-        'acNo': widget.task.partyId ?? '', // Add account number for receipt upload
+        'keyno': widget.task.id ?? '',
+        'acNo': widget.task.partyId ?? '',
         'deliveryStatus': statusCode,
-        'remark': _remarkController.text.trim().isEmpty ? 'Delivered successfully' : _remarkController.text.trim(),
+        'remark': _remarkController.text.trim().isEmpty ? 'Delivery completed' : _remarkController.text.trim(),
         'deliveryDateTime': DateTime.now().toUtc().toIso8601String(),
         'paymentMode': _paymentMode,
         'handoverDetail': _personNameController.text.trim(),
@@ -521,7 +602,6 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
       debugPrint('[MarkDeliveredPage] Request JSON: ${jsonEncode(requestJson)}');
 
-      // Create FormData with request as JSON string
       final formData = FormData.fromMap({
         'request': jsonEncode(requestJson),
       });
@@ -558,7 +638,6 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
       final data = response.data is String ? jsonDecode(response.data) : response.data;
       if (mounted) {
         if (data['Status'] == true) {
-          // Show success dialog with all details
           _showSuccessDialog(data);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -581,25 +660,22 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
   Future<void> _completeReturn() async {
     final auth = Provider.of<AuthService>(context, listen: false);
-    // Use auth.getDioClient() for automatic 401 handling
     final dio = auth.getDioClient();
     dio.options.connectTimeout = const Duration(seconds: 30);
 
     try {
-      // Determine status code: "3"=Not delivered, "5"=Return
-      String statusCode = "3"; // Default to Not delivered
-      if (_deliveryStatus == 'Return') statusCode = "5";
+      // Use the selected status code (3=Not Delivered, 5=Return)
+      String statusCode = _selectedStatusCode.toString();
 
-      // Build the request JSON object for return/not delivered
       final requestJson = {
-        'keyno': widget.task.id ?? '', // Use task.id as keyno (bill key)
-        'acNo': widget.task.partyId ?? '', // Add account number for receipt upload
-        'deliveryStatus': statusCode, // 3 = Not delivered, 5 = Return
+        'keyno': widget.task.id ?? '',
+        'acNo': widget.task.partyId ?? '',
+        'deliveryStatus': statusCode,
         'remark': _remarkController.text.trim(),
         'deliveryDateTime': DateTime.now().toUtc().toIso8601String(),
       };
 
-      debugPrint('[MarkDeliveredPage] Return Request JSON: ${jsonEncode(requestJson)}');
+      debugPrint('[MarkDeliveredPage] Reason Request JSON: ${jsonEncode(requestJson)}');
 
       final formData = FormData.fromMap({
         'request': jsonEncode(requestJson),
@@ -611,29 +687,29 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
             'package_name': 'com.reckon.reckonbiz',
           }));
 
-      debugPrint('[MarkDeliveredPage] Return Response: ${response.data}');
+      debugPrint('[MarkDeliveredPage] Reason Response: ${response.data}');
 
       final data = response.data is String ? jsonDecode(response.data) : response.data;
       if (mounted) {
         if (data['Status'] == true) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(data['Message'] ?? 'Return recorded successfully'),
-              backgroundColor: Colors.orange,
+              content: Text(data['Message'] ?? 'Delivery status recorded successfully'),
+              backgroundColor: Colors.green,
             ),
           );
           Navigator.pop(context, true);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(data['Message'] ?? 'Failed to record return'),
+              content: Text(data['Message'] ?? 'Failed to record delivery status'),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
     } catch (e) {
-      debugPrint('[MarkDeliveredPage] Return error: $e');
+      debugPrint('[MarkDeliveredPage] Reason error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed: ${e.toString()}'), backgroundColor: Colors.red),
@@ -703,10 +779,10 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
                       _buildInfoRow('Bill Number', widget.task.billNo ?? 'N/A', colorScheme),
                       const SizedBox(height: 12),
                       _buildInfoRow('Amount', '₹${widget.task.billAmount?.toStringAsFixed(2) ?? '0.00'}', colorScheme, isBold: true),
-                      const SizedBox(height: 12),
-                      _buildInfoRow('Status', _deliveryStatus, colorScheme),
-                      const SizedBox(height: 12),
-                      _buildInfoRow('Payment', _paymentMode, colorScheme),
+                       const SizedBox(height: 12),
+                       _buildInfoRow('Status', _getStatusNameFromCode(_selectedStatusCode), colorScheme),
+                       const SizedBox(height: 12),
+                       _buildInfoRow('Payment', _paymentMode, colorScheme),
 
                       if (_personNameController.text.trim().isNotEmpty) ...[
                         const SizedBox(height: 12),
@@ -982,453 +1058,433 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
                       const SizedBox(height: 10),
 
-                      // Delivered / Return Toggle
-                      _buildSectionCard(
-                        'Status',
-                        Icons.check_circle_outline,
-                        colorScheme,
-                        [
-                          DropdownButtonFormField<String>(
-                            initialValue: _deliveryStatus,
-                            decoration: InputDecoration(
-                              labelText: 'Delivery Status',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            items: const [
-                              DropdownMenuItem(value: 'Delivered', child: Text('Delivered')),
-                              DropdownMenuItem(value: 'Part delivered', child: Text('Part delivered')),
-                              DropdownMenuItem(value: 'Not delivered', child: Text('Not delivered')),
-                              DropdownMenuItem(value: 'Return', child: Text('Return')),
-                            ],
-                            onChanged: (v) => setState(() {
-                              _deliveryStatus = v ?? 'Delivered';
-                              _isDelivered = _deliveryStatus != 'Not delivered' && _deliveryStatus != 'Return';
-                            }),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Select delivery outcome.',
-                            style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-                          ),
-                        ],
-                      ),
+                       // Delivered / Return Toggle - API Driven
+                       _buildSectionCard(
+                         'Status',
+                         Icons.check_circle_outline,
+                         colorScheme,
+                         [
+                               _isLoadingStatuses
+                               ? const Center(child: CircularProgressIndicator())
+                               : DropdownButtonFormField<int>(
+                                   initialValue: _selectedStatusCode,
+                                   decoration: InputDecoration(
+                                     labelText: 'Delivery Status',
+                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                   ),
+                                   items: _deliveryStatusList.map((status) {
+                                     return DropdownMenuItem<int>(
+                                       value: status.code,
+                                       child: Text(status.name),
+                                     );
+                                   }).toList(),
+                                   onChanged: (code) {
+                                     if (code != null) {
+                                       setState(() {
+                                         _selectedStatusCode = code;
+                                         // Update _isDelivered flag based on code
+                                         // Codes: 1=Delivered, 2=Part Delivered, 3=Not Delivered, 5=Return
+                                         _isDelivered = code != 3 && code != 5;
+                                         debugPrint('[MarkDeliveredPage] Status changed to code: $code, isDelivered: $_isDelivered');
+                                       });
+                                     }
+                                   },
+                                 ),
+                           const SizedBox(height: 8),
+                           Text(
+                             'Select delivery outcome.',
+                             style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                           ),
+                         ],
+                       ),
 
-                      const SizedBox(height: 10),
+                       const SizedBox(height: 10),
 
-                      // Conditional Forms
-                      if (_isDelivered) ...[
-                        // Delivered Flow
-                        _buildSectionCard(
-                          'Payment Mode',
-                          Icons.payment,
-                          colorScheme,
-                          [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: RadioListTile<String>(
-                                    title: const Text('Cash'),
-                                    value: 'Cash',
-                                    groupValue: _paymentMode,
-                                    onChanged: (value) {
-                                      setState(() => _paymentMode = value!);
-                                    },
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: RadioListTile<String>(
-                                    title: const Text('Credit'),
-                                    value: 'Credit',
-                                    groupValue: _paymentMode,
-                                    onChanged: (value) {
-                                      setState(() => _paymentMode = value!);
-                                    },
-                                    contentPadding: EdgeInsets.zero,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                       // Show Delivery Form for Delivered (1) and Part Delivered (2)
+                       if (_selectedStatusCode == 1 || _selectedStatusCode == 2) ...[
+                         // Delivered Flow - Payment Mode, OTP, Handover, Photos for Part Delivered
+                         _buildSectionCard(
+                           'Payment Mode',
+                           Icons.payment,
+                           colorScheme,
+                           [
+                             Row(
+                               children: [
+                                 Expanded(
+                                   child: RadioListTile<String>(
+                                     title: const Text('Cash'),
+                                     value: 'Cash',
+                                     groupValue: _paymentMode,
+                                     onChanged: (value) {
+                                       setState(() => _paymentMode = value!);
+                                     },
+                                     contentPadding: EdgeInsets.zero,
+                                   ),
+                                 ),
+                                 Expanded(
+                                   child: RadioListTile<String>(
+                                     title: const Text('Credit'),
+                                     value: 'Credit',
+                                     groupValue: _paymentMode,
+                                     onChanged: (value) {
+                                       setState(() => _paymentMode = value!);
+                                     },
+                                     contentPadding: EdgeInsets.zero,
+                                   ),
+                                 ),
+                               ],
+                             ),
+                           ],
+                         ),
 
-                        const SizedBox(height: 10),
+                         const SizedBox(height: 10),
 
-                        // OTP Section
-                        _buildSectionCard(
-                          'OTP Verification (Optional)',
-                          Icons.security,
-                          colorScheme,
-                          [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.blue.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'OTP verification is optional. You can proceed without it.',
-                                      style: TextStyle(
-                                        color: Colors.blue.shade700,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            if (_otpVerified)
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.green, width: 1),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.check_circle, color: Colors.green, size: 24),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'OTP Verified Successfully',
-                                        style: TextStyle(
-                                          color: Colors.green.shade700,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            else ...[
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: (_otpSent || _isRequestingOTP) ? null : _requestOTP,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _otpSent ? Colors.green : colorScheme.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 14),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  icon: _isRequestingOTP
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                        )
-                                      : Icon(_otpSent ? Icons.check : Icons.send),
-                                  label: Text(_isRequestingOTP ? 'Sending...' : _otpSent ? 'OTP Sent' : 'Send OTP to Customer'),
-                                ),
-                              ),
-                              if (_otpSent) ...[
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Enter 6-digit OTP received by customer',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colorScheme.onSurfaceVariant,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 12),
-                                GestureDetector(
-                                  onTap: () {
-                                    FocusScope.of(context).requestFocus(FocusNode());
-                                    Future.delayed(const Duration(milliseconds: 100), () {
-                                      if (mounted) {
-                                        FocusScope.of(context).requestFocus(_otpFocusNode);
-                                      }
-                                    });
-                                  },
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                    children: List.generate(6, (index) {
-                                      final currentLength = _otpController.text.length;
-                                      final isFilled = index < currentLength;
-                                      final isCurrent = index == currentLength;
+                         // OTP Section
+                         _buildSectionCard(
+                           'OTP Verification (Optional)',
+                           Icons.security,
+                           colorScheme,
+                           [
+                             Container(
+                               padding: const EdgeInsets.all(10),
+                               decoration: BoxDecoration(
+                                 color: Colors.blue.withValues(alpha: 0.1),
+                                 borderRadius: BorderRadius.circular(8),
+                               ),
+                               child: Row(
+                                 children: [
+                                   Icon(Icons.info_outline, color: Colors.blue.shade700, size: 18),
+                                   const SizedBox(width: 8),
+                                   Expanded(
+                                     child: Text(
+                                       'OTP verification is optional. You can proceed without it.',
+                                       style: TextStyle(
+                                         color: Colors.blue.shade700,
+                                         fontSize: 12,
+                                       ),
+                                     ),
+                                   ),
+                                 ],
+                               ),
+                             ),
+                             const SizedBox(height: 12),
+                             if (_otpVerified)
+                               Container(
+                                 padding: const EdgeInsets.all(12),
+                                 decoration: BoxDecoration(
+                                   color: Colors.green.withValues(alpha: 0.1),
+                                   borderRadius: BorderRadius.circular(8),
+                                   border: Border.all(color: Colors.green, width: 1),
+                                 ),
+                                 child: Row(
+                                   children: [
+                                     const Icon(Icons.check_circle, color: Colors.green, size: 24),
+                                     const SizedBox(width: 12),
+                                     Expanded(
+                                       child: Text(
+                                         'OTP Verified Successfully',
+                                         style: TextStyle(
+                                           color: Colors.green.shade700,
+                                           fontWeight: FontWeight.w600,
+                                           fontSize: 14,
+                                         ),
+                                       ),
+                                     ),
+                                   ],
+                                 ),
+                               )
+                             else ...[
+                               SizedBox(
+                                 width: double.infinity,
+                                 child: ElevatedButton.icon(
+                                   onPressed: (_otpSent || _isRequestingOTP) ? null : _requestOTP,
+                                   style: ElevatedButton.styleFrom(
+                                     backgroundColor: _otpSent ? Colors.green : colorScheme.primary,
+                                     foregroundColor: Colors.white,
+                                     padding: const EdgeInsets.symmetric(vertical: 14),
+                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                   ),
+                                   icon: _isRequestingOTP
+                                       ? const SizedBox(
+                                           height: 20,
+                                           width: 20,
+                                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                         )
+                                       : Icon(_otpSent ? Icons.check : Icons.send),
+                                   label: Text(_isRequestingOTP ? 'Sending...' : _otpSent ? 'OTP Sent' : 'Send OTP to Customer'),
+                                 ),
+                               ),
+                               if (_otpSent) ...[
+                                 const SizedBox(height: 16),
+                                 Text(
+                                   'Enter 6-digit OTP received by customer',
+                                   style: TextStyle(
+                                     fontSize: 12,
+                                     color: colorScheme.onSurfaceVariant,
+                                     fontWeight: FontWeight.w500,
+                                   ),
+                                   textAlign: TextAlign.center,
+                                 ),
+                                 const SizedBox(height: 12),
+                                 GestureDetector(
+                                   onTap: () {
+                                     FocusScope.of(context).requestFocus(FocusNode());
+                                     Future.delayed(const Duration(milliseconds: 100), () {
+                                       if (mounted) {
+                                         FocusScope.of(context).requestFocus(_otpFocusNode);
+                                       }
+                                     });
+                                   },
+                                   child: Row(
+                                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                     children: List.generate(6, (index) {
+                                       final currentLength = _otpController.text.length;
+                                       final isFilled = index < currentLength;
+                                       final isCurrent = index == currentLength;
 
-                                      return Container(
-                                        width: 45,
-                                        height: 55,
-                                        decoration: BoxDecoration(
-                                          color: isFilled
-                                              ? colorScheme.primaryContainer.withValues(alpha: 0.3)
-                                              : colorScheme.surface,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: isCurrent
-                                                ? colorScheme.primary
-                                                : isFilled
-                                                    ? colorScheme.primary.withValues(alpha: 0.5)
-                                                    : colorScheme.outlineVariant,
-                                            width: isCurrent ? 2 : 1,
-                                          ),
-                                          boxShadow: isCurrent ? [
-                                            BoxShadow(
-                                              color: colorScheme.primary.withValues(alpha: 0.2),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ] : null,
-                                        ),
-                                        child: Center(
-                                          child: Text(
-                                            isFilled ? _otpController.text[index] : '',
-                                            style: TextStyle(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.bold,
-                                              color: colorScheme.onSurface,
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    }),
-                                  ),
-                                ),
-                                SizedBox(
-                                  height: 0,
-                                  width: 0,
-                                  child: TextField(
-                                    controller: _otpController,
-                                    focusNode: _otpFocusNode,
-                                    keyboardType: TextInputType.number,
-                                    maxLength: 6,
-                                    autofocus: true,
-                                    onChanged: (value) {
-                                      setState(() {});
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: ElevatedButton(
-                                    onPressed: _isVerifyingOTP ? null : _verifyOTP,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: colorScheme.primary,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                    ),
-                                    child: _isVerifyingOTP
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                          )
-                                        : const Text('Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Center(
-                                  child: TextButton(
-                                    onPressed: _isRequestingOTP ? null : _requestOTP,
-                                    child: Text(
-                                      'Resend OTP',
-                                      style: TextStyle(
-                                        color: colorScheme.primary,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ],
-                        ),
+                                       return Container(
+                                         width: 45,
+                                         height: 55,
+                                         decoration: BoxDecoration(
+                                           color: isFilled
+                                               ? colorScheme.primaryContainer.withValues(alpha: 0.3)
+                                               : colorScheme.surface,
+                                           borderRadius: BorderRadius.circular(12),
+                                           border: Border.all(
+                                             color: isCurrent
+                                                 ? colorScheme.primary
+                                                 : isFilled
+                                                     ? colorScheme.primary.withValues(alpha: 0.5)
+                                                     : colorScheme.outlineVariant,
+                                             width: isCurrent ? 2 : 1,
+                                           ),
+                                           boxShadow: isCurrent ? [
+                                             BoxShadow(
+                                               color: colorScheme.primary.withValues(alpha: 0.2),
+                                               blurRadius: 8,
+                                               offset: const Offset(0, 2),
+                                             ),
+                                           ] : null,
+                                         ),
+                                         child: Center(
+                                           child: Text(
+                                             isFilled ? _otpController.text[index] : '',
+                                             style: TextStyle(
+                                               fontSize: 24,
+                                               fontWeight: FontWeight.bold,
+                                               color: colorScheme.onSurface,
+                                             ),
+                                           ),
+                                         ),
+                                       );
+                                     }),
+                                   ),
+                                 ),
+                                 SizedBox(
+                                   height: 0,
+                                   width: 0,
+                                   child: TextField(
+                                     controller: _otpController,
+                                     focusNode: _otpFocusNode,
+                                     keyboardType: TextInputType.number,
+                                     maxLength: 6,
+                                     autofocus: true,
+                                     onChanged: (value) {
+                                       setState(() {});
+                                     },
+                                   ),
+                                 ),
+                                 const SizedBox(height: 16),
+                                 SizedBox(
+                                   width: double.infinity,
+                                   child: ElevatedButton(
+                                     onPressed: _isVerifyingOTP ? null : _verifyOTP,
+                                     style: ElevatedButton.styleFrom(
+                                       backgroundColor: colorScheme.primary,
+                                       foregroundColor: Colors.white,
+                                       padding: const EdgeInsets.symmetric(vertical: 14),
+                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                     ),
+                                     child: _isVerifyingOTP
+                                         ? const SizedBox(
+                                             height: 20,
+                                             width: 20,
+                                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                           )
+                                         : const Text('Verify OTP', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                   ),
+                                 ),
+                                 const SizedBox(height: 12),
+                                 Center(
+                                   child: TextButton(
+                                     onPressed: _isRequestingOTP ? null : _requestOTP,
+                                     child: Text(
+                                       'Resend OTP',
+                                       style: TextStyle(
+                                         color: colorScheme.primary,
+                                         fontSize: 13,
+                                         fontWeight: FontWeight.w600,
+                                       ),
+                                     ),
+                                   ),
+                                 ),
+                               ],
+                             ],
+                           ],
+                         ),
 
-                        const SizedBox(height: 10),
+                         const SizedBox(height: 10),
 
-                        // Person Name
-                        _buildSectionCard(
-                          'Handover Details',
-                          Icons.person_pin,
-                          colorScheme,
-                          [
-                            TextFormField(
-                              controller: _personNameController,
-                              decoration: InputDecoration(
-                                labelText: 'Goods handed over to',
-                                hintText: 'Enter person name',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                            ),
-                          ],
-                        ),
+                         // Person Name
+                         _buildSectionCard(
+                           'Handover Details',
+                           Icons.person_pin,
+                           colorScheme,
+                           [
+                             TextFormField(
+                               controller: _personNameController,
+                               decoration: InputDecoration(
+                                 labelText: 'Goods handed over to',
+                                 hintText: 'Enter person name',
+                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                               ),
+                             ),
+                           ],
+                         ),
 
-                        const SizedBox(height: 10),
+                         const SizedBox(height: 10),
 
-                        // Photo Upload
-                        _buildSectionCard(
-                          'Photo Upload (Bill and Goods)',
-                          Icons.photo_camera,
-                          colorScheme,
-                          [
-                            if (_uploadedPhotos.isEmpty)
-                              Text(
-                                'Upload 2 photos required',
-                                style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
-                              ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: [
-                                ..._uploadedPhotos.asMap().entries.map((entry) {
-                                  final raw = entry.value;
-                                  File? file;
-                                  if (raw is File) file = raw;
-                                  else if (raw is XFile) file = File(raw.path);
-                                  else if (raw is String) file = File(raw);
+                         // Photo Upload
+                         _buildSectionCard(
+                           'Photo Upload (Bill and Goods)',
+                           Icons.photo_camera,
+                           colorScheme,
+                           [
+                             if (_uploadedPhotos.isEmpty)
+                               Text(
+                                 _selectedStatusCode == 2 ? 'Upload 1 photo required for Part Delivered' : 'Upload 2 photos required for Delivered',
+                                 style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+                               ),
+                             const SizedBox(height: 8),
+                             Wrap(
+                               spacing: 8,
+                               runSpacing: 8,
+                               children: [
+                                 ..._uploadedPhotos.asMap().entries.map((entry) {
+                                   final raw = entry.value;
+                                   File? file;
+                                   if (raw is File) file = raw;
+                                   else if (raw is XFile) file = File(raw.path);
+                                   else if (raw is String) file = File(raw);
 
-                                  return Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
-                                        child: Container(
-                                          width: 100,
-                                          height: 100,
-                                          color: colorScheme.surfaceContainerHighest,
-                                          child: (file != null && file.existsSync())
-                                              ? Image.file(file, fit: BoxFit.cover, width: 100, height: 100)
-                                              : Center(child: Icon(Icons.image, color: colorScheme.primary, size: 32)),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 4,
-                                        right: 4,
-                                        child: GestureDetector(
-                                          onTap: () => _removePhoto(entry.key),
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(
-                                              color: Colors.red,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            child: const Icon(Icons.close, color: Colors.white, size: 16),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }),
-                                if (_uploadedPhotos.length < 2)
-                                  GestureDetector(
-                                    onTap: _pickPhoto,
-                                    child: Container(
-                                      width: 100,
-                                      height: 100,
-                                      decoration: BoxDecoration(
-                                        color: colorScheme.surfaceContainerHighest,
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: colorScheme.primary,
-                                          style: BorderStyle.solid,
-                                          width: 2,
-                                        ),
-                                      ),
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.add_a_photo, color: colorScheme.primary, size: 32),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            'Add Photo',
-                                            style: TextStyle(fontSize: 10, color: colorScheme.primary),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
+                                   return Stack(
+                                     children: [
+                                       ClipRRect(
+                                         borderRadius: BorderRadius.circular(8),
+                                         child: Container(
+                                           width: 100,
+                                           height: 100,
+                                           color: colorScheme.surfaceContainerHighest,
+                                           child: (file != null && file.existsSync())
+                                               ? Image.file(file, fit: BoxFit.cover, width: 100, height: 100)
+                                               : Center(child: Icon(Icons.image, color: colorScheme.primary, size: 32)),
+                                         ),
+                                       ),
+                                       Positioned(
+                                         top: 4,
+                                         right: 4,
+                                         child: GestureDetector(
+                                           onTap: () => _removePhoto(entry.key),
+                                           child: Container(
+                                             padding: const EdgeInsets.all(4),
+                                             decoration: const BoxDecoration(
+                                               color: Colors.red,
+                                               shape: BoxShape.circle,
+                                             ),
+                                             child: const Icon(Icons.close, color: Colors.white, size: 16),
+                                           ),
+                                         ),
+                                       ),
+                                     ],
+                                   );
+                                 }),
+                                 if ((_selectedStatusCode == 2 && _uploadedPhotos.length < 1) ||
+                                     (_selectedStatusCode == 1 && _uploadedPhotos.length < 2))
+                                   GestureDetector(
+                                     onTap: _pickPhoto,
+                                     child: Container(
+                                       width: 100,
+                                       height: 100,
+                                       decoration: BoxDecoration(
+                                         color: colorScheme.surfaceContainerHighest,
+                                         borderRadius: BorderRadius.circular(8),
+                                         border: Border.all(
+                                           color: colorScheme.primary,
+                                           style: BorderStyle.solid,
+                                           width: 2,
+                                         ),
+                                       ),
+                                       child: Column(
+                                         mainAxisAlignment: MainAxisAlignment.center,
+                                         children: [
+                                           Icon(Icons.add_a_photo, color: colorScheme.primary, size: 32),
+                                           const SizedBox(height: 4),
+                                           Text(
+                                             'Add Photo',
+                                             style: TextStyle(fontSize: 10, color: colorScheme.primary),
+                                           ),
+                                         ],
+                                       ),
+                                     ),
+                                   ),
+                               ],
+                             ),
+                           ],
+                         ),
 
-                        const SizedBox(height: 10),
+                         const SizedBox(height: 10),
 
-                        // Remark - Show only for Delivered, Part delivered, and Not delivered (not for Return)
-                        if (_deliveryStatus != 'Return') ...[
-                          _buildSectionCard(
-                            'Remark',
-                            Icons.note,
-                            colorScheme,
-                            [
-                              TextFormField(
-                                controller: _remarkController,
-                                maxLines: 3,
-                                decoration: InputDecoration(
-                                  hintText: 'Enter any remarks (optional)',
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        // Reason - Show for both "Not delivered" and "Return" statuses
-                        if (_deliveryStatus == 'Not delivered' || _deliveryStatus == 'Return') ...[
-                          if (_deliveryStatus != 'Return') const SizedBox(height: 10),
-                          _buildSectionCard(
-                            _deliveryStatus == 'Return' ? 'Reason for Return' : 'Reason for Non-Delivery',
-                            Icons.undo,
-                            colorScheme,
-                            [
-                              TextFormField(
-                                controller: _remarkController,
-                                maxLines: 4,
-                                decoration: InputDecoration(
-                                  labelText: _deliveryStatus == 'Return' ? 'Reason for Return' : 'Reason for Non-Delivery',
-                                  hintText: _deliveryStatus == 'Return'
-                                    ? 'Enter reason why goods are being returned'
-                                    : 'Enter reason why goods could not be delivered',
-                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                ),
-                                validator: (value) {
-                                  if ((_deliveryStatus == 'Not delivered' || _deliveryStatus == 'Return') && (value == null || value.isEmpty)) {
-                                    return 'Please enter reason';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ] else ...[
-                        // Return Flow - Show reason field for non-delivered items
-                        _buildSectionCard(
-                          'Reason for Return',
-                          Icons.undo,
-                          colorScheme,
-                          [
-                            TextFormField(
-                              controller: _remarkController,
-                              maxLines: 4,
-                              decoration: InputDecoration(
-                                labelText: 'Reason for Return',
-                                hintText: 'Enter reason why goods are being returned',
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              ),
-                              validator: (value) {
-                                if (!_isDelivered && (value == null || value.isEmpty)) {
-                                  return 'Please enter reason';
-                                }
-                                return null;
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
+                         // Remark for Part Delivered only
+                         _buildSectionCard(
+                           'Remark',
+                           Icons.note,
+                           colorScheme,
+                           [
+                             TextFormField(
+                               controller: _remarkController,
+                               maxLines: 3,
+                               decoration: InputDecoration(
+                                 hintText: 'Enter any remarks (optional)',
+                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                               ),
+                             ),
+                           ],
+                         ),
+                       ] else ...[
+                         // Show REASON UI for Not Delivered (3) and Return (5)
+                         _buildSectionCard(
+                           'Reason',
+                           Icons.undo,
+                           colorScheme,
+                           [
+                             TextFormField(
+                               controller: _remarkController,
+                               maxLines: 4,
+                               decoration: InputDecoration(
+                                 labelText: 'Reason',
+                                 hintText: 'Enter reason for this delivery status',
+                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                               ),
+                               validator: (value) {
+                                 if (value == null || value.isEmpty) {
+                                   return 'Please enter reason';
+                                 }
+                                 return null;
+                               },
+                             ),
+                           ],
+                         ),
+                       ],
 
                       const SizedBox(height: 100), // Space for bottom button
                     ],
@@ -1585,5 +1641,14 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
         ),
       ],
     );
+  }
+
+  /// Get status name from status code
+  String _getStatusNameFromCode(int code) {
+    final status = _deliveryStatusList.firstWhere(
+      (s) => s.code == code,
+      orElse: () => DeliveryStatus(code: code, name: 'Unknown'),
+    );
+    return status.name;
   }
 }
