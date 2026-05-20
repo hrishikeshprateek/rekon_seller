@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'create_password_screen.dart';
 import 'create_mpin_screen.dart';
+import 'forgot_password_otp_screen.dart';
 import 'home_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/salesman_flags_service.dart';
@@ -26,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
   String? _errorMessage;
 
   @override
@@ -47,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final savedLicense = await _secureStorage.read(key: 'license');
       final savedMobile = await _secureStorage.read(key: 'mobile');
       if (savedLicense != null && savedLicense.isNotEmpty) {
-        _licenseController.text = savedLicense;
+        _licenseController.text = savedLicense.toUpperCase();
       }
       if (savedMobile != null && savedMobile.isNotEmpty) {
         // If savedMobile contains country code, strip it (we expect 10 digits)
@@ -207,18 +209,38 @@ class _LoginScreenState extends State<LoginScreen> {
     return msg.isEmpty ? 'Login failed. Please try again.' : msg;
   }
 
-  void _openResetPassword() {
+  Future<void> _openResetPassword() async {
     FocusScope.of(context).unfocus();
-    final lic = _licenseController.text.trim();
     final mob = _mobileController.text.trim();
-    if (lic.isEmpty || mob.length != 10) {
-      setState(() => _errorMessage = 'Enter your license number and 10-digit mobile to reset password.');
+    if (mob.length != 10) {
+      setState(() => _errorMessage = 'Enter your 10-digit mobile number to reset password.');
       return;
     }
-    setState(() => _errorMessage = null);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => CreatePasswordScreen(mobile: mob, licenseNumber: lic)),
-    );
+    setState(() {
+      _errorMessage = null;
+      _isLoading = true;
+    });
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final result = await authService.generateOTPForMobile(mobile: mob);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      if (result['success'] == true) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ForgotPasswordOtpScreen(mobile: mob),
+          ),
+        );
+      } else {
+        setState(() => _errorMessage = result['message']?.toString() ?? 'Failed to send OTP. Try again.');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to send OTP. Please try again.';
+      });
+    }
   }
 
   @override
@@ -285,6 +307,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextFormField(
                           controller: _licenseController,
                           textInputAction: TextInputAction.next,
+                          textCapitalization: TextCapitalization.characters,
+                          inputFormatters: [
+                            TextInputFormatter.withFunction(
+                              (oldValue, newValue) => newValue.copyWith(
+                                text: newValue.text.toUpperCase(),
+                              ),
+                            ),
+                          ],
                           style: const TextStyle(fontSize: 14),
                           decoration: _materialDecoration(
                               context,
@@ -324,7 +354,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Optional Password - if filled, app will attempt direct login with ValidateLicense
                         TextFormField(
                           controller: _passwordController,
-                          obscureText: true,
+                          obscureText: _obscurePassword,
                           textInputAction: TextInputAction.done,
                           style: const TextStyle(fontSize: 14),
                           decoration: _materialDecoration(
@@ -332,23 +362,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               label: 'Password',
                               hint: 'Enter password to login directly',
                               icon: Icons.lock_outline
-                          ),
-                        ),
-
-                        // --- FORGOT PASSWORD LINK ---
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: _isLoading ? null : _openResetPassword,
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                              minimumSize: const Size(0, 32),
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              foregroundColor: colorScheme.primary,
-                            ),
-                            child: const Text(
-                              'Forgot password?',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                          ).copyWith(
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                size: 20,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                              tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                             ),
                           ),
                         ),
@@ -384,7 +406,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
 
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 18),
 
                         // --- 3. LOGIN BUTTON ---
                         SizedBox(
@@ -415,15 +437,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
 
-                        // Info text
-                        Text(
-                          "Password is optional. If not set, you'll be asked to create one.",
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 12,
-                            color: colorScheme.onSurfaceVariant,
+                        // --- FORGOT PASSWORD LINK ---
+                        Center(
+                          child: TextButton(
+                            onPressed: _isLoading ? null : _openResetPassword,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                              minimumSize: const Size(0, 32),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              foregroundColor: colorScheme.primary,
+                            ),
+                            child: const Text(
+                              'Forgot password?',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                            ),
                           ),
                         ),
                       ],
@@ -443,19 +471,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      "Powered by Reckon Software",
+                      "Powered by",
                       style: theme.textTheme.labelSmall?.copyWith(
-                        fontSize: 11,
+                        fontSize: 10,
                         color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "v2.0.1 (Build 104)",
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        fontSize: 10,
-                        color: colorScheme.outline,
-                      ),
+                    const SizedBox(height: 2),
+                    Image.asset(
+                      'assets/images/reckon_powered.jpg',
+                      height: 56,
+                      fit: BoxFit.contain,
                     ),
                   ],
                 ),

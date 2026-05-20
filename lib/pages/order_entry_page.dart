@@ -17,7 +17,9 @@ import 'product_detail_page.dart';
 import '../services/salesman_flags_service.dart';
 
 class OrderEntryPage extends StatefulWidget {
-  const OrderEntryPage({super.key});
+  final models.Account? initialAccount;
+
+  const OrderEntryPage({super.key, this.initialAccount});
 
   @override
   State<OrderEntryPage> createState() => _OrderEntryPageState();
@@ -55,9 +57,40 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _openSelectAccount();
+      if (widget.initialAccount != null) {
+        _useInitialAccount(widget.initialAccount!);
+      } else {
+        _openSelectAccount();
+      }
     });
     _scrollController.addListener(_onScroll);
+  }
+
+  Future<void> _useInitialAccount(models.Account account) async {
+    final statusCheck = await _checkAccountStatus(account);
+    if (!mounted) return;
+    if (statusCheck['ok'] == true) {
+      setState(() {
+        _selectedAccount = account;
+        _hasSelectedAccount = true;
+      });
+      await _loadDraftOrder();
+      if (mounted) await _loadProducts();
+      return;
+    }
+    // Account rejected by server — fall back to the normal selector loop.
+    final msg = statusCheck['message']?.toString() ?? 'Account is not available';
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Account unavailable'),
+        content: Text(msg),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
+        ],
+      ),
+    );
+    if (mounted) _openSelectAccount();
   }
 
   @override
@@ -687,16 +720,17 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       child: Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text('New Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        title: const Text('New Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
         centerTitle: true,
-        backgroundColor: colorScheme.surface,
+        backgroundColor: const Color(0xFF1E88E5),
+        foregroundColor: Colors.white,
         scrolledUnderElevation: 0,
         actions: [
           if (_selectedAccount != null)
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
               child: IconButton(
-                icon: const Icon(Icons.person_search_rounded),
+                icon: const Icon(Icons.person_search_rounded, color: Colors.white),
                 onPressed: _openSelectAccount,
                 tooltip: 'Change Party',
               ),
@@ -943,24 +977,24 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                         ),
                       ),
                     ),
-                  Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                  Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: Color(0xFF1E88E5))),
                   const SizedBox(height: 6),
                   if (showItemMfgComp && (product.manufacturer ?? '').isNotEmpty)
-                    Text(product.manufacturer ?? '', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                    Text(product.manufacturer ?? '', style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
                   if (showItemComposition && (product.salt ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(product.salt!, style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                      child: Text(product.salt!, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
                     ),
                   if (showProductDesc && (product.description ?? '').trim().isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4.0),
-                      child: Text((product.description ?? ''), style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                      child: Text((product.description ?? ''), style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
                     ),
                   if (showItemCategory && product.category.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(product.category, style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                      child: Text(product.category, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
                     ),
                   if (showItemRemark && false)
                     const SizedBox.shrink(),
@@ -1015,7 +1049,18 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     ),
                     const SizedBox(height: 6),
                   ],
-                Text('Stock: ${product.stockQuantity}', style: TextStyle(fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                Text(
+                  'Stock: ${product.stockQuantity}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: product.stockQuantity < 0
+                        ? Colors.red.shade700
+                        : (product.stockQuantity >= 10
+                            ? const Color(0xFFB58900) // yellow / amber
+                            : Colors.green.shade700),
+                  ),
+                ),
               ],
             ),
           ],
@@ -1406,6 +1451,70 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
   // Bulk Add Bottom Sheet UI
   void _showBulkAddBottomSheet(Product product, Map<String, dynamic>? cartData) {
+    // NOTE: Controllers and per-session state are created OUTSIDE the modal's
+    // builder. The builder re-runs whenever MediaQuery changes (e.g. keyboard
+    // show/hide), and if controllers were declared inside it they'd be
+    // recreated on every rebuild — losing focus and any typed text. Declaring
+    // them here means the closure captures stable references that survive
+    // rebuilds, so typing into a field and dismissing the keyboard preserves
+    // both focus and the value.
+    final int? currentQuantity = cartData != null ? (cartData['qty'] as int?) : null;
+
+    double _safeDouble(dynamic v) => v is double ? v : (v is int ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0);
+    int _safeInt(dynamic v) => v is int ? v : (v is double ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0);
+
+    // For a brand-new add (no cartData), leave numeric fields empty — the
+    // hint shows "0" so users can just tap and type. For an existing cart
+    // edit, prefill with the saved values.
+    final qtyController        = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '');
+    final priceController      = TextEditingController(text: cartData != null ? _safeDouble(cartData['rate']).toStringAsFixed(2) : product.price.toStringAsFixed(2));
+    final freeQtyController    = TextEditingController(text: cartData != null ? _safeInt(cartData['freeQty']).toString() : '');
+    final schemeController     = TextEditingController(text: cartData != null ? _safeDouble(cartData['schQty']).toStringAsFixed(0) : '');
+    final dSchemeController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['dSchQty']).toStringAsFixed(0) : '');
+    final discPcsController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPcs']).toStringAsFixed(2) : '');
+    final discPerController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPer']).toStringAsFixed(2) : '');
+    final addDiscPerController = TextEditingController(text: cartData != null ? _safeDouble(cartData['addDiscPer']).toStringAsFixed(2) : '');
+    final remarkController     = TextEditingController(text: cartData != null ? (cartData['remark']?.toString() ?? '') : '');
+
+    // Explicit FocusNodes so the keyboard "Next" key reliably hops to every
+    // visible field — including the flag-gated Free Qty and Pcs Discount rows.
+    final qtyFocus        = FocusNode();
+    final freeQtyFocus    = FocusNode();
+    final schemeFocus     = FocusNode();
+    final dSchemeFocus    = FocusNode();
+    final priceFocus      = FocusNode();
+    final discPcsFocus    = FocusNode();
+    final discPerFocus    = FocusNode();
+    final addDiscPerFocus = FocusNode();
+    final remarkFocus     = FocusNode();
+    final orderedFocus = [
+      qtyFocus, freeQtyFocus, schemeFocus, dSchemeFocus, priceFocus,
+      discPcsFocus, discPerFocus, addDiscPerFocus, remarkFocus,
+    ];
+    // Find the next currently-mounted focus node after `current`.
+    // A node whose widget isn't in the tree (because the flag hides it) has
+    // a null context — skip those so the "Next" key never lands on nothing.
+    FocusNode? nextVisibleFocus(FocusNode current) {
+      final idx = orderedFocus.indexOf(current);
+      if (idx < 0) return null;
+      for (int i = idx + 1; i < orderedFocus.length; i++) {
+        if (orderedFocus[i].context != null) return orderedFocus[i];
+      }
+      return null;
+    }
+
+    double price = product.price;
+    final int available = product.stockQuantity;
+    final mrp = product.mrp;
+
+    double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
+
+    DraftOrderPreviewResult? preview;
+    Timer? previewDebounce;
+    int previewToken = 0;
+    bool isPreviewLoading = false;
+    bool _firstBuild = true;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1413,32 +1522,6 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       builder: (ctx) {
         final colorScheme = Theme.of(context).colorScheme;
         final textTheme = Theme.of(context).textTheme;
-
-        final int? currentQuantity = cartData != null ? (cartData['qty'] as int?) : null;
-
-        double _safeDouble(dynamic v) => v is double ? v : (v is int ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0);
-        int _safeInt(dynamic v) => v is int ? v : (v is double ? v.toInt() : int.tryParse(v?.toString() ?? '') ?? 0);
-
-        final qtyController        = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '0');
-        final priceController      = TextEditingController(text: cartData != null ? _safeDouble(cartData['rate']).toStringAsFixed(2) : product.price.toStringAsFixed(2));
-        final freeQtyController    = TextEditingController(text: cartData != null ? _safeInt(cartData['freeQty']).toString() : '0');
-        final schemeController     = TextEditingController(text: cartData != null ? _safeDouble(cartData['schQty']).toStringAsFixed(0) : '0');
-        final dSchemeController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['dSchQty']).toStringAsFixed(0) : '0');
-        final discPcsController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPcs']).toStringAsFixed(2) : '0.0');
-        final discPerController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPer']).toStringAsFixed(2) : '0.0');
-        final addDiscPerController = TextEditingController(text: cartData != null ? _safeDouble(cartData['addDiscPer']).toStringAsFixed(2) : '0.0');
-        final remarkController     = TextEditingController(text: cartData != null ? (cartData['remark']?.toString() ?? '') : '');
-
-        double price = product.price;
-        final int available = product.stockQuantity;
-        final mrp = product.mrp;
-
-        double goodsValue = 0.0, schemeValue = 0.0, discountValue = 0.0, gst = 0.0, netValue = 0.0;
-
-        DraftOrderPreviewResult? preview;
-        Timer? previewDebounce;
-        int previewToken = 0;
-        bool isPreviewLoading = false;
 
         void syncFromPreview() {
           // Only use server values - no fallback to frontend calculation
@@ -1463,8 +1546,6 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
         );
-
-        bool _firstBuild = true;
 
         return StatefulBuilder(
           builder: (context, setModalState) {
@@ -1549,14 +1630,24 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               ],
             );
 
-            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true}) => Row(
+            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode}) => Row(
               children: [
                 Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
                 SizedBox(
                   width: 130,
                   child: TextField(
                     controller: ctrl,
+                    focusNode: focusNode,
                     keyboardType: kbType,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) {
+                      final next = focusNode != null ? nextVisibleFocus(focusNode) : null;
+                      if (next != null) {
+                        next.requestFocus();
+                      } else {
+                        FocusScope.of(context).unfocus();
+                      }
+                    },
                     textAlign: TextAlign.right,
                     enabled: enabled,
                     onChanged: (_) => updateFields(),
@@ -1567,7 +1658,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               ],
             );
 
-            Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt) {
+            Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt, {FocusNode? focusNode}) {
               final bool hasAmt = amt > 0;
               return Row(
                 children: [
@@ -1604,7 +1695,17 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     width: 130,
                     child: TextField(
                       controller: ctrl,
+                      focusNode: focusNode,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textInputAction: TextInputAction.next,
+                      onSubmitted: (_) {
+                        final next = focusNode != null ? nextVisibleFocus(focusNode) : null;
+                        if (next != null) {
+                          next.requestFocus();
+                        } else {
+                          FocusScope.of(context).unfocus();
+                        }
+                      },
                       textAlign: TextAlign.right,
                       onChanged: (_) => updateFields(),
                       style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -1633,17 +1734,13 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
             );
 
             return Container(
+              height: MediaQuery.of(context).size.height * 0.92,
               decoration: BoxDecoration(
                 color: colorScheme.surface,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               ),
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-              child: DraggableScrollableSheet(
-                expand: false,
-                initialChildSize: 0.92,
-                minChildSize: 0.5,
-                maxChildSize: 0.95,
-                builder: (ctx, scroll) => Column(
+              child: Column(
                   children: [
                     // Handle
                     Container(
@@ -1698,19 +1795,24 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     // Scrollable form body
                     Expanded(
                       child: SingleChildScrollView(
-                        controller: scroll,
                         padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-                        child: Column(
+                        // Force focus to advance in widget-tree order so the
+                        // keyboard's "Next" key hits every visible field
+                        // (Quantity → Free Qty → Scheme → +Scheme → Price →
+                        // Discount fields → Remark) without skipping.
+                        child: FocusTraversalGroup(
+                          policy: WidgetOrderTraversalPolicy(),
+                          child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // ORDER DETAILS
                             sectionLabel('ORDER DETAILS'),
                             const SizedBox(height: 14),
-                            rowField('Quantity', qtyController, TextInputType.number),
+                            rowField('Quantity', qtyController, TextInputType.number, focusNode: qtyFocus),
                             const SizedBox(height: 12),
                             if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
                               ...[
-                                rowField('Free Quantity', freeQtyController, TextInputType.number),
+                                rowField('Free Quantity', freeQtyController, TextInputType.number, focusNode: freeQtyFocus),
                                 const SizedBox(height: 12),
                               ],
                             // Scheme (two boxes with +)
@@ -1723,7 +1825,14 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                       width: 56,
                                       child: TextField(
                                         controller: schemeController,
+                                        focusNode: schemeFocus,
                                         keyboardType: TextInputType.number,
+                                        textInputAction: TextInputAction.next,
+                                        onSubmitted: (_) {
+                                          final next = nextVisibleFocus(schemeFocus);
+                                          if (next != null) next.requestFocus();
+                                          else FocusScope.of(context).unfocus();
+                                        },
                                         textAlign: TextAlign.center,
                                         onChanged: (_) => updateFields(),
                                         style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -1738,7 +1847,14 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                       width: 56,
                                       child: TextField(
                                         controller: dSchemeController,
+                                        focusNode: dSchemeFocus,
                                         keyboardType: TextInputType.number,
+                                        textInputAction: TextInputAction.next,
+                                        onSubmitted: (_) {
+                                          final next = nextVisibleFocus(dSchemeFocus);
+                                          if (next != null) next.requestFocus();
+                                          else FocusScope.of(context).unfocus();
+                                        },
                                         textAlign: TextAlign.center,
                                         onChanged: (_) => updateFields(),
                                         style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
@@ -1755,6 +1871,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                               priceController,
                               const TextInputType.numberWithOptions(decimal: true),
                               enabled: context.watch<SalesmanFlagsService>().flags?.enablePriceSalesMan ?? false,
+                              focusNode: priceFocus,
                             ),
                             const SizedBox(height: 20),
                             // DISCOUNTS
@@ -1762,17 +1879,17 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                             const SizedBox(height: 14),
                             if (context.watch<SalesmanFlagsService>().flags?.showDiscPcsSalesMan ?? false)
                               ...[
-                                rowFieldWithAmt('Discount (Pcs)', discPcsController, preview?.discAmt ?? 0.0),
+                                rowFieldWithAmt('Discount (Pcs)', discPcsController, preview?.disc2Amt ?? 0.0, focusNode: discPcsFocus),
                                 const SizedBox(height: 12),
                               ],
                             if (context.watch<SalesmanFlagsService>().flags?.showDiscPerSalesMan ?? false)
                               ...[
-                                rowFieldWithAmt('Discount (%)', discPerController, preview?.disc1Amt ?? 0.0),
+                                rowFieldWithAmt('Discount (%)', discPerController, preview?.discAmt ?? 0.0, focusNode: discPerFocus),
                                 const SizedBox(height: 12),
                               ],
                             if (context.watch<SalesmanFlagsService>().flags?.showdisc1perSalesman ?? false)
                               ...[
-                                rowFieldWithAmt('Add. Discount (%)', addDiscPerController, preview?.disc2Amt ?? 0.0),
+                                rowFieldWithAmt('Add. Discount (%)', addDiscPerController, preview?.disc1Amt ?? 0.0, focusNode: addDiscPerFocus),
                                 const SizedBox(height: 12),
                               ],
                             const SizedBox(height: 20),
@@ -1783,8 +1900,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                 const SizedBox(height: 8),
                                 TextField(
                                   controller: remarkController,
+                                  focusNode: remarkFocus,
                                   maxLength: 200,
                                   maxLines: 2,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) => FocusScope.of(context).unfocus(),
                                   style: textTheme.bodyMedium,
                                   decoration: _fieldDeco(colorScheme).copyWith(
                                     hintText: 'Type here...',
@@ -1896,11 +2016,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                             ),
                           ],
                         ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
             );
           },
         );
@@ -1939,6 +2059,8 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     final acCode = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
     final cuId = int.tryParse(user?.userId ?? '') ?? 0;
     final firmCode = user?.stores.isNotEmpty == true ? user!.stores.first.firmCode : '';
+    // Empty inputs coerce to "0" so the backend doesn't choke on "".
+    String orZero(String s) => s.trim().isEmpty ? '0' : s.trim();
     final payload = {
       'UserId': user?.mobileNumber ?? user?.userId ?? '',
       'LicNo': user?.licenseNumber ?? '',
@@ -1947,16 +2069,16 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       'ItemCode': product.code ?? product.id,
       'Icode': product.code ?? product.id,
       'IdCol': product.iidcol ?? int.tryParse(product.id) ?? 0,
-      'ItemQty': qtyController.text,
+      'ItemQty': orZero(qtyController.text),
       'ItemRate': price.toStringAsFixed(2),
       'cu_id': cuId,
-      'ItemFQty': freeQtyController.text,
-      'ItemSchQty': schemeController.text,
-      'ItemDSchQty': dSchemeController.text,
+      'ItemFQty': orZero(freeQtyController.text),
+      'ItemSchQty': orZero(schemeController.text),
+      'ItemDSchQty': orZero(dSchemeController.text),
       'ItemAmt': goodsValue.toStringAsFixed(2),
-      'discount_percentage': discPerController.text,
-      'discount_percentage1': addDiscPerController.text,
-      'discount_pcs': discPcsController.text,
+      'discount_percentage': orZero(discPerController.text),
+      'discount_percentage1': orZero(addDiscPerController.text),
+      'discount_pcs': orZero(discPcsController.text),
       'remark': remarkController.text,
       'insert_record': 1,
       'default_hit': true,
@@ -2014,9 +2136,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       itemSchQty: schemeQty.isEmpty ? '0' : schemeQty,
       itemDSchQty: dSchemeQty.isEmpty ? '0' : dSchemeQty,
       itemAmt: itemAmt,
-      discountPercentage: discountPer,
-      discountPercentage1: addDiscountPer,
-      discountPcs: discountPcs,
+      discountPercentage: discountPer.isEmpty ? '0' : discountPer,
+      discountPercentage1: addDiscountPer.isEmpty ? '0' : addDiscountPer,
+      discountPcs: discountPcs.isEmpty ? '0' : discountPcs,
       remark: remark,
       insertRecord: insertRecord,
     );

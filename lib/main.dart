@@ -471,6 +471,8 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   }
 
   Future<void> _checkAuth() async {
+    // Keep the splash visible for at least this long even if auth resolves faster.
+    final minSplash = Future<void>.delayed(const Duration(milliseconds: 2500));
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.tryAutoLogin();
@@ -497,6 +499,7 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Auto-login error: $e');
     } finally {
+      await minSplash;
       if (mounted) {
         setState(() => _isChecking = false);
       }
@@ -506,31 +509,63 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if (_isChecking) {
+      final colorScheme = Theme.of(context).colorScheme;
+      final textTheme = Theme.of(context).textTheme;
       return Scaffold(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.storefront,
-                size: 64,
-                color: Theme.of(context).colorScheme.primary,
+        backgroundColor: colorScheme.surface,
+        body: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/reckon.png',
+                    width: 96,
+                    height: 96,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Reckon BIZ360',
+                    style: textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  CircularProgressIndicator(
+                    color: colorScheme.primary,
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              Text(
-                'Reckon BIZ360',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 16,
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Powered by',
+                      style: textTheme.labelSmall?.copyWith(
+                        fontSize: 10,
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Image.asset(
+                      'assets/images/reckon_powered.jpg',
+                      height: 56,
+                      fit: BoxFit.contain,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 32),
-              CircularProgressIndicator(
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
     }

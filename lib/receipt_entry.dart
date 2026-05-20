@@ -59,7 +59,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   final _amountController = TextEditingController();
   final _docNoController = TextEditingController();
   final _narrationController = TextEditingController();
-  final _discountController = TextEditingController(text: '0.00');
+  final _discountController = TextEditingController();
 
   // State
   String? _selectedAccount;
@@ -925,15 +925,15 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       // Border Radius matches Home Screen Tiles (12px - 16px)
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderSide: BorderSide(color: colorScheme.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderSide: BorderSide(color: colorScheme.outlineVariant),
       ),
       disabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
+        borderSide: BorderSide(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),

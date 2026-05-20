@@ -9,6 +9,7 @@ import '../services/account_selection_service.dart';
 import '../services/salesman_flags_service.dart';
 import 'select_account_page.dart';
 import 'place_order_page.dart';
+import 'order_entry_page.dart';
 
 class CartPage extends StatefulWidget {
   final String acCode;
@@ -553,8 +554,11 @@ class _CartPageState extends State<CartPage> {
   Widget _buildItemList(ColorScheme cs) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 100),
-      itemCount: _items.length,
+      itemCount: _items.length + 1,
       itemBuilder: (context, index) {
+        if (index == _items.length) {
+          return _buildAddMoreItemsCard(cs);
+        }
         final it = _items[index];
 
         final double gv  = it.amt ?? 0;
@@ -791,6 +795,59 @@ class _CartPageState extends State<CartPage> {
           const SizedBox(height: 2),
           Text(val, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAddMoreItemsCard(ColorScheme cs) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            models.Account? account = widget.selectedAccount;
+            if (account == null) {
+              final accountService = Provider.of<AccountSelectionService>(context, listen: false);
+              account = accountService.selectedAccount;
+            }
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => OrderEntryPage(initialAccount: account),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: cs.primary.withAlpha((0.06 * 255).toInt()),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: cs.primary.withAlpha((0.35 * 255).toInt()),
+                style: BorderStyle.solid,
+                width: 1.2,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.add_circle_outline_rounded, color: cs.primary, size: 22),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Add more items',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: cs.primary,
+                    ),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: cs.primary, size: 22),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -636,16 +636,16 @@ class _HomeScreenState extends State<HomeScreen> {
             elevation: 0,
             scrolledUnderElevation: 1,
             toolbarHeight: 70,
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
+            backgroundColor: const Color(0xFF1E88E5),
+            foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                color: Colors.white,
+                color: const Color(0xFF1E88E5),
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: Container(
                     height: 1,
-                    color: Colors.grey.shade200,
+                    color: Colors.white.withValues(alpha: 0.12),
                   ),
                 ),
               ),
@@ -688,35 +688,51 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  // App Title and User Info
+                  // Firm name + logged-in field staff
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _config!.appTitle,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF212121),
-                            letterSpacing: 0.2,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${_config!.userInfo.loginLabel} • ${_config!.userInfo.roleLabel}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.grey.shade700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+                    child: Consumer<AuthService>(
+                      builder: (context, authService, _) {
+                        final user = authService.currentUser;
+                        String firmName = _config!.appTitle;
+                        if (user != null && user.stores.isNotEmpty) {
+                          final primary = user.stores.firstWhere(
+                            (s) => s.primary,
+                            orElse: () => user.stores.first,
+                          );
+                          if (primary.name.trim().isNotEmpty) {
+                            firmName = primary.name.trim();
+                          }
+                        }
+                        final staffName = user?.fullName.trim() ?? '';
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              firmName,
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                                letterSpacing: 0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              staffName.isNotEmpty ? 'Login: $staffName' : 'Login',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.white.withValues(alpha: 0.85),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -727,7 +743,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 IconButton(
                   onPressed: _openSpotlightSearch,
                   icon: const Icon(Icons.search_rounded),
-                  color: Colors.black87,
+                  color: Colors.white,
                   tooltip: 'Search',
                   splashRadius: 24,
                 ),
@@ -735,7 +751,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 builder: (context, authService, child) {
                   final user = authService.currentUser;
                   return PopupMenuButton(
-                    icon: const Icon(Icons.more_vert_rounded, color: Colors.black87),
+                    icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -814,9 +830,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ],
-        body: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-          children: [
+        body: RefreshIndicator(
+          onRefresh: _loadConfig,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
             if (_config!.bannerList.visible && _config!.bannerList.banners.where((b) => b.visible).isNotEmpty)
               _buildBannerCarousel(),
 
@@ -836,6 +855,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _buildIconGridFromConfig(context, _config!.extras.where((item) => item.visible && item.isActive).toList()),
             ],
           ],
+          ),
         ),
       ),
       floatingActionButton: Container(
@@ -996,46 +1016,40 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 12),
-      child: Row(
-        children: [
-          // Colored accent bar
-          Container(
-            width: 4,
-            height: 18,
-            decoration: BoxDecoration(
-              color: headerColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
+      padding: const EdgeInsets.only(top: 4, bottom: 6),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: headerColor.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: headerColor.withValues(alpha: 0.25),
+            width: 1,
           ),
-          const SizedBox(width: 12),
-          Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: headerColor,
-              letterSpacing: 1.0,
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Expanded decorative line
-          Expanded(
-            child: Container(
-              height: 1.5,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 3,
+              height: 14,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                  colors: [
-                    headerColor.withValues(alpha: 0.3),
-                    headerColor.withValues(alpha: 0.05),
-                  ],
-                ),
+                color: headerColor,
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: headerColor,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1060,6 +1074,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
       itemCount: items.length,
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: crossAxisCount,

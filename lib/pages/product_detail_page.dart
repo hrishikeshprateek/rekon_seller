@@ -1376,14 +1376,18 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     final p = widget.product;
     final price = p is Product ? p.price : sd(p is Map ? (p['Rate'] ?? p['price']) : 0.0);
 
-    qtyCtrl        = TextEditingController(text: si(d['Qty']).toString());
-    fQtyCtrl       = TextEditingController(text: si(d['FQty']).toString());
-    schQtyCtrl     = TextEditingController(text: sd(d['SchQty']).toStringAsFixed(0));
-    dSchQtyCtrl    = TextEditingController(text: sd(d['DSchQty']).toStringAsFixed(0));
+    // For a brand-new add (no existing cart entry), leave numeric fields
+    // blank — the hint shows "0" so the user can just tap and type. For an
+    // edit of an existing cart item, prefill with the saved values.
+    final bool isNew = d.isEmpty || si(d['Qty']) == 0;
+    qtyCtrl        = TextEditingController(text: isNew ? '' : si(d['Qty']).toString());
+    fQtyCtrl       = TextEditingController(text: isNew ? '' : si(d['FQty']).toString());
+    schQtyCtrl     = TextEditingController(text: isNew ? '' : sd(d['SchQty']).toStringAsFixed(0));
+    dSchQtyCtrl    = TextEditingController(text: isNew ? '' : sd(d['DSchQty']).toStringAsFixed(0));
     priceCtrl      = TextEditingController(text: sd(d['Rate']) > 0 ? sd(d['Rate']).toStringAsFixed(2) : price.toStringAsFixed(2));
-    discPcsCtrl    = TextEditingController(text: sd(d['DiscPcs']).toString());
-    discPerCtrl    = TextEditingController(text: sd(d['DiscPer']).toString());
-    addDiscPerCtrl = TextEditingController(text: sd(d['AddDiscPer']).toString());
+    discPcsCtrl    = TextEditingController(text: isNew ? '' : sd(d['DiscPcs']).toString());
+    discPerCtrl    = TextEditingController(text: isNew ? '' : sd(d['DiscPer']).toString());
+    addDiscPerCtrl = TextEditingController(text: isNew ? '' : sd(d['AddDiscPer']).toString());
     schNarrCtrl    = TextEditingController(text: d['SchNarr']?.toString() ?? '');
     remarkCtrl     = TextEditingController(text: d['Remark']?.toString() ?? '');
   }
@@ -1433,17 +1437,18 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     _resolveProductIds((c, i) { code = c; idCol = i; });
     final qty  = int.tryParse(qtyCtrl.text.trim()) ?? 0;
     final rate = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
+    String orZero(String s) => s.trim().isEmpty ? '0' : s.trim();
     return DraftOrderRequest(
       itemCode: code, idCol: idCol,
-      itemQty: qtyCtrl.text.trim(),
+      itemQty: orZero(qtyCtrl.text),
       itemRate: rate.toStringAsFixed(2),
-      itemFQty:    fQtyCtrl.text.trim().isEmpty    ? '0' : fQtyCtrl.text.trim(),
-      itemSchQty:  schQtyCtrl.text.trim().isEmpty  ? '0' : schQtyCtrl.text.trim(),
-      itemDSchQty: dSchQtyCtrl.text.trim().isEmpty ? '0' : dSchQtyCtrl.text.trim(),
+      itemFQty:    orZero(fQtyCtrl.text),
+      itemSchQty:  orZero(schQtyCtrl.text),
+      itemDSchQty: orZero(dSchQtyCtrl.text),
       itemAmt: (rate * qty).toStringAsFixed(2),
-      discountPercentage:  discPerCtrl.text.trim(),
-      discountPercentage1: addDiscPerCtrl.text.trim(),
-      discountPcs:         discPcsCtrl.text.trim(),
+      discountPercentage:  orZero(discPerCtrl.text),
+      discountPercentage1: orZero(addDiscPerCtrl.text),
+      discountPcs:         orZero(discPcsCtrl.text),
       remark:              remarkCtrl.text.trim(),
       insertRecord:        insertRecord,
     );
@@ -1818,18 +1823,19 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     required String remark,
     required int insertRecord,
   }) {
+    String orZero(String s) => s.trim().isEmpty ? '0' : s.trim();
     return DraftOrderRequest(
       itemCode: itemCode,
       idCol: idCol,
-      itemQty: qty,
+      itemQty: orZero(qty),
       itemRate: rate,
-      itemFQty: freeQty.isEmpty ? '0' : freeQty,
-      itemSchQty: schemeQty.isEmpty ? '0' : schemeQty,
-      itemDSchQty: dSchemeQty.isEmpty ? '0' : dSchemeQty,
+      itemFQty: orZero(freeQty),
+      itemSchQty: orZero(schemeQty),
+      itemDSchQty: orZero(dSchemeQty),
       itemAmt: itemAmt,
-      discountPercentage: discountPer,
-      discountPercentage1: addDiscountPer,
-      discountPcs: discountPcs,
+      discountPercentage: orZero(discountPer),
+      discountPercentage1: orZero(addDiscountPer),
+      discountPcs: orZero(discountPcs),
       remark: remark,
       insertRecord: insertRecord,
     );

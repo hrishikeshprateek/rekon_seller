@@ -141,28 +141,21 @@ class OrderDetailPage extends StatelessWidget {
     final qty = _fmt(product['Qty']);
     final fQty = _fmt(product['FQty']);
     final rate = _fmt(product['Rate']);
-    // Amt from API is the gross value per item
-    final amt = _fmt(product['Amt']);
-    // SchAmt is at the order level (same across all rows), use per-product SchQty info if available
-    final schAmt = _fmt(product['SchAmt']);
-    // TaxAmt is at order level; per-product tax not separately available
-    final taxAmt = _fmt(product['TaxAmt']);
-    // NetAmt not in this API — compute from Amt + TaxAmt - discounts
-    final double rawAmt = double.tryParse(product['Amt']?.toString() ?? '0') ?? 0;
-    final double rawDiscAmt = double.tryParse(product['DiscAmt']?.toString() ?? '0') ?? 0;
-    final double rawDisc1Amt = double.tryParse(product['Disc1Amt']?.toString() ?? '0') ?? 0;
-    final double rawDisc2Amt = double.tryParse(product['Disc2Amt']?.toString() ?? '0') ?? 0;
-    final double rawTaxAmt = double.tryParse(product['TaxAmt']?.toString() ?? '0') ?? 0;
-    final double computedNet = rawAmt - rawDiscAmt - rawDisc1Amt - rawDisc2Amt + rawTaxAmt;
-    final netAmt = computedNet.toStringAsFixed(2);
-    final mrp = _fmt(product['Mrp'] ?? product['MRP']);
+    // API `Amt` is OD_NET_AMT — per-line value after tax and after all discounts.
+    // The gross/base (OD_Amt) isn't returned, so compute Qty × Rate.
+    final double rawQty = double.tryParse(product['Qty']?.toString() ?? '0') ?? 0;
+    final double rawRate = double.tryParse(product['Rate']?.toString() ?? '0') ?? 0;
+    final double baseAmt = rawQty * rawRate;
+    final String baseAmtStr = baseAmt.toStringAsFixed(2);
+    final netAmt = _fmt(product['Amt']);
     final discAmt = product['DiscAmt']?.toString() ?? '';
     final discPer = product['DiscPer']?.toString() ?? '';
     final disc1Per = product['Disc1Per']?.toString() ?? '';
+    final disc1Amt = product['Disc1Amt']?.toString() ?? '';
     final disc2Per = product['Disc2Per']?.toString() ?? '';
-    final remark = product['DO_Remark']?.toString() ?? product['Remark']?.toString() ?? '';
+    final disc2Amt = product['Disc2Amt']?.toString() ?? '';
     final icode = product['Icode']?.toString() ?? '';
-    final invNo = product['InvNo']?.toString() ?? '';
+    final invQty = _fmt(product['InvQty']);
     final balQty = _fmt(product['BalQty']);
 
     return Container(
@@ -241,10 +234,6 @@ class OrderDetailPage extends StatelessWidget {
                   _buildMiniStat('FREE QTY', fQty, cs),
                   Container(width: 1, height: 32, color: cs.outlineVariant),
                   _buildMiniStat('RATE', '₹$rate', cs),
-                  if (mrp != null && mrp != '0' && mrp != '0.0' && mrp.isNotEmpty) ...[
-                    Container(width: 1, height: 32, color: cs.outlineVariant),
-                    _buildMiniStat('MRP', '₹$mrp', cs),
-                  ],
                 ],
               ),
             ),
@@ -255,24 +244,17 @@ class OrderDetailPage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: Column(
               children: [
-                _buildProductDetailRow('Base Amount', '₹$amt', cs),
-                if (_isNonZero(discAmt))
-                  _buildProductDetailRow('Discount (Pcs)', '- ₹$discAmt', cs, valueColor: Colors.green.shade700),
-                if (_isNonZero(discPer))
-                  _buildProductDetailRow('Discount (%)', '$discPer%', cs, valueColor: Colors.green.shade700),
-                if (_isNonZero(disc1Per))
-                  _buildProductDetailRow('Disc 1 (%)', '$disc1Per%', cs, valueColor: Colors.green.shade700),
-                if (_isNonZero(disc2Per))
-                  _buildProductDetailRow('Add Disc (%)', '$disc2Per%', cs, valueColor: Colors.green.shade700),
-                if (_isNonZero(schAmt))
-                  _buildProductDetailRow('Scheme Amt', '- ₹$schAmt', cs, valueColor: Colors.green.shade700),
-                _buildProductDetailRow('Tax Amount', '+ ₹$taxAmt', cs),
+                _buildProductDetailRow('Base Amount', '₹$baseAmtStr', cs),
+                if (_isNonZero(discPer) || _isNonZero(discAmt))
+                  _buildProductDetailRow('Discount ($discPer%)', '- ₹$discAmt', cs, valueColor: Colors.green.shade700),
+                if (_isNonZero(disc1Per) || _isNonZero(disc1Amt))
+                  _buildProductDetailRow('Disc 1 ($disc1Per%)', '- ₹$disc1Amt', cs, valueColor: Colors.green.shade700),
+                if (_isNonZero(disc2Per) || _isNonZero(disc2Amt))
+                  _buildProductDetailRow('Disc Per Pc ($disc2Per)', '- ₹$disc2Amt', cs, valueColor: Colors.green.shade700),
+                if (invQty != '0' && invQty.isNotEmpty)
+                  _buildProductDetailRow('Invoice Qty', invQty, cs),
                 if (balQty != '0' && balQty.isNotEmpty)
                   _buildProductDetailRow('Balance Qty', balQty, cs),
-                if (invNo.isNotEmpty && invNo != 'null')
-                  _buildProductDetailRow('Invoice No', invNo, cs),
-                if (remark.isNotEmpty && remark != 'null')
-                  _buildProductDetailRow('Remark', remark, cs),
               ],
             ),
           ),
@@ -288,7 +270,7 @@ class OrderDetailPage extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Net Amount', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface)),
+                Text('Net Amount (incl. tax)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface)),
                 Text(
                   '₹$netAmt',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs.primary),
@@ -331,21 +313,14 @@ class OrderDetailPage extends StatelessWidget {
 
     final String orderId = orderDetail['OrderId']?.toString() ?? 'N/A';
 
-    // Compute totals across all products
-    // NetAmt isn't in this API; use Amt - discounts + TaxAmt per row
-    // But TaxAmt & SchAmt are order-level (same for all rows) so only take from first row
-    double totalGoodsAmt = 0;
-    double totalDiscAmt = 0;
-    for (final p in products) {
-      totalGoodsAmt += (double.tryParse(p['Amt']?.toString() ?? '0') ?? 0);
-      totalDiscAmt += (double.tryParse(p['DiscAmt']?.toString() ?? '0') ?? 0)
-          + (double.tryParse(p['Disc1Amt']?.toString() ?? '0') ?? 0)
-          + (double.tryParse(p['Disc2Amt']?.toString() ?? '0') ?? 0);
-    }
-    // TaxAmt and SchAmt are order-level (same in every row), take from first product
+    // All summary figures are order-level roll-ups duplicated across rows; read once.
+    final double itemAmt = double.tryParse(orderDetail['ItemAmt']?.toString() ?? '0') ?? 0;
+    final double discValue = double.tryParse(orderDetail['DiscValue']?.toString() ?? '0') ?? 0;
+    final double disc1Value = double.tryParse(orderDetail['Disc1Value']?.toString() ?? '0') ?? 0;
+    final double disc2Value = double.tryParse(orderDetail['Disc2Value']?.toString() ?? '0') ?? 0;
     final double orderTaxAmt = double.tryParse(orderDetail['TaxAmt']?.toString() ?? '0') ?? 0;
     final double orderSchAmt = double.tryParse(orderDetail['SchAmt']?.toString() ?? '0') ?? 0;
-    final double totalNetAmt = totalGoodsAmt - totalDiscAmt - orderSchAmt + orderTaxAmt;
+    final double orderValue = double.tryParse(orderDetail['OrderValue']?.toString() ?? '0') ?? 0;
 
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
@@ -400,7 +375,7 @@ class OrderDetailPage extends StatelessWidget {
                     children: [
                       _buildInfoChip(Icons.inventory_2_outlined, '${products.length} item${products.length == 1 ? '' : 's'}', cs),
                       const SizedBox(width: 8),
-                      _buildInfoChip(Icons.currency_rupee, orderDetail['OrderValue']?.toString() ?? totalNetAmt.toStringAsFixed(2), cs),
+                      _buildInfoChip(Icons.currency_rupee, orderValue.toStringAsFixed(2), cs),
                     ],
                   ),
                 ],
@@ -500,9 +475,13 @@ class OrderDetailPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildSectionHeader('Order Summary', Icons.receipt_long_rounded, cs),
-                  _buildDetailRow('Item Amount', '₹${totalGoodsAmt.toStringAsFixed(2)}', cs),
-                  if (totalDiscAmt != 0)
-                    _buildDetailRow('Total Discount', '- ₹${totalDiscAmt.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
+                  _buildDetailRow('Item Amount', '₹${itemAmt.toStringAsFixed(2)}', cs),
+                  if (discValue != 0)
+                    _buildDetailRow('Discount', '- ₹${discValue.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
+                  if (disc1Value != 0)
+                    _buildDetailRow('Disc 1', '- ₹${disc1Value.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
+                  if (disc2Value != 0)
+                    _buildDetailRow('Add Disc', '- ₹${disc2Value.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
                   if (orderSchAmt != 0)
                     _buildDetailRow('Scheme Amount', '- ₹${orderSchAmt.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
                   _buildDetailRow('Tax Amount', '+ ₹${orderTaxAmt.toStringAsFixed(2)}', cs),
@@ -515,7 +494,7 @@ class OrderDetailPage extends StatelessWidget {
                     children: [
                       Text('Net Payable', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface)),
                       Text(
-                        '₹${orderDetail['OrderValue']?.toString() ?? totalNetAmt.toStringAsFixed(2)}',
+                        '₹${orderValue.toStringAsFixed(2)}',
                         style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs.primary),
                       ),
                     ],
@@ -523,6 +502,20 @@ class OrderDetailPage extends StatelessWidget {
                 ],
               ),
             ),
+
+            // --- INVOICE NO (order-level, shown only if available) ---
+            if ((orderDetail['InvNo']?.toString() ?? '').isNotEmpty &&
+                orderDetail['InvNo']?.toString() != 'null')
+              _buildCard(
+                cs: cs,
+                child: _buildDetailRow(
+                  'Invoice No',
+                  orderDetail['InvNo']?.toString(),
+                  cs,
+                  icon: Icons.receipt_outlined,
+                  isBold: true,
+                ),
+              ),
 
             // --- SECTION 4: ACCOUNT & FIRM ---
             /*_buildCard(

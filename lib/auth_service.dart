@@ -664,6 +664,57 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  /// Generate / send an OTP to a mobile number (used by forgot-password).
+  /// Header-based endpoint, no JWT required — same contract as MarkDelivered.
+  Future<Map<String, dynamic>> generateOTPForMobile({
+    required String mobile,
+    String countryCode = '91',
+  }) async {
+    try {
+      debugPrint('[AuthService.generateOTPForMobile] sending OTP → '
+          'MobileNo: $mobile, CountryCode: $countryCode, GenerateOtp: 1');
+      final response = await _dio.post(
+        '/GenerateOTPForMobile',
+        options: Options(
+          validateStatus: (status) => true,
+          headers: {
+            'package_name': packageNameHeader,
+            'MobileNo': mobile,
+            'CountryCode': countryCode,
+            'lApkName': packageNameHeader,
+            'GenerateOtp': '1',
+          },
+        ),
+      );
+      debugPrint('[AuthService.generateOTPForMobile] status: '
+          '${response.statusCode}, raw response: ${response.data}');
+
+      if (response.statusCode != 200) {
+        final errorMsg = response.data is String
+            ? response.data as String
+            : (response.data?.toString() ?? 'Failed to send OTP');
+        return {'success': false, 'message': errorMsg, 'data': null, 'raw': response.data};
+      }
+
+      final data = _normalizeResponse(response.data);
+      // Proceed to the change-password step only when status is explicitly true.
+      bool isTruthy(dynamic v) => v == true || v?.toString().toLowerCase() == 'true';
+      final success = isTruthy(data['success']) || isTruthy(data['Status']) || isTruthy(data['status']);
+      return {
+        'success': success,
+        'message': data['Message'] ??
+            data['message'] ??
+            (success ? 'OTP sent successfully' : 'Failed to send OTP'),
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null};
+    } catch (e) {
+      return {'success': false, 'message': 'An unexpected error occurred: ${e.toString()}', 'data': null};
+    }
+  }
+
   /// Validate mobile OTP endpoint (new API)
   Future<Map<String, dynamic>> validateMobileOTP({
     required String mobile,
@@ -727,18 +778,20 @@ class AuthService with ChangeNotifier {
   }
 
   /// Create or set user password
-  /// Uses endpoint POST /forgotpassword with payload: { licNo, countryCode, password }
+  /// Uses endpoint POST /forgotpassword with payload: { licNo, countryCode, password, otp? }
+  /// When [otp] is provided (forgot-password flow), it is verified server-side
+  /// in the same call — no separate OTP-validation endpoint is needed.
   Future<Map<String, dynamic>> createPassword({
     required String mobile,
     required String password,
     String countryCode = '91',
     String? licenseNumber,
+    String? otp,
   }) async {
     try {
       // The backend expects the user's mobile number in licNo (per API examples).
-      // Prefer `mobile` here; fallback to licenseNumber only if mobile is empty.
+      // licNo carries the user's phone number (digits only, last 10).
       String lic = (mobile.isNotEmpty) ? mobile : (licenseNumber ?? '');
-      // Normalize: keep digits only and use last 10 digits if longer
       lic = lic.replaceAll(RegExp(r'[^0-9]'), '');
       if (lic.length > 10) lic = lic.substring(lic.length - 10);
 
@@ -746,6 +799,7 @@ class AuthService with ChangeNotifier {
         'licNo': lic,
         'countryCode': countryCode,
         'password': password,
+        if (otp != null && otp.trim().isNotEmpty) 'otp': otp.trim(),
       };
 
       debugPrint('[AuthService.createPassword] payload: $payload');
@@ -766,10 +820,13 @@ class AuthService with ChangeNotifier {
       debugPrint('[AuthService.createPassword] raw response: ${response.data}');
 
       final data = _normalizeResponse(response.data);
-      final success = data['success'] == true || data['Status'] == true || (data['status']?.toString().toLowerCase() == 'true');
+      // Treat a truthy status/Status/success (bool or "true" string, any case) as success.
+      bool isTruthy(dynamic v) => v == true || v?.toString().toLowerCase() == 'true';
+      final success = isTruthy(data['success']) || isTruthy(data['Status']) || isTruthy(data['status']);
       return {
         'success': success,
-        'message': data['message'] ?? data['Message'] ?? (success ? 'Password created' : 'Failed to create password'),
+        'message': data['Message'] ?? data['message'] ??
+            (success ? 'Password reset successfully' : 'Failed to reset password'),
         'data': data,
         'raw': response.data,
       };

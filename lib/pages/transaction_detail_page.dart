@@ -1,4 +1,12 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:cross_file/cross_file.dart';
+import '../auth_service.dart';
 import '../models/ledger_entry_model.dart';
 
 /// Full-screen transaction detail page that fetches detail via provided callback
@@ -21,11 +29,74 @@ class  TransactionDetailPage extends StatefulWidget {
 
 class _TransactionDetailPageState extends State<TransactionDetailPage> {
   late Future<Map<String, dynamic>?> _future;
+  bool _isSharingBill = false;
 
   @override
   void initState() {
     super.initState();
     _future = widget.fetchDetail(widget.entry);
+  }
+
+  /// Fetches the bill as a PDF via GetTranDetail with lSharePdf: 1 and opens
+  /// the OS share sheet.
+  Future<void> _viewBill() async {
+    if (_isSharingBill) return;
+    setState(() => _isSharingBill = true);
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      final e = widget.entry;
+      final keyEntryNo = e.keyEntryNo ?? e.entryNo ?? e.tranId ?? e.vchNumber ?? '';
+
+      final payload = {
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lKeyEntryNo': keyEntryNo,
+        'lIsEntryRecord': (e.isEntryRecord != null) ? e.isEntryRecord.toString() : '1',
+        'lKeyEntrySrNo': e.keyEntrySrNo,
+        'lSharePdf': 1,
+      };
+
+      final response = await dio.post(
+        '/GetTranDetail',
+        data: payload,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      Uint8List? bytes;
+      if (response.data is Uint8List) {
+        bytes = response.data as Uint8List;
+      } else if (response.data is List<int>) {
+        bytes = Uint8List.fromList(List<int>.from(response.data));
+      }
+
+      if (bytes == null || bytes.isEmpty) {
+        throw 'No PDF data received.';
+      }
+
+      final dir = await getTemporaryDirectory();
+      final safeNo = keyEntryNo.toString().replaceAll(RegExp(r'[^A-Za-z0-9]'), '_');
+      final file = File('${dir.path}/bill_${safeNo}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(bytes, flush: true);
+
+      final xfile = XFile(file.path, mimeType: 'application/pdf');
+      await Share.shareXFiles([xfile], text: 'Bill $keyEntryNo');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to open bill: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSharingBill = false);
+    }
   }
 
   @override
@@ -757,12 +828,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       margin: const EdgeInsets.symmetric(horizontal: 12),
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: () {
-          // TODO: Implement view bill functionality
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('View Bill feature coming soon')),
-          );
-        },
+        onPressed: _isSharingBill ? null : _viewBill,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF1976D2),
           foregroundColor: Colors.white,
@@ -772,14 +838,20 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
           ),
           elevation: 0,
         ),
-        child: const Text(
-          'View Bill',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 0.5,
-          ),
-        ),
+        child: _isSharingBill
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+            : const Text(
+                'View Bill',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                ),
+              ),
       ),
     );
   }

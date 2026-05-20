@@ -216,8 +216,8 @@ class DraftOrderPreviewResult {
       schemeAmt: asDouble(data['ItemSchAmt']),
       taxAmt: asDouble(data['ItemTaxAmt']),
       discAmt: asDouble(data['ItemDiscAmt']),
-      disc1Amt: asDouble(data['ItemDisc2Amt']),
-      disc2Amt: asDouble(data['ItemDisc1Amt']),
+      disc1Amt: asDouble(data['ItemDisc1Amt']),
+      disc2Amt: asDouble(data['ItemDisc2Amt']),
       discPer: asDouble(data['ItemDiscPer']),
       disc1Per: asDouble(data['ItemDisc1Per']),
       disc2Per: asDouble(data['ItemDisc2Per']),
@@ -263,6 +263,12 @@ class DraftOrderService {
 
     final normalized = _normalizeResponse(response.data);
     final data = normalized['data'] is Map ? normalized['data'] as Map : {};
+    final rawStr = response.data is String ? response.data as String : jsonEncode(response.data);
+    print('=== AddDraftOrder RAW RESPONSE ===');
+    for (int i = 0; i < rawStr.length; i += 800) {
+      print(rawStr.substring(i, i + 800 > rawStr.length ? rawStr.length : i + 800));
+    }
+    print('=== END (total ${rawStr.length} chars) ===');
     print('=== AddDraftOrder RAW discount fields ===');
     print('discount_pcs sent     : ${payload['discount_pcs']}');
     print('discount_percentage   : ${payload['discount_percentage']}');
