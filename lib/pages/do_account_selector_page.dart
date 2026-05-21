@@ -35,11 +35,91 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
   String _searchQuery = '';
   Timer? _debounce;
 
+  // Firm selection
+  List<_Firm> _firms = [];
+  _Firm? _selectedFirm;
+  bool _isLoadingFirms = false;
+
   @override
   void initState() {
     super.initState();
-    _loadAccounts(reset: true);
     _scrollCtrl.addListener(_onScroll);
+    _init();
+  }
+
+  Future<void> _init() async {
+    await _loadFirms();
+    await _loadAccounts(reset: true);
+  }
+
+  /// Fetch the list of firms for the current licence and pre-select the one
+  /// matching the user's primary store (falls back to the first firm).
+  Future<void> _loadFirms() async {
+    setState(() => _isLoadingFirms = true);
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+      final user = auth.currentUser;
+
+      final response = await dio.post(
+        '/GetFirmList',
+        data: {
+          'lLicNo': user?.licenseNumber ?? '',
+          'lPageNo': 1,
+          'lSize': 100,
+          'lSearchFieldValue': '',
+          'lExecuteTotalRows': 1,
+        },
+        options: Options(headers: {
+          'Content-Type': 'application/json',
+          'package_name': auth.packageNameHeader,
+          if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+        }),
+      );
+
+      dynamic raw = response.data;
+      Map<String, dynamic> parsed = {};
+      if (raw is Map<String, dynamic>) {
+        parsed = raw;
+      } else if (raw is String) {
+        parsed = jsonDecode(raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')) as Map<String, dynamic>;
+      } else {
+        parsed = jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
+      }
+
+      final List<dynamic> list = (parsed['data'] is List) ? parsed['data'] as List : [];
+      final firms = list
+          .map((e) => _Firm(
+                code: (e['Code'] ?? '').toString(),
+                name: (e['Name'] ?? '').toString(),
+              ))
+          .where((f) => f.code.isNotEmpty)
+          .toList();
+
+      // Pre-select the user's primary store firm if present.
+      String primaryFirmCode = '';
+      try {
+        if (user != null && user.stores.isNotEmpty) {
+          primaryFirmCode = user.stores
+              .firstWhere((s) => s.primary, orElse: () => user.stores.first)
+              .firmCode;
+        }
+      } catch (_) {}
+
+      setState(() {
+        _firms = firms;
+        _selectedFirm = firms.isEmpty
+            ? null
+            : firms.firstWhere(
+                (f) => f.code == primaryFirmCode,
+                orElse: () => firms.first,
+              );
+        _isLoadingFirms = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingFirms = false);
+      debugPrint('[GetFirmList] error: $e');
+    }
   }
 
   @override
@@ -82,13 +162,16 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
       final dio = auth.getDioClient();
       final user = auth.currentUser;
 
-      String firmCode = '';
-      try {
-        if (user != null && user.stores.isNotEmpty) {
-          final primary = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first);
-          firmCode = primary.firmCode;
-        }
-      } catch (_) {}
+      // Prefer the firm picked in the selector; fall back to the primary store.
+      String firmCode = _selectedFirm?.code ?? '';
+      if (firmCode.isEmpty) {
+        try {
+          if (user != null && user.stores.isNotEmpty) {
+            final primary = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first);
+            firmCode = primary.firmCode;
+          }
+        } catch (_) {}
+      }
 
       final payload = {
         'lLicNo': user?.licenseNumber ?? '',
@@ -201,9 +284,58 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
       ),
       body: Column(
         children: [
+          // Firm selector
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: 'Firm',
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                prefixIcon: Icon(Icons.domain_rounded, size: 20, color: cs.primary),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: cs.outlineVariant),
+                ),
+              ),
+              child: _isLoadingFirms
+                  ? const SizedBox(
+                      height: 24,
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                      ),
+                    )
+                  : DropdownButtonHideUnderline(
+                      child: DropdownButton<_Firm>(
+                        isExpanded: true,
+                        value: _selectedFirm,
+                        hint: const Text('Select firm'),
+                        items: _firms
+                            .map((f) => DropdownMenuItem<_Firm>(
+                                  value: f,
+                                  child: Text(
+                                    f.name.isNotEmpty ? f.name : f.code,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                                  ),
+                                ))
+                            .toList(),
+                        onChanged: (f) {
+                          if (f == null || f.code == _selectedFirm?.code) return;
+                          setState(() => _selectedFirm = f);
+                          _loadAccounts(reset: true);
+                        },
+                      ),
+                    ),
+            ),
+          ),
+
           // Search bar
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: TextField(
               controller: _searchCtrl,
               onChanged: _onSearch,
@@ -335,5 +467,19 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
       ),
     );
   }
+}
+
+/// A firm returned by /GetFirmList.
+class _Firm {
+  final String code;
+  final String name;
+
+  const _Firm({required this.code, required this.name});
+
+  @override
+  bool operator ==(Object other) => other is _Firm && other.code == code;
+
+  @override
+  int get hashCode => code.hashCode;
 }
 
