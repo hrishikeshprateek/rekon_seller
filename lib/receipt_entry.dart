@@ -204,55 +204,19 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text(
-            'Submit Receipt Alert!',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 16),
-                Icon(
-                  Icons.warning_rounded,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'This is an irreversible process, you can\'t change this later. Please verify all the details before final submitting.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Theme.of(context).colorScheme.onSurface,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
+          title: const Text('Submit Receipt?'),
+          content: const Text(
+            'This is an irreversible process — you can\'t change it later. '
+            'Please verify all the details before submitting.',
           ),
           actions: [
-            SizedBox(
-              width: 100,
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('Change'),
-              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Change'),
             ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: 100,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: const Text('Submit'),
-              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Submit'),
             ),
           ],
         );
@@ -442,14 +406,15 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text(
-          "Create Receipt",
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
+          "CREATE RECEIPT",
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white, letterSpacing: 0.5),
         ),
         centerTitle: true,
-        backgroundColor: colorScheme.surface,
+        backgroundColor: const Color(0xFF1E88E5),
+        foregroundColor: Colors.white,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -563,19 +528,19 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildLabel(context, "Amount"),
-                        TextFormField(
-                          controller: _amountController,
-                          keyboardType: TextInputType.number,
+                        _inlineField(
+                          icon: Icons.currency_rupee_rounded,
+                          label: 'Amount',
                           enabled: _selectedAccount != null && _selectedAccount!.isNotEmpty,
-                          style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.primary, fontSize: 16),
-                          decoration: _homeThemeDecoration(
-                            context,
-                            "₹ 0.00",
-                            Icons.currency_rupee_rounded,
-                            isDisabled: _selectedAccount == null || _selectedAccount!.isEmpty,
+                          input: TextFormField(
+                            controller: _amountController,
+                            keyboardType: TextInputType.number,
+                            enabled: _selectedAccount != null && _selectedAccount!.isNotEmpty,
+                            textAlign: TextAlign.right,
+                            style: TextStyle(fontWeight: FontWeight.w700, color: colorScheme.primary, fontSize: 16),
+                            decoration: _inlineInputDeco('₹ 0.00'),
+                            validator: (v) => (v?.isEmpty ?? true) ? 'Required' : null,
                           ),
-                          validator: (v) => (v?.isEmpty ?? true) ? 'Required' : null,
                         ),
                         if (_selectedAccount == null || _selectedAccount!.isEmpty)
                           Padding(
@@ -587,90 +552,85 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                           ),
                       ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 14),
 
                     // --- 3.5 Discount (added back per request) ---
                     if (!(widget.selectedBills != null && widget.selectedBills!.isNotEmpty)) ...[
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildLabel(context, "Discount"),
-                          TextFormField(
-                            controller: _discountController,
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-                            decoration: _homeThemeDecoration(context, "₹ 0.00", Icons.currency_rupee_rounded),
-                            // Discount is optional; keep numeric formatting to 2 decimals when submitting
-                          ),
-                        ],
+                      _inlineField(
+                        icon: Icons.currency_rupee_rounded,
+                        label: 'Disc Amt',
+                        input: TextFormField(
+                          controller: _discountController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          textAlign: TextAlign.right,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          decoration: _inlineInputDeco('Enter Amount'),
+                        ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 14),
                     ],
 
                     // --- 4. Payment Mode ---
-                    _buildLabel(context, "Payment Mode"),
-                    DropdownButtonFormField<String>(
-                      initialValue: _selectedPaymentMode,
-                      items: _paymentModes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                      onChanged: (v) => setState(() => _selectedPaymentMode = v),
-                      decoration: _homeThemeDecoration(context, "Select Mode", Icons.payment_rounded),
-                      validator: (v) => v == null ? 'Required' : null,
+                    _inlineField(
+                      icon: Icons.payment_rounded,
+                      label: 'Payment Mode',
+                      input: DropdownButtonFormField<String>(
+                        initialValue: _selectedPaymentMode,
+                        isExpanded: true,
+                        alignment: AlignmentDirectional.centerEnd,
+                        items: _paymentModes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        onChanged: (v) => setState(() => _selectedPaymentMode = v),
+                        decoration: _inlineInputDeco('Select Mode'),
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 14),
 
-                    // --- 5. Doc No & Date ---
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel(context, "Doc No."),
-                              TextFormField(
-                                controller: _docNoController,
-                                decoration: _homeThemeDecoration(context, "Ref No.", Icons.numbers_rounded),
-                                validator: (v) {
-                                  // Make doc number required when Bank is selected
-                                  if (_selectedPaymentMode == 'Bank' && (v == null || v.trim().isEmpty)) {
-                                    return 'Required for Bank';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildLabel(context, "Doc Date"),
-                              InkWell(
-                                onTap: () => _pickDate(context),
-                                borderRadius: BorderRadius.circular(12),
-                                child: IgnorePointer(
-                                  child: TextFormField(
-                                    key: ValueKey(_docDate),
-                                    initialValue: _docDate != null ? DateFormat('dd/MM/yyyy').format(_docDate!) : null,
-                                    decoration: _homeThemeDecoration(context, "Select", Icons.event_rounded),
-                                    validator: (v) {
-                                      // Make doc date required when Bank is selected
-                                      if (_selectedPaymentMode == 'Bank' && _docDate == null) {
-                                        return 'Required for Bank';
-                                      }
-                                      return null;
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                    // --- 5. Doc No ---
+                    _inlineField(
+                      icon: Icons.numbers_rounded,
+                      label: 'Doc No.',
+                      input: TextFormField(
+                        controller: _docNoController,
+                        textAlign: TextAlign.right,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                        decoration: _inlineInputDeco('Ref No.'),
+                        validator: (v) {
+                          // Make doc number required when Bank is selected
+                          if (_selectedPaymentMode == 'Bank' && (v == null || v.trim().isEmpty)) {
+                            return 'Required for Bank';
+                          }
+                          return null;
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 14),
+
+                    // --- 5b. Doc Date ---
+                    _inlineField(
+                      icon: Icons.event_rounded,
+                      label: 'Doc Date',
+                      input: InkWell(
+                        onTap: () => _pickDate(context),
+                        child: IgnorePointer(
+                          child: TextFormField(
+                            key: ValueKey(_docDate),
+                            initialValue: _docDate != null ? DateFormat('dd/MM/yyyy').format(_docDate!) : null,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            decoration: _inlineInputDeco('Select'),
+                            validator: (v) {
+                              // Make doc date required when Bank is selected
+                              if (_selectedPaymentMode == 'Bank' && _docDate == null) {
+                                return 'Required for Bank';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
 
                     // --- 6. Add Bills (Button styled like Home Cards) ---
                     // Hide the "Attach Bills / Invoices" button when bills were passed into this screen
@@ -865,6 +825,62 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
   }
 
   // --- WIDGET HELPERS ---
+
+  /// Single-row field: [blue icon] [label] .......... [input, right-aligned].
+  /// The outer box draws the border; the [input] should use [_inlineInputDeco].
+  Widget _inlineField({
+    required IconData icon,
+    required String label,
+    required Widget input,
+    bool enabled = true,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: enabled ? Colors.white : cs.surfaceContainerLow.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: Colors.white),
+          ),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: cs.onSurface)),
+          const SizedBox(width: 8),
+          Expanded(child: input),
+        ],
+      ),
+    );
+  }
+
+  /// Borderless decoration for inputs placed inside [_inlineField].
+  /// `filled: false` keeps the input transparent so it fuses with the
+  /// white card box (the global theme otherwise applies a grey fill).
+  InputDecoration _inlineInputDeco(String hint) => InputDecoration(
+        isCollapsed: true,
+        filled: false,
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        disabledBorder: InputBorder.none,
+        errorBorder: InputBorder.none,
+        focusedErrorBorder: InputBorder.none,
+        hintText: hint,
+        hintStyle: TextStyle(
+          color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+          fontSize: 14,
+          fontWeight: FontWeight.normal,
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      );
 
   Widget _buildLabel(BuildContext context, String label) {
     return Padding(

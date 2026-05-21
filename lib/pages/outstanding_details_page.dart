@@ -547,7 +547,7 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Colors.blueGrey.shade800;
+    const primaryColor = Color(0xFF1E88E5);
     final scaffoldBg = Colors.grey.shade100;
     final selectedTotal = _selectedTotal;
     final currencyFormat = NumberFormat.simpleCurrency(
@@ -632,7 +632,7 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
                             Text(
                               'Total: ${currencyFormat.format(selectedTotal)}',
                               style: const TextStyle(
-                                fontSize: 14,
+                                fontSize: 18,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),

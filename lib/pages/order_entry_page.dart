@@ -1541,9 +1541,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           filled: true,
-          fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
           focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
         );
 
@@ -1622,17 +1622,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               }
             }
 
-            Widget sectionLabel(String title) => Row(
-              children: [
-                Container(width: 3, height: 16, decoration: BoxDecoration(color: colorScheme.primary, borderRadius: BorderRadius.circular(2))),
-                const SizedBox(width: 8),
-                Text(title, style: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800, color: colorScheme.primary, letterSpacing: 1.2)),
-              ],
-            );
-
             Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode}) => Row(
               children: [
-                Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                Expanded(child: Text(label, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
                 SizedBox(
                   width: 130,
                   child: TextField(
@@ -1663,36 +1655,32 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               return Row(
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: hasAmt ? Colors.red.shade50 : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: hasAmt ? Colors.red.shade200 : colorScheme.outlineVariant.withValues(alpha: 0.4),
-                              width: 0.8,
-                            ),
-                          ),
-                          child: Text(
-                            '- ₹${amt.toStringAsFixed(2)}',
-                            style: textTheme.labelSmall?.copyWith(
-                              color: hasAmt ? Colors.red.shade700 : colorScheme.outline,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                      ],
+                    child: Text(label, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 8),
+                  // Amount chip — sits to the LEFT of the value entry box.
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: hasAmt ? Colors.red.shade50 : colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: hasAmt ? Colors.red.shade200 : colorScheme.outlineVariant.withValues(alpha: 0.4),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Text(
+                      '- ₹${amt.toStringAsFixed(2)}',
+                      style: textTheme.labelLarge?.copyWith(
+                        color: hasAmt ? Colors.red.shade700 : colorScheme.outline,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   SizedBox(
-                    width: 130,
+                    width: 110,
                     child: TextField(
                       controller: ctrl,
                       focusNode: focusNode,
@@ -1758,7 +1746,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(product.name,
-                                    style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                                    style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                                     maxLines: 2, overflow: TextOverflow.ellipsis),
                                 const SizedBox(height: 2),
                                 Text('${product.manufacturer ?? ''} • ${product.unit}',
@@ -1795,7 +1783,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     // Scrollable form body
                     Expanded(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                         // Force focus to advance in widget-tree order so the
                         // keyboard's "Next" key hits every visible field
                         // (Quantity → Free Qty → Scheme → +Scheme → Price →
@@ -1805,15 +1793,12 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                           child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // ORDER DETAILS
-                            sectionLabel('ORDER DETAILS'),
-                            const SizedBox(height: 14),
                             rowField('Quantity', qtyController, TextInputType.number, focusNode: qtyFocus),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
                             if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
                               ...[
                                 rowField('Free Quantity', freeQtyController, TextInputType.number, focusNode: freeQtyFocus),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                               ],
                             // Scheme (two boxes with +)
                             if (context.watch<SalesmanFlagsService>().flags?.showSchemeSalesMan ?? false)
@@ -1863,7 +1848,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                               ],
                             // Price field - always visible, editable/disabled based on flag
                             rowField(
@@ -1873,26 +1858,23 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                               enabled: context.watch<SalesmanFlagsService>().flags?.enablePriceSalesMan ?? false,
                               focusNode: priceFocus,
                             ),
-                            const SizedBox(height: 20),
-                            // DISCOUNTS
-                            sectionLabel('DISCOUNTS'),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 8),
                             if (context.watch<SalesmanFlagsService>().flags?.showDiscPcsSalesMan ?? false)
                               ...[
                                 rowFieldWithAmt('Discount (Pcs)', discPcsController, preview?.disc2Amt ?? 0.0, focusNode: discPcsFocus),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                               ],
                             if (context.watch<SalesmanFlagsService>().flags?.showDiscPerSalesMan ?? false)
                               ...[
                                 rowFieldWithAmt('Discount (%)', discPerController, preview?.discAmt ?? 0.0, focusNode: discPerFocus),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                               ],
                             if (context.watch<SalesmanFlagsService>().flags?.showdisc1perSalesman ?? false)
                               ...[
                                 rowFieldWithAmt('Add. Discount (%)', addDiscPerController, preview?.disc1Amt ?? 0.0, focusNode: addDiscPerFocus),
-                                const SizedBox(height: 12),
+                                const SizedBox(height: 8),
                               ],
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 12),
                             // Remark
                             if (context.watch<SalesmanFlagsService>().flags?.showItemRemarkSalesMan ?? false)
                               ...[

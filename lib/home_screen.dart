@@ -723,9 +723,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               staffName.isNotEmpty ? 'Login: $staffName' : 'Login',
                               style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.white.withValues(alpha: 0.85),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white.withValues(alpha: 0.9),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

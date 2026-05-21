@@ -632,8 +632,12 @@ class _CartPageState extends State<CartPage> {
                     // Row 2: Dis(Pcs) | Dis(%) | Add Dis(%)
                     Row(
                       children: [
-                        _metricCell(cs, 'Dis (Pcs)', '${(it.disc2Per ?? 0).toStringAsFixed(1)} (₹${(it.disc2Amt ?? 0).toStringAsFixed(2)})'),
-                        _metricCell(cs, 'Dis (%)',   '${(it.discPer ?? 0).toStringAsFixed(0)} (₹${(it.discAmt ?? 0).toStringAsFixed(2)})'),
+                        // NOTE: ListDraftOrder's DO_DiscAmt and DO_Disc2Amt are stored under the
+                        // *opposite* convention from /AddDraftOrder's ItemDiscAmt/ItemDisc2Amt.
+                        // To keep the cart consistent with the bottom-sheet preview chips, pair
+                        // each percentage with the *opposite-side* amount field.
+                        _metricCell(cs, 'Dis (Pcs)', '${(it.disc2Per ?? 0).toStringAsFixed(1)} (₹${(it.discAmt ?? 0).toStringAsFixed(2)})'),
+                        _metricCell(cs, 'Dis (%)',   '${(it.discPer ?? 0).toStringAsFixed(0)} (₹${(it.disc2Amt ?? 0).toStringAsFixed(2)})'),
                         _metricCell(cs, 'Add Dis (%)', '${(it.disc1Per ?? 0).toStringAsFixed(0)} (₹${(it.disc1Amt ?? 0).toStringAsFixed(2)})'),
                       ],
                     ),
@@ -819,31 +823,26 @@ class _CartPageState extends State<CartPage> {
             );
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
-              color: cs.primary.withAlpha((0.06 * 255).toInt()),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: cs.primary.withAlpha((0.35 * 255).toInt()),
-                style: BorderStyle.solid,
-                width: 1.2,
-              ),
+              color: const Color(0xFF1E88E5),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.add_circle_outline_rounded, color: cs.primary, size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Add more items',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: cs.primary,
-                    ),
+                Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                SizedBox(width: 8),
+                Text(
+                  'Add more items',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    letterSpacing: 0.2,
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, color: cs.primary, size: 22),
               ],
             ),
           ),
