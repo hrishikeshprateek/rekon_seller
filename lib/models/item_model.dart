@@ -13,6 +13,13 @@ class ItemModel {
   final String firmName;
   final String salt;
   final String? refNumber; // RefNumber from API
+  final String scheme; // scheme narration from GetItemList
+  // Visibility flags from GetItemList — control whether to show each field.
+  final bool showMrp;
+  final bool showRate;
+  final bool showStock;
+  final bool showScheme;
+  final double rating; // item rating from GetItemList
 
   ItemModel({
     required this.iidcol,
@@ -28,6 +35,12 @@ class ItemModel {
     required this.firmName,
     required this.salt,
     this.refNumber,
+    this.scheme = '',
+    this.showMrp = true,
+    this.showRate = true,
+    this.showStock = true,
+    this.showScheme = true,
+    this.rating = 0,
   });
 
   factory ItemModel.fromJson(Map<String, dynamic> json) {
@@ -58,6 +71,13 @@ class ItemModel {
       firmName: (json['FirmName'] ?? '').toString(),
       salt: (json['Salt'] ?? json['Salt '] ?? '').toString(),
       refNumber: (json['RefNumber'] ?? '').toString().isEmpty ? null : (json['RefNumber'] ?? '').toString(),
+      // Scheme narration from GetItemList — confirmed key is 'SCHNARR'.
+      scheme: (json['SCHNARR'] ?? '').toString().trim(),
+      showMrp: json['ShowMrp'] == true,
+      showRate: json['ShowRate'] == true,
+      showStock: json['ShowStock'] == true,
+      showScheme: json['ShowScheme'] == true,
+      rating: parseDouble(json['Rating']),
     );
   }
 }

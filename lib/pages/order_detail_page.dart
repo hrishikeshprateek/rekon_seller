@@ -1,17 +1,17 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import '../auth_service.dart';
 
 /// Sectioned order-detail screen.
 ///
 /// Layout (top to bottom): blue app bar, account-name strip, a 4-step status
-/// stepper, an "ORDER DETAILS" card, an optional "INVOICE DETAILS" card (with a
-/// share-PDF action) and a collapsible "ITEM PURCHASED" card.
+/// stepper, an "ORDER DETAILS" card, an optional "INVOICE DETAILS" card (with
+/// view / save PDF actions) and a collapsible "ITEM PURCHASED" card.
 class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> orderDetail;
   final List<dynamic> products;
@@ -31,7 +31,11 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
   static const Color _bg = Color(0xFFF5F7FA);
 
   bool _itemsExpanded = true;
-  bool _isSharingInvoice = false;
+  static const MethodChannel _filesChannel =
+      MethodChannel('com.reckon.reckonbiz/files');
+  Uint8List? _invoicePdfBytes;
+  bool _isOpeningInvoice = false;
+  bool _isSavingInvoice = false;
 
   Map<String, dynamic> get _order => widget.orderDetail;
   List<dynamic> get _products => widget.products;
@@ -59,62 +63,70 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     return 0; // placed / pending / anything else
   }
 
-  // --- PDF SHARE ---
+  // --- INVOICE PDF ---
 
-  /// Fetches the invoice as a PDF and opens the OS share sheet.
+  String _safeInvNo() => (_order['InvNo']?.toString() ?? 'invoice')
+      .replaceAll(RegExp(r'[^A-Za-z0-9]'), '_');
+
+  /// Fetches the invoice PDF once and caches the bytes.
   ///
-  /// Best-effort: hits `/GetTranDetail` with `lSharePdf: 1` (the same endpoint
-  /// the transaction screen uses). The order API does not expose a dedicated
-  /// invoice-PDF endpoint, so this may need adjustment if the backend changes.
-  Future<void> _viewInvoice() async {
-    if (_isSharingInvoice) return;
-    setState(() => _isSharingInvoice = true);
-    try {
-      final auth = Provider.of<AuthService>(context, listen: false);
-      final dio = auth.getDioClient();
+  /// Hits `/GetTranDetail` with `lSharePdf: 1` (the same endpoint the
+  /// transaction screen uses) and returns the raw PDF bytes.
+  Future<Uint8List> _fetchInvoicePdf() async {
+    final cached = _invoicePdfBytes;
+    if (cached != null) return cached;
 
-      final invNo = _order['InvNo']?.toString() ?? '';
-      final payload = {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = auth.getDioClient();
+
+    final response = await dio.post(
+      '/GetTranDetail',
+      data: {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'lKeyEntryNo':
             _order['TMNO']?.toString() ?? _order['InvNo']?.toString() ?? '',
         'lIsEntryRecord': '1',
         'lSharePdf': 1,
-      };
+      },
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {
+          'Content-Type': 'application/json',
+          'package_name': auth.packageNameHeader,
+          if (auth.getAuthHeader() != null)
+            'Authorization': auth.getAuthHeader(),
+        },
+      ),
+    );
 
-      final response = await dio.post(
-        '/GetTranDetail',
-        data: payload,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: {
-            'Content-Type': 'application/json',
-            'package_name': auth.packageNameHeader,
-            if (auth.getAuthHeader() != null)
-              'Authorization': auth.getAuthHeader(),
-          },
-        ),
-      );
+    Uint8List? bytes;
+    if (response.data is Uint8List) {
+      bytes = response.data as Uint8List;
+    } else if (response.data is List<int>) {
+      bytes = Uint8List.fromList(List<int>.from(response.data));
+    }
+    if (bytes == null || bytes.isEmpty) throw 'No PDF data received.';
 
-      Uint8List? bytes;
-      if (response.data is Uint8List) {
-        bytes = response.data as Uint8List;
-      } else if (response.data is List<int>) {
-        bytes = Uint8List.fromList(List<int>.from(response.data));
-      }
+    _invoicePdfBytes = bytes;
+    return bytes;
+  }
 
-      if (bytes == null || bytes.isEmpty) {
-        throw 'No PDF data received.';
-      }
-
+  /// Opens the invoice in the device's default PDF viewer.
+  Future<void> _viewInvoice() async {
+    if (_isOpeningInvoice || _isSavingInvoice) return;
+    setState(() => _isOpeningInvoice = true);
+    try {
+      final bytes = await _fetchInvoicePdf();
       final dir = await getTemporaryDirectory();
-      final safeNo = invNo.replaceAll(RegExp(r'[^A-Za-z0-9]'), '_');
-      final file = File(
-          '${dir.path}/invoice_${safeNo}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      final file = File('${dir.path}/invoice_${_safeInvNo()}.pdf');
       await file.writeAsBytes(bytes, flush: true);
 
-      final xfile = XFile(file.path, mimeType: 'application/pdf');
-      await Share.shareXFiles([xfile], text: 'Invoice $invNo');
+      final result = await OpenFilex.open(file.path, type: 'application/pdf');
+      if (result.type != ResultType.done && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open invoice: ${result.message}')),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -122,7 +134,47 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isSharingInvoice = false);
+      if (mounted) setState(() => _isOpeningInvoice = false);
+    }
+  }
+
+  /// Saves the invoice PDF into the device's Downloads folder.
+  Future<void> _saveInvoice() async {
+    if (_isOpeningInvoice || _isSavingInvoice) return;
+    setState(() => _isSavingInvoice = true);
+    try {
+      final bytes = await _fetchInvoicePdf();
+      final fileName = 'invoice_${_safeInvNo()}.pdf';
+      String savedAt;
+      if (Platform.isAndroid) {
+        savedAt = await _filesChannel.invokeMethod<String>(
+              'saveToDownloads',
+              {
+                'fileName': fileName,
+                'bytes': bytes,
+                'mimeType': 'application/pdf',
+              },
+            ) ??
+            'Downloads';
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsBytes(bytes, flush: true);
+        savedAt = file.path;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invoice saved to $savedAt')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to save invoice: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingInvoice = false);
     }
   }
 
@@ -326,40 +378,55 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           _detailRow('Invoice Date', _order['INVDt']?.toString()),
           _amountRow('Invoice Amount', _money(_order['InvAmt'])),
           const SizedBox(height: 12),
-          Center(
-            child: InkWell(
-              onTap: _isSharingInvoice ? null : _viewInvoice,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: _isSharingInvoice
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.red,
-                        ),
-                      )
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(Icons.receipt_long,
-                              size: 18, color: Colors.red),
-                          SizedBox(width: 6),
-                          Text(
-                            'View Invoice',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: (_isOpeningInvoice || _isSavingInvoice)
+                      ? null
+                      : _viewInvoice,
+                  icon: _isOpeningInvoice
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: _blue),
+                        )
+                      : const Icon(Icons.visibility_outlined, size: 18),
+                  label: const Text('View Invoice'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _blue,
+                    side: const BorderSide(color: _blue),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: (_isOpeningInvoice || _isSavingInvoice)
+                      ? null
+                      : _saveInvoice,
+                  icon: _isSavingInvoice
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Save'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _blue,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

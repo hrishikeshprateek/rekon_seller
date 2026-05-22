@@ -632,12 +632,11 @@ class _CartPageState extends State<CartPage> {
                     // Row 2: Dis(Pcs) | Dis(%) | Add Dis(%)
                     Row(
                       children: [
-                        // NOTE: ListDraftOrder's DO_DiscAmt and DO_Disc2Amt are stored under the
-                        // *opposite* convention from /AddDraftOrder's ItemDiscAmt/ItemDisc2Amt.
-                        // To keep the cart consistent with the bottom-sheet preview chips, pair
-                        // each percentage with the *opposite-side* amount field.
-                        _metricCell(cs, 'Dis (Pcs)', '${(it.disc2Per ?? 0).toStringAsFixed(1)} (₹${(it.discAmt ?? 0).toStringAsFixed(2)})'),
-                        _metricCell(cs, 'Dis (%)',   '${(it.discPer ?? 0).toStringAsFixed(0)} (₹${(it.disc2Amt ?? 0).toStringAsFixed(2)})'),
+                        // Pair each discount percentage with its own amount field:
+                        // disc2Per/disc2Amt = Pcs discount, discPer/discAmt = % discount.
+                        // (Matches the bottom-sheet editor preview chips.)
+                        _metricCell(cs, 'Dis (Pcs)', '${(it.disc2Per ?? 0).toStringAsFixed(1)} (₹${(it.disc2Amt ?? 0).toStringAsFixed(2)})'),
+                        _metricCell(cs, 'Dis (%)',   '${(it.discPer ?? 0).toStringAsFixed(0)} (₹${(it.discAmt ?? 0).toStringAsFixed(2)})'),
                         _metricCell(cs, 'Add Dis (%)', '${(it.disc1Per ?? 0).toStringAsFixed(0)} (₹${(it.disc1Amt ?? 0).toStringAsFixed(2)})'),
                       ],
                     ),
@@ -1063,6 +1062,10 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   double _discountValue = 0.0;
   double _gst           = 0.0;
   double _netValue      = 0.0;
+  // Live per-field discount amounts from the latest preview (not the static item).
+  double _discAmt       = 0.0;
+  double _disc1Amt      = 0.0;
+  double _disc2Amt      = 0.0;
 
   Timer?  _debounce;
   int     _token   = 0;
@@ -1097,6 +1100,15 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     discPerController.dispose();
     addDiscPerController.dispose();
     remarkController.dispose();
+    _qtyFocus.dispose();
+    _freeQtyFocus.dispose();
+    _schemeFocus.dispose();
+    _dSchemeFocus.dispose();
+    _priceFocus.dispose();
+    _discPcsFocus.dispose();
+    _discPerFocus.dispose();
+    _addDiscPerFocus.dispose();
+    _remarkFocus.dispose();
     _debounce?.cancel();
     super.dispose();
   }
@@ -1125,12 +1137,14 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       'ItemSchQty':           schemeController.text.trim().isEmpty     ? '0' : schemeController.text.trim(),
       'ItemDSchQty':          dSchemeController.text.trim().isEmpty    ? '0' : dSchemeController.text.trim(),
       'ItemAmt':              ((double.tryParse(priceController.text) ?? 0) * (int.tryParse(qtyController.text) ?? 0)).toStringAsFixed(2),
-      'discount_percentage':  discPerController.text.trim(),
-      'discount_percentage1': addDiscPerController.text.trim(),
-      'discount_pcs':         discPcsController.text.trim(),
+      'discount_percentage':  discPerController.text.trim().isEmpty    ? '0' : discPerController.text.trim(),
+      'discount_percentage1': addDiscPerController.text.trim().isEmpty ? '0' : addDiscPerController.text.trim(),
+      'discount_pcs':         discPcsController.text.trim().isEmpty    ? '0' : discPcsController.text.trim(),
       'remark':               remarkController.text.trim(),
       'insert_record':        insertRecord,
-      'default_hit':          true,
+      // false → server uses the user-entered discount instead of the item's
+      // default. This is an edit sheet, so the entered values must be honored.
+      'default_hit':          false,
     };
   }
 
@@ -1139,16 +1153,18 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     _debounce = Timer(const Duration(milliseconds: 350), () async {
       final qty = int.tryParse(qtyController.text.trim()) ?? 0;
       if (qty <= 0) {
-        if (mounted) setState(() { _goodsValue = 0; _schemeValue = 0; _discountValue = 0; _gst = 0; _netValue = 0; _loading = false; });
+        if (mounted) setState(() { _goodsValue = 0; _schemeValue = 0; _discountValue = 0; _gst = 0; _netValue = 0; _discAmt = 0; _disc1Amt = 0; _disc2Amt = 0; _loading = false; });
         return;
       }
       final t = ++_token;
       if (mounted) setState(() => _loading = true);
       try {
         final auth = Provider.of<AuthService>(context, listen: false);
+        final reqPayload = _buildPayload(0);
+        debugPrint('[CartUpdate preview] REQUEST: $reqPayload');
         final resp = await auth.getDioClient().post(
           '/AddDraftOrder',
-          data: _buildPayload(0),
+          data: reqPayload,
           options: Options(headers: {
             'Content-Type': 'application/json',
             'package_name': auth.packageNameHeader,
@@ -1156,6 +1172,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
           }),
         );
         if (!mounted || t != _token) return;
+        debugPrint('[CartUpdate preview] RESPONSE: ${resp.data}');
         final parsed = _parseResp(resp.data);
         if (parsed['success'] == true && parsed['data'] != null) {
           final d = parsed['data'];
@@ -1166,6 +1183,9 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
             _discountValue = pd(d['totalDisc']);
             _gst           = pd(d['ItemTaxAmt']);
             _netValue      = pd(d['ItemNetAmt']);
+            _discAmt       = pd(d['ItemDiscAmt']);
+            _disc1Amt      = pd(d['ItemDisc1Amt']);
+            _disc2Amt      = pd(d['ItemDisc2Amt']);
             _loading       = false;
           });
         } else {
@@ -1216,254 +1236,454 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     return jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
   }
 
+  // Explicit FocusNodes so the keyboard "Next" key reliably hops to every
+  // visible field — including the flag-gated Free Qty and Pcs Discount rows.
+  final FocusNode _qtyFocus        = FocusNode();
+  final FocusNode _freeQtyFocus    = FocusNode();
+  final FocusNode _schemeFocus     = FocusNode();
+  final FocusNode _dSchemeFocus    = FocusNode();
+  final FocusNode _priceFocus      = FocusNode();
+  final FocusNode _discPcsFocus    = FocusNode();
+  final FocusNode _discPerFocus    = FocusNode();
+  final FocusNode _addDiscPerFocus = FocusNode();
+  final FocusNode _remarkFocus     = FocusNode();
+
+  List<FocusNode> get _orderedFocus => [
+        _qtyFocus, _freeQtyFocus, _schemeFocus, _dSchemeFocus, _priceFocus,
+        _discPcsFocus, _discPerFocus, _addDiscPerFocus, _remarkFocus,
+      ];
+
+  // Find the next currently-mounted focus node after `current`.
+  // A node whose widget isn't in the tree (because the flag hides it) has a
+  // null context — skip those so the "Next" key never lands on nothing.
+  FocusNode? _nextVisibleFocus(FocusNode current) {
+    final ordered = _orderedFocus;
+    final idx = ordered.indexOf(current);
+    if (idx < 0) return null;
+    for (int i = idx + 1; i < ordered.length; i++) {
+      if (ordered[i].context != null) return ordered[i];
+    }
+    return null;
+  }
+
+  // Shared input decoration.
+  InputDecoration _fieldDeco(ColorScheme cs) => InputDecoration(
+        hintText: '0',
+        hintStyle: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.outlineVariant)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
+      );
+
+  Widget _rowField(ColorScheme cs, TextTheme tt, String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false}) => Row(
+        children: [
+          Expanded(child: Text(label, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
+          SizedBox(
+            width: 130,
+            child: TextField(
+              controller: ctrl,
+              focusNode: focusNode,
+              autofocus: autofocus,
+              keyboardType: kbType,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) {
+                final next = focusNode != null ? _nextVisibleFocus(focusNode) : null;
+                if (next != null) {
+                  next.requestFocus();
+                } else {
+                  FocusScope.of(context).unfocus();
+                }
+              },
+              textAlign: TextAlign.right,
+              enabled: enabled,
+              onChanged: (_) => _onChanged(),
+              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              decoration: _fieldDeco(cs),
+            ),
+          ),
+        ],
+      );
+
+  Widget _rowFieldWithAmt(ColorScheme cs, TextTheme tt, String label, TextEditingController ctrl, double amt, {FocusNode? focusNode}) {
+    final bool hasAmt = amt > 0;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(label, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(width: 8),
+        // Amount chip — sits to the LEFT of the value entry box.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: hasAmt ? Colors.red.shade50 : cs.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: hasAmt ? Colors.red.shade200 : cs.outlineVariant.withValues(alpha: 0.4),
+              width: 0.8,
+            ),
+          ),
+          child: Text(
+            '- ₹${amt.toStringAsFixed(2)}',
+            style: tt.labelLarge?.copyWith(
+              color: hasAmt ? Colors.red.shade700 : cs.outline,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 110,
+          child: TextField(
+            controller: ctrl,
+            focusNode: focusNode,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) {
+              final next = focusNode != null ? _nextVisibleFocus(focusNode) : null;
+              if (next != null) {
+                next.requestFocus();
+              } else {
+                FocusScope.of(context).unfocus();
+              }
+            },
+            textAlign: TextAlign.right,
+            onChanged: (_) => _onChanged(),
+            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            decoration: _fieldDeco(cs),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoChip(String label, IconData icon, Color color) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
+      );
+
+  Widget _summaryRow(ColorScheme cs, TextTheme tt, String label, String value, {bool isNegative = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+        Text(value, style: tt.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: isNegative ? Colors.red.shade600 : cs.onSurface)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final int available = (widget.item.stock ?? 0).toInt();
+    final double mrp = widget.item.mrp ?? 0;
 
-    // Get salesman flags from service
-    final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
-    final flags = flagsService.flags;
-
-    // Get visibility flags with defaults (show if flags not loaded)
-    final showFreeQty = flags?.showFreeQtySalesMan ?? true;
-    final showScheme = flags?.showSchemeSalesMan ?? true;
-    final showPrice = flags?.enablePriceSalesMan ?? true;
-    final showDiscPcs = flags?.showDiscPcsSalesMan ?? true;
-    final showDiscPer = flags?.showDiscPerSalesMan ?? true;
-    final showAddDiscPer = flags?.showdisc1perSalesman ?? true;
-    final showRemark = flags?.showItemRemarkSalesMan ?? true;
-    final showAddDetailsBottomSheet = flags?.showadddetailsbottomsheetSalesMan ?? true;
-
-    // Log flag visibility for debugging
-    debugPrint('[CartUpdateBottomSheet] === FIELD VISIBILITY FLAGS ===');
-    debugPrint('[CartUpdateBottomSheet] showFreeQty: $showFreeQty (ShowFreeQty_SalesMan)');
-    debugPrint('[CartUpdateBottomSheet] showScheme: $showScheme (ShowScheme_SalesMan)');
-    debugPrint('[CartUpdateBottomSheet] showPrice: $showPrice (EnablePrice_SalesMan)');
-    debugPrint('[CartUpdateBottomSheet] showDiscPcs: $showDiscPcs (ShowDiscPcs_SalesMan)');
-    debugPrint('[CartUpdateBottomSheet] showDiscPer: $showDiscPer (ShowDiscPer_SalesMan)');
-    debugPrint('[CartUpdateBottomSheet] showAddDiscPer: $showAddDiscPer (showdisc1per_Salesman)');
-    debugPrint('[CartUpdateBottomSheet] showRemark: $showRemark (ShowItemRemark_SalesMan)');
-    debugPrint('[CartUpdateBottomSheet] showAddDetailsBottomSheet: $showAddDetailsBottomSheet (Showadddetailsbottomsheet_SalesMan)');
-    debugPrint('[CartUpdateBottomSheet] ===========================');
-
-    // Trigger preview on first open with existing values
+    // Trigger preview on first open with existing values.
     if (_firstBuild) {
       _firstBuild = false;
       WidgetsBinding.instance.addPostFrameCallback((_) => _onChanged());
     }
 
-    // Shared input decoration
-    InputDecoration fieldDeco(ColorScheme csc) => InputDecoration(
-      hintText: '0',
-      hintStyle: TextStyle(color: csc.onSurfaceVariant.withValues(alpha: 0.4), fontWeight: FontWeight.normal),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      filled: true,
-      fillColor: csc.surfaceContainerHighest.withValues(alpha: 0.5),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: csc.outlineVariant.withValues(alpha: 0.3))),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: csc.outlineVariant.withValues(alpha: 0.3))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: csc.primary, width: 2)),
-    );
-
-    Widget sectionLabel(String title) => Row(
-      children: [
-        Container(width: 3, height: 16, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(2))),
-        const SizedBox(width: 8),
-        Text(title, style: textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1.2)),
-      ],
-    );
-
-    Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true}) => Row(
-      children: [
-        Expanded(child: Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-        SizedBox(
-          width: 130,
-          child: TextField(
-            controller: ctrl,
-            keyboardType: kbType,
-            textAlign: TextAlign.right,
-            enabled: enabled,
-            onChanged: (_) => _onChanged(),
-            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            decoration: fieldDeco(cs),
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.92,
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.only(top: 12, bottom: 4),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(color: colorScheme.outlineVariant, borderRadius: BorderRadius.circular(2)),
           ),
-        ),
-      ],
-    );
-
-    Widget rowFieldWithAmt(String label, TextEditingController ctrl, double amt) => Row(
-      children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: amt > 0 ? Colors.red.shade50 : cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: amt > 0 ? Colors.red.shade200 : cs.outlineVariant.withValues(alpha: 0.4), width: 0.8),
-              ),
-              child: Text('- ₹${amt.toStringAsFixed(2)}', style: textTheme.labelSmall?.copyWith(color: amt > 0 ? Colors.red.shade700 : cs.outline, fontWeight: FontWeight.w700)),
-            ),
-          ]),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 130,
-          child: TextField(
-            controller: ctrl,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            textAlign: TextAlign.right,
-            onChanged: (_) => _onChanged(),
-            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
-            decoration: fieldDeco(cs),
-          ),
-        ),
-      ],
-    );
-
-    Widget infoChip(String label, IconData icon, Color color) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.25))),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(icon, size: 13, color: color), const SizedBox(width: 4), Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color))]),
-    );
-
-    Widget summaryRow(String label, String value, {bool isNegative = false}) => Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(label, style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
-        Text(value, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: isNegative ? Colors.red.shade600 : cs.onSurface)),
-      ],
-    );
-
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOut,
-      padding: MediaQuery.of(context).viewInsets,
-      child: Container(
-        decoration: BoxDecoration(color: cs.surface, borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
-        child: DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.92,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (ctx, scroll) => Column(children: [
-            Container(margin: const EdgeInsets.only(top: 12, bottom: 4), width: 40, height: 4, decoration: BoxDecoration(color: cs.outlineVariant, borderRadius: BorderRadius.circular(2))),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
-              child: Row(children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(widget.item.name, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  Text(widget.item.mfg ?? '', style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                ])),
-                IconButton.filledTonal(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close_rounded, size: 18), style: IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero)),
-              ]),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Wrap(spacing: 8, runSpacing: 6, children: [
-                infoChip('₹${(widget.item.rate ?? 0).toStringAsFixed(2)}', Icons.sell_outlined, cs.primary),
-                if ((widget.item.mrp ?? 0) > 0) infoChip('MRP ₹${(widget.item.mrp ?? 0).toStringAsFixed(2)}', Icons.price_change_outlined, cs.secondary),
-                infoChip(available > 0 ? 'Stock: $available' : 'Out of Stock', available > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined, available > 0 ? Colors.green.shade600 : cs.error),
-              ]),
-            ),
-            Divider(height: 1, thickness: 0.5, color: cs.outlineVariant),
-            Expanded(child: SingleChildScrollView(
-              controller: scroll,
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                sectionLabel('ORDER DETAILS'), const SizedBox(height: 14),
-                rowField('Quantity', qtyController, TextInputType.number), const SizedBox(height: 12),
-                if (showFreeQty) ...[
-                  rowField('Free Quantity', freeQtyController, TextInputType.number), const SizedBox(height: 12),
-                ],
-                if (showScheme) ...[
-                  Row(children: [
-                    Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
-                    SizedBox(width: 56, child: TextField(controller: schemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
-                    Padding(padding: const EdgeInsets.symmetric(horizontal: 6), child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.primary))),
-                    SizedBox(width: 56, child: TextField(controller: dSchemeController, keyboardType: TextInputType.number, textAlign: TextAlign.center, onChanged: (_) => _onChanged(), style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700), decoration: fieldDeco(cs))),
-                  ]),
-                  const SizedBox(height: 12),
-                ],
-                // Price field - always visible, editable/disabled based on flag
-                rowField('Price', priceController, const TextInputType.numberWithOptions(decimal: true), enabled: showPrice),
-                const SizedBox(height: 20),
-                if (showDiscPcs || showDiscPer || showAddDiscPer) ...[
-                  sectionLabel('DISCOUNTS'), const SizedBox(height: 14),
-                  if (showDiscPcs) ...[
-                    rowFieldWithAmt('Discount (Pcs)', discPcsController, widget.item.disc2Amt ?? 0.0), const SizedBox(height: 12),
-                  ],
-                  if (showDiscPer) ...[
-                    rowFieldWithAmt('Discount (%)',   discPerController,  widget.item.discAmt  ?? 0.0), const SizedBox(height: 12),
-                  ],
-                  if (showAddDiscPer) ...[
-                    rowFieldWithAmt('Add. Discount (%)', addDiscPerController, widget.item.disc1Amt ?? 0.0),
-                  ],
-                  const SizedBox(height: 20),
-                ],
-                if (showRemark) ...[
-                  Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextField(controller: remarkController, maxLength: 200, maxLines: 2, style: textTheme.bodyMedium,
-                    decoration: fieldDeco(cs).copyWith(hintText: 'Type here...', contentPadding: const EdgeInsets.all(12), counterText: '')),
-                  const SizedBox(height: 24),
-                ],
-                // Summary - Conditional rendering based on flag
-                if (showAddDetailsBottomSheet) ...[
-                  Container(
-                    decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(16), border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3))),
-                    child: Column(children: [
-                      Padding(padding: const EdgeInsets.fromLTRB(16, 14, 16, 10), child: Column(children: [
-                        summaryRow('Goods Value',    '₹${_goodsValue.toStringAsFixed(2)}'),    const SizedBox(height: 8),
-                        summaryRow('Scheme Value',   '₹${_schemeValue.toStringAsFixed(2)}'),   const SizedBox(height: 8),
-                        summaryRow('Discount Value', '-₹${_discountValue.toStringAsFixed(2)}', isNegative: true), const SizedBox(height: 8),
-                        summaryRow('GST (Excl.)',    '₹${_gst.toStringAsFixed(2)}'),
-                      ])),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                        decoration: BoxDecoration(color: cs.primary.withValues(alpha: 0.08), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)), border: Border(top: BorderSide(color: cs.primary.withValues(alpha: 0.15)))),
-                        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                          Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary)),
-                          Text('₹${_netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary, letterSpacing: -0.5)),
-                        ]),
-                      ),
-                    ]),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.item.name,
+                          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text(widget.item.mfg ?? '',
+                          style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                ],
-                if (_loading) ...[const SizedBox(height: 12), const LinearProgressIndicator(minHeight: 3)],
-                const SizedBox(height: 24),
-                Row(children: [
-                  Expanded(child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), side: BorderSide(color: cs.outlineVariant), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(flex: 2, child: FilledButton(
-                    onPressed: () async {
-                      if ((int.tryParse(qtyController.text) ?? 0) <= 0) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quantity must be greater than 0')));
-                        return;
-                      }
-                      await _submit();
-                    },
-                    style: FilledButton.styleFrom(backgroundColor: cs.secondary, foregroundColor: cs.onSecondary, padding: const EdgeInsets.symmetric(vertical: 14), elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                    child: Text('UPDATE CART', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
-                  )),
-                ]),
-              ]),
-            )),
-          ]),
-        ),
+                ),
+                IconButton.filledTonal(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  style: IconButton.styleFrom(minimumSize: const Size(36, 36), padding: EdgeInsets.zero),
+                ),
+              ],
+            ),
+          ),
+          // Info chips
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _infoChip('₹${(widget.item.rate ?? 0).toStringAsFixed(2)}', Icons.sell_outlined, colorScheme.primary),
+                if (mrp > 0) _infoChip('MRP ₹${mrp.toStringAsFixed(2)}', Icons.price_change_outlined, colorScheme.secondary),
+                _infoChip(
+                  available > 0 ? 'Stock: $available' : 'Out of Stock',
+                  available > 0 ? Icons.inventory_2_outlined : Icons.remove_shopping_cart_outlined,
+                  available > 0 ? Colors.green.shade600 : colorScheme.error,
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, thickness: 0.5, color: colorScheme.outlineVariant),
+          // Scrollable form body
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+              // Force focus to advance in widget-tree order so the keyboard's
+              // "Next" key hits every visible field (Quantity → Free Qty →
+              // Scheme → +Scheme → Price → Discount fields → Remark) without
+              // skipping.
+              child: FocusTraversalGroup(
+                policy: WidgetOrderTraversalPolicy(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _rowField(colorScheme, textTheme, 'Quantity', qtyController, TextInputType.number, focusNode: _qtyFocus, autofocus: true),
+                    const SizedBox(height: 8),
+                    if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
+                      ...[
+                        _rowField(colorScheme, textTheme, 'Free Quantity', freeQtyController, TextInputType.number, focusNode: _freeQtyFocus),
+                        const SizedBox(height: 8),
+                      ],
+                    // Scheme (two boxes with +)
+                    if (context.watch<SalesmanFlagsService>().flags?.showSchemeSalesMan ?? false)
+                      ...[
+                        Row(
+                          children: [
+                            Expanded(child: Text('Scheme', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600))),
+                            SizedBox(
+                              width: 56,
+                              child: TextField(
+                                controller: schemeController,
+                                focusNode: _schemeFocus,
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) {
+                                  final next = _nextVisibleFocus(_schemeFocus);
+                                  if (next != null) {
+                                    next.requestFocus();
+                                  } else {
+                                    FocusScope.of(context).unfocus();
+                                  }
+                                },
+                                textAlign: TextAlign.center,
+                                onChanged: (_) => _onChanged(),
+                                style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                                decoration: _fieldDeco(colorScheme),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6),
+                              child: Text('+', style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: colorScheme.primary)),
+                            ),
+                            SizedBox(
+                              width: 56,
+                              child: TextField(
+                                controller: dSchemeController,
+                                focusNode: _dSchemeFocus,
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.next,
+                                onSubmitted: (_) {
+                                  final next = _nextVisibleFocus(_dSchemeFocus);
+                                  if (next != null) {
+                                    next.requestFocus();
+                                  } else {
+                                    FocusScope.of(context).unfocus();
+                                  }
+                                },
+                                textAlign: TextAlign.center,
+                                onChanged: (_) => _onChanged(),
+                                style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                                decoration: _fieldDeco(colorScheme),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
+                    // Price field - always visible, editable/disabled based on flag
+                    _rowField(
+                      colorScheme,
+                      textTheme,
+                      'Price',
+                      priceController,
+                      const TextInputType.numberWithOptions(decimal: true),
+                      enabled: context.watch<SalesmanFlagsService>().flags?.enablePriceSalesMan ?? false,
+                      focusNode: _priceFocus,
+                    ),
+                    const SizedBox(height: 8),
+                    if (context.watch<SalesmanFlagsService>().flags?.showDiscPcsSalesMan ?? false)
+                      ...[
+                        _rowFieldWithAmt(colorScheme, textTheme, 'Discount (Pcs)', discPcsController, _disc2Amt, focusNode: _discPcsFocus),
+                        const SizedBox(height: 8),
+                      ],
+                    if (context.watch<SalesmanFlagsService>().flags?.showDiscPerSalesMan ?? false)
+                      ...[
+                        _rowFieldWithAmt(colorScheme, textTheme, 'Discount (%)', discPerController, _discAmt, focusNode: _discPerFocus),
+                        const SizedBox(height: 8),
+                      ],
+                    if (context.watch<SalesmanFlagsService>().flags?.showdisc1perSalesman ?? false)
+                      ...[
+                        _rowFieldWithAmt(colorScheme, textTheme, 'Add. Discount (%)', addDiscPerController, _disc1Amt, focusNode: _addDiscPerFocus),
+                        const SizedBox(height: 8),
+                      ],
+                    const SizedBox(height: 12),
+                    // Remark
+                    if (context.watch<SalesmanFlagsService>().flags?.showItemRemarkSalesMan ?? false)
+                      ...[
+                        Text('Add Remark (Optional)', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: remarkController,
+                          focusNode: _remarkFocus,
+                          maxLength: 200,
+                          maxLines: 2,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => FocusScope.of(context).unfocus(),
+                          style: textTheme.bodyMedium,
+                          decoration: _fieldDeco(colorScheme).copyWith(
+                            hintText: 'Type here...',
+                            contentPadding: const EdgeInsets.all(12),
+                            counterText: '',
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ]
+                    else
+                      const SizedBox(height: 20),
+                    // Summary card - show/hide based on Showadddetailsbottomsheet_SalesMan flag
+                    if (context.watch<SalesmanFlagsService>().flags?.showadddetailsbottomsheetSalesMan ?? true)
+                      ...[
+                        Container(
+                          decoration: BoxDecoration(
+                            color: colorScheme.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                          ),
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                                child: Column(
+                                  children: [
+                                    _summaryRow(colorScheme, textTheme, 'Goods Value', '₹${_goodsValue.toStringAsFixed(2)}'),
+                                    const SizedBox(height: 8),
+                                    _summaryRow(colorScheme, textTheme, 'Scheme Value', '₹${_schemeValue.toStringAsFixed(2)}'),
+                                    const SizedBox(height: 8),
+                                    _summaryRow(colorScheme, textTheme, 'Discount Value', '-₹${_discountValue.toStringAsFixed(2)}', isNegative: true),
+                                    const SizedBox(height: 8),
+                                    _summaryRow(colorScheme, textTheme, 'GST % (Excl)', '₹${_gst.toStringAsFixed(2)}'),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primary.withValues(alpha: 0.08),
+                                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+                                  border: Border(top: BorderSide(color: colorScheme.primary.withValues(alpha: 0.15))),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text('Net Value', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800, color: colorScheme.primary)),
+                                    Text('₹${_netValue.toStringAsFixed(2)}', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: colorScheme.primary, letterSpacing: -0.5)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                      ],
+                    const SizedBox(height: 12),
+                    if (_loading) ...[
+                      const SizedBox(height: 12),
+                      const LinearProgressIndicator(minHeight: 3),
+                      const SizedBox(height: 12),
+                    ],
+                    // Action buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: BorderSide(color: colorScheme.outlineVariant),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: FilledButton(
+                            onPressed: () async {
+                              if ((int.tryParse(qtyController.text) ?? 0) <= 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Quantity must be greater than 0')));
+                                return;
+                              }
+                              await _submit();
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF1E88E5),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: Text('UPDATE CART', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
-
 }
 

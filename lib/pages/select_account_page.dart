@@ -790,6 +790,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     if (account.pincode != null) _detailRow("Pincode", account.pincode!),
                     if (account.gstNumber != null) _detailRow("GSTIN", account.gstNumber!),
                     if (account.accountCreditDays != null) _detailRow("Credit Days", account.accountCreditDays.toString()),
+                    if (account.accountCreditBills != null) _detailRow("Credit Bills", account.accountCreditBills.toString()),
+                    _detailRow("Amount", '₹${(account.closBal ?? account.balance ?? 0.0).abs().toStringAsFixed(0)}'),
                     const SizedBox(height: 40),
                     SizedBox(
                       width: double.infinity,

@@ -16,6 +16,15 @@ class Product {
   final String? code; // Icode
   final int? iidcol; // i_id_col
   final String? refNumber; // RefNumber from API
+  final double gst; // GST / tax percentage
+  final String? scheme; // scheme narration, e.g. "10.00 + 1.00 Full"
+  // Visibility flags from GetItemList.
+  final bool showMrp;
+  final bool showRate;
+  final bool showStock;
+  final bool showScheme;
+  final String? firmName; // owning firm name
+  final double rating; // item rating
 
   Product({
     required this.id,
@@ -34,6 +43,14 @@ class Product {
     this.code,
     this.iidcol,
     this.refNumber,
+    this.gst = 0,
+    this.scheme,
+    this.showMrp = true,
+    this.showRate = true,
+    this.showStock = true,
+    this.showScheme = true,
+    this.firmName,
+    this.rating = 0,
   });
 
   // Discount percentage
@@ -67,6 +84,14 @@ class Product {
     'code': code,
     'iidcol': iidcol,
     'RefNumber': refNumber,
+    'gst': gst,
+    'scheme': scheme,
+    'showMrp': showMrp,
+    'showRate': showRate,
+    'showStock': showStock,
+    'showScheme': showScheme,
+    'firmName': firmName,
+    'rating': rating,
   };
 
   // Create from JSON
@@ -89,6 +114,14 @@ class Product {
     code: json['code'] as String?,
     iidcol: json['iidcol'] as int?,
     refNumber: json['refNumber'] as String? ?? json['RefNumber'] as String?,
+    gst: (json['gst'] as num?)?.toDouble() ?? 0,
+    scheme: json['scheme'] as String?,
+    showMrp: json['showMrp'] as bool? ?? true,
+    showRate: json['showRate'] as bool? ?? true,
+    showStock: json['showStock'] as bool? ?? true,
+    showScheme: json['showScheme'] as bool? ?? true,
+    firmName: json['firmName'] as String?,
+    rating: (json['rating'] as num?)?.toDouble() ?? 0,
   );
 
   @override

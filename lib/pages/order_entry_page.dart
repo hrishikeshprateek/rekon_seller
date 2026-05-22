@@ -429,6 +429,14 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       code: item.code, // <-- set Icode
       iidcol: item.iidcol, // <-- set i_id_col
       refNumber: item.refNumber, // <-- set RefNumber from API
+      gst: item.tax, // GST % from GetItemList 'Tax'
+      scheme: item.scheme.isNotEmpty ? item.scheme : null,
+      showMrp: item.showMrp,
+      showRate: item.showRate,
+      showStock: item.showStock,
+      showScheme: item.showScheme,
+      firmName: item.firmName,
+      rating: item.rating,
     );
   }
 
@@ -943,21 +951,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: qty > 0 ? colorScheme.primary.withAlpha((0.5 * 255).round()) : colorScheme.outlineVariant.withAlpha((0.3 * 255).round())),
         ),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- NEW: Medicine Icon Container ---
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: colorScheme.secondaryContainer.withAlpha((0.4 * 255).round()),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.medication_outlined, size: 20, color: colorScheme.secondary),
-            ),
-            const SizedBox(width: 12),
-
             // Info
             Expanded(
               child: Column(
@@ -981,6 +978,31 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                   const SizedBox(height: 6),
                   if (showItemMfgComp && (product.manufacturer ?? '').isNotEmpty)
                     Text(product.manufacturer ?? '', style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
+                  // Price · MRP · GST line — each part gated by the API's Show* flags
+                  if (product.showRate || product.showMrp)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4.0),
+                    child: Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (product.showRate)
+                          Text(
+                            '₹${product.price.toStringAsFixed(2)}',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: colorScheme.primary),
+                          ),
+                        if (product.showMrp && product.mrp > 0) ...[
+                          if (product.showRate) const SizedBox(width: 6),
+                          Text('(MRP ${product.mrp.toStringAsFixed(1)})',
+                              style: TextStyle(fontSize: 13, color: colorScheme.primary)),
+                        ],
+                        if (product.showRate && product.gst > 0) ...[
+                          const SizedBox(width: 6),
+                          Text('(GST ${product.gst.toStringAsFixed(0)}%)',
+                              style: TextStyle(fontSize: 12, color: colorScheme.primary.withValues(alpha: 0.7))),
+                        ],
+                      ],
+                    ),
+                  ),
                   if (showItemComposition && (product.salt ?? '').isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 4.0),
@@ -998,14 +1020,75 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     ),
                   if (showItemRemark && false)
                     const SizedBox.shrink(),
+                  // Firm name + rating badge
+                  if ((product.firmName ?? '').isNotEmpty || product.rating > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6.0),
+                      child: Row(
+                        children: [
+                          if ((product.firmName ?? '').isNotEmpty)
+                            Flexible(
+                              child: Text(
+                                product.firmName!.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          if (product.rating > 0) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF0A500),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    product.rating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const Icon(Icons.star, size: 11, color: Colors.white),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                 ],
               ),
             ),
+            const SizedBox(width: 12),
 
             // Action + Stock shown below the action (Add or Update button)
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Scheme narration (e.g. "10.00 + 1.00 Full")
+                if (product.showScheme && (product.scheme ?? '').isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6.0),
+                    child: Text(
+                      '(${product.scheme})',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.green.shade700,
+                      ),
+                    ),
+                  ),
                 // If Showadddetailsbottomsheet_SalesMan is FALSE: Show only -/+ button, hide Add/Update
                 if (!(context.watch<SalesmanFlagsService>().flags?.showadddetailsbottomsheetSalesMan ?? false))
                   ...[
@@ -1049,18 +1132,19 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     ),
                     const SizedBox(height: 6),
                   ],
-                Text(
-                  'Stock: ${product.stockQuantity}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: product.stockQuantity < 0
-                        ? Colors.red.shade700
-                        : (product.stockQuantity >= 10
-                            ? const Color(0xFFB58900) // yellow / amber
-                            : Colors.green.shade700),
+                if (product.showStock)
+                  Text(
+                    'Stock: ${product.stockQuantity} Pcs',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: product.stockQuantity < 0
+                          ? Colors.red.shade700
+                          : (product.stockQuantity >= 10
+                              ? const Color(0xFFB58900) // yellow / amber
+                              : Colors.green.shade700),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -1469,8 +1553,23 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     final qtyController        = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '');
     final priceController      = TextEditingController(text: cartData != null ? _safeDouble(cartData['rate']).toStringAsFixed(2) : product.price.toStringAsFixed(2));
     final freeQtyController    = TextEditingController(text: cartData != null ? _safeInt(cartData['freeQty']).toString() : '');
-    final schemeController     = TextEditingController(text: cartData != null ? _safeDouble(cartData['schQty']).toStringAsFixed(0) : '');
-    final dSchemeController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['dSchQty']).toStringAsFixed(0) : '');
+    // Item's own scheme narration ("4.00 + 1.00 Full") → split into the two
+    // scheme boxes so a scheme-bearing item is pre-filled on a fresh add.
+    double schemeDefault = 0, dSchemeDefault = 0;
+    final schemeFieldVisible = Provider.of<SalesmanFlagsService>(context, listen: false).flags?.showSchemeSalesMan ?? false;
+    if (schemeFieldVisible && product.showScheme && (product.scheme ?? '').trim().isNotEmpty) {
+      final schemeMatch = RegExp(r'([\d.]+)\s*\+\s*([\d.]+)').firstMatch(product.scheme!);
+      if (schemeMatch != null) {
+        schemeDefault  = double.tryParse(schemeMatch.group(1)!) ?? 0;
+        dSchemeDefault = double.tryParse(schemeMatch.group(2)!) ?? 0;
+      }
+    }
+    final schemeController     = TextEditingController(text: cartData != null
+        ? _safeDouble(cartData['schQty']).toStringAsFixed(0)
+        : (schemeDefault > 0 ? schemeDefault.toStringAsFixed(0) : ''));
+    final dSchemeController    = TextEditingController(text: cartData != null
+        ? _safeDouble(cartData['dSchQty']).toStringAsFixed(0)
+        : (dSchemeDefault > 0 ? dSchemeDefault.toStringAsFixed(0) : ''));
     final discPcsController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPcs']).toStringAsFixed(2) : '');
     final discPerController    = TextEditingController(text: cartData != null ? _safeDouble(cartData['discPer']).toStringAsFixed(2) : '');
     final addDiscPerController = TextEditingController(text: cartData != null ? _safeDouble(cartData['addDiscPer']).toStringAsFixed(2) : '');
@@ -1514,6 +1613,8 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     int previewToken = 0;
     bool isPreviewLoading = false;
     bool _firstBuild = true;
+    // Guards the one-time prefill of discount fields from the first preview.
+    bool discountPrefilled = false;
 
     showModalBottomSheet(
       context: context,
@@ -1595,6 +1696,18 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     preview = result;
                     isPreviewLoading = false;
                     syncFromPreview();
+                    // First preview after the sheet opens: prefill the discount
+                    // boxes with the default % the server applied — only where
+                    // the user (or a saved cart entry) hasn't typed anything.
+                    if (!discountPrefilled) {
+                      discountPrefilled = true;
+                      void seed(TextEditingController c, double v) {
+                        if (c.text.trim().isEmpty && v > 0) c.text = v.toStringAsFixed(2);
+                      }
+                      seed(discPerController, result.discPer);
+                      seed(addDiscPerController, result.disc1Per);
+                      seed(discPcsController, result.disc2Per);
+                    }
                   });
                 } catch (_) {
                   if (!mounted || currentToken != previewToken) return;
@@ -1622,7 +1735,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               }
             }
 
-            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode}) => Row(
+            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false}) => Row(
               children: [
                 Expanded(child: Text(label, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
                 SizedBox(
@@ -1630,6 +1743,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                   child: TextField(
                     controller: ctrl,
                     focusNode: focusNode,
+                    autofocus: autofocus,
                     keyboardType: kbType,
                     textInputAction: TextInputAction.next,
                     onSubmitted: (_) {
@@ -1793,7 +1907,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                           child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            rowField('Quantity', qtyController, TextInputType.number, focusNode: qtyFocus),
+                            rowField('Quantity', qtyController, TextInputType.number, focusNode: qtyFocus, autofocus: true),
                             const SizedBox(height: 8),
                             if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
                               ...[

@@ -701,7 +701,7 @@ class _ProductListPageState extends State<ProductListPage> {
                       children: [
                         Expanded(child: TextField(controller: priceController, keyboardType: TextInputType.numberWithOptions(decimal: true), onChanged: (_) => updateFields(), decoration: _inputDeco('Price', icon: Icons.price_check))),
                         const SizedBox(width: 12),
-                        Expanded(child: TextField(controller: qtyController, keyboardType: TextInputType.number, onChanged: (_) => updateFields(), decoration: _inputDeco('Quantity', icon: Icons.shopping_basket))),
+                        Expanded(child: TextField(controller: qtyController, keyboardType: TextInputType.number, autofocus: true, onChanged: (_) => updateFields(), decoration: _inputDeco('Quantity', icon: Icons.shopping_basket))),
                       ],
                     ),
                     const SizedBox(height: 12),
