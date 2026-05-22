@@ -504,8 +504,8 @@ class _AttachBillsPageState extends State<AttachBillsPage> {
           "ADD BILLS",
           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16, letterSpacing: 0.5),
         ),
-        centerTitle: false,
-        backgroundColor: Colors.white,
+        centerTitle: true,
+        backgroundColor: const Color(0xFF1E88E5),
         elevation: 1,
         shadowColor: Colors.black.withValues(alpha: 0.1),
         leading: IconButton(

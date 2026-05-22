@@ -266,7 +266,7 @@ class _DeliveryCollectionPageState extends State<DeliveryCollectionPage> {
       expandedHeight: 220.0,
       floating: false,
       pinned: true,
-      backgroundColor: colorScheme.primary, // Theme Primary
+      backgroundColor: const Color(0xFF1E88E5), // Theme Primary
       iconTheme: IconThemeData(color: colorScheme.onPrimary),
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
@@ -350,7 +350,7 @@ class _DeliveryCollectionPageState extends State<DeliveryCollectionPage> {
           ),
         ),
       ),
-      title: Text("Dashboard", style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.w600)),
+      title: Text("DASHBOARD", style: TextStyle(color: colorScheme.onPrimary, fontWeight: FontWeight.w600)),
       centerTitle: true,
     );
   }

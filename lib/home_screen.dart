@@ -1011,7 +1011,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (levelColor != null) {
       headerColor = _parseColor(levelColor);
     } else {
-      // Alternate between blue and orange for visual interest
       headerColor = const Color(0xFF1E88E5); // Default blue
     }
 

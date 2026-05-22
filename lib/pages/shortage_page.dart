@@ -6,7 +6,7 @@ class ShortagePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Shortage')),
+      appBar: AppBar(title: const Text('SHORTAGE')),
       body: const Center(child: Text('Shortage page (empty)')),
     );
   }

@@ -143,16 +143,16 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerHigh,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFF1E88E5),
         elevation: 0,
         centerTitle: true,
-        title: Text("Receipt Details",
+        title: const Text("RECEIPT DETAILS",
             style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: colorScheme.onSurface)),
+                color: Colors.white)),
         leading: IconButton(
-          icon: Icon(Icons.close_rounded, color: colorScheme.onSurface),
+          icon: const Icon(Icons.close_rounded, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),

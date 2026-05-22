@@ -6,7 +6,7 @@ class POBookPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('PO Book')),
+      appBar: AppBar(title: const Text('PO BOOK')),
       body: const Center(child: Text('PO Book page (empty)')),
     );
   }

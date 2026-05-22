@@ -426,7 +426,7 @@ class _CartPageState extends State<CartPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         scrolledUnderElevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF1E88E5),
         elevation: 0,
         title: GestureDetector(
           onTap: _openSelectAccount,
@@ -440,15 +440,15 @@ class _CartPageState extends State<CartPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Review Order',
+                          'REVIEW ORDER',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
-                            color: cs.onSurface,
+                            color: Colors.white,
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Icon(Icons.arrow_drop_down, color: cs.primary),
+                        const Icon(Icons.arrow_drop_down, color: Colors.white),
                         const SizedBox(width: 8),
                         // Show account name as a chip if available
                         if (_selectedAccountName != null && _selectedAccountName!.isNotEmpty)
@@ -456,15 +456,15 @@ class _CartPageState extends State<CartPage> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: cs.primary.withAlpha((0.08 * 255).toInt()),
+                                color: Colors.white.withAlpha((0.18 * 255).toInt()),
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: cs.primary.withAlpha((0.12 * 255).toInt())),
+                                border: Border.all(color: Colors.white.withAlpha((0.32 * 255).toInt())),
                               ),
                               child: Text(
                                 _selectedAccountName!,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 13,
-                                  color: cs.primary,
+                                  color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
                                 maxLines: 1,
@@ -480,9 +480,9 @@ class _CartPageState extends State<CartPage> {
                       _selectedAccountName != null && _selectedAccountName!.isNotEmpty
                           ? _selectedAccountName!
                           : 'A/C: $_currentAcCode',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: cs.primary,
+                        color: Colors.white,
                         fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,

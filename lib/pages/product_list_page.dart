@@ -292,10 +292,10 @@ class _ProductListPageState extends State<ProductListPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Select Products', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text('SELECT PRODUCTS', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
             Text(
-              widget.selectedAccount.name,
-              style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant),
+              widget.selectedAccount.name.toUpperCase(),
+              style: const TextStyle(fontSize: 12, color: Colors.white),
             ),
           ],
         ),

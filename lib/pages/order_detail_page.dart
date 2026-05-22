@@ -1,584 +1,631 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import '../auth_service.dart';
 
-class OrderDetailPage extends StatelessWidget {
+/// Sectioned order-detail screen.
+///
+/// Layout (top to bottom): blue app bar, account-name strip, a 4-step status
+/// stepper, an "ORDER DETAILS" card, an optional "INVOICE DETAILS" card (with a
+/// share-PDF action) and a collapsible "ITEM PURCHASED" card.
+class OrderDetailPage extends StatefulWidget {
   final Map<String, dynamic> orderDetail;
   final List<dynamic> products;
 
   const OrderDetailPage({
-    Key? key,
+    super.key,
     required this.orderDetail,
     this.products = const [],
-  }) : super(key: key);
+  });
+
+  @override
+  State<OrderDetailPage> createState() => _OrderDetailPageState();
+}
+
+class _OrderDetailPageState extends State<OrderDetailPage> {
+  static const Color _blue = Color(0xFF1E88E5);
+  static const Color _bg = Color(0xFFF5F7FA);
+
+  bool _itemsExpanded = true;
+  bool _isSharingInvoice = false;
+
+  Map<String, dynamic> get _order => widget.orderDetail;
+  List<dynamic> get _products => widget.products;
 
   // --- HELPERS ---
 
-  /// Format a numeric value from the API to a clean string (strips trailing .0000)
-  String _fmt(dynamic val) {
-    if (val == null) return '0';
-    final d = double.tryParse(val.toString());
-    if (d == null) return val.toString();
-    // Show as int if whole number, else 2 decimal places
-    if (d == d.truncateToDouble()) return d.toInt().toString();
-    return d.toStringAsFixed(2);
+  /// Parse any API value into a double, defaulting to 0.
+  double _num(dynamic v) => double.tryParse(v?.toString() ?? '') ?? 0;
+
+  /// Format a numeric value with 2 decimal places, prefixed with a rupee sign.
+  String _money(dynamic v) => '₹${_num(v).toStringAsFixed(2)}';
+
+  /// Whether a string field actually carries a value (not null / empty / "null").
+  bool _hasValue(dynamic v) {
+    final s = v?.toString().trim() ?? '';
+    return s.isNotEmpty && s.toLowerCase() != 'null';
   }
 
-  bool _isNonZero(String? val) {
-    if (val == null || val.isEmpty || val == 'null') return false;
-    final d = double.tryParse(val);
-    return d != null && d != 0;
+  /// Resolve the active stepper index from the order status text.
+  int _statusIndex(String status) {
+    final s = status.toLowerCase();
+    if (s.contains('deliver')) return 3;
+    if (s.contains('ship')) return 2;
+    if (s.contains('invoic')) return 1;
+    return 0; // placed / pending / anything else
   }
 
-  // --- UI HELPER WIDGETS ---
+  // --- PDF SHARE ---
 
-  Widget _buildStatusChip(String? status) {
-    final safeStatus = status ?? 'Unknown';
-    final isPending = safeStatus.toLowerCase() == 'pending';
-    final color = isPending ? Colors.orange.shade700 : Colors.green.shade700;
-    final bgColor = isPending ? Colors.orange.shade50 : Colors.green.shade50;
+  /// Fetches the invoice as a PDF and opens the OS share sheet.
+  ///
+  /// Best-effort: hits `/GetTranDetail` with `lSharePdf: 1` (the same endpoint
+  /// the transaction screen uses). The order API does not expose a dedicated
+  /// invoice-PDF endpoint, so this may need adjustment if the backend changes.
+  Future<void> _viewInvoice() async {
+    if (_isSharingInvoice) return;
+    setState(() => _isSharingInvoice = true);
+    try {
+      final auth = Provider.of<AuthService>(context, listen: false);
+      final dio = auth.getDioClient();
+
+      final invNo = _order['InvNo']?.toString() ?? '';
+      final payload = {
+        'lLicNo': auth.currentUser?.licenseNumber ?? '',
+        'lKeyEntryNo':
+            _order['TMNO']?.toString() ?? _order['InvNo']?.toString() ?? '',
+        'lIsEntryRecord': '1',
+        'lSharePdf': 1,
+      };
+
+      final response = await dio.post(
+        '/GetTranDetail',
+        data: payload,
+        options: Options(
+          responseType: ResponseType.bytes,
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': auth.packageNameHeader,
+            if (auth.getAuthHeader() != null)
+              'Authorization': auth.getAuthHeader(),
+          },
+        ),
+      );
+
+      Uint8List? bytes;
+      if (response.data is Uint8List) {
+        bytes = response.data as Uint8List;
+      } else if (response.data is List<int>) {
+        bytes = Uint8List.fromList(List<int>.from(response.data));
+      }
+
+      if (bytes == null || bytes.isEmpty) {
+        throw 'No PDF data received.';
+      }
+
+      final dir = await getTemporaryDirectory();
+      final safeNo = invNo.replaceAll(RegExp(r'[^A-Za-z0-9]'), '_');
+      final file = File(
+          '${dir.path}/invoice_${safeNo}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+      await file.writeAsBytes(bytes, flush: true);
+
+      final xfile = XFile(file.path, mimeType: 'application/pdf');
+      await Share.shareXFiles([xfile], text: 'Invoice $invNo');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to open invoice: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSharingInvoice = false);
+    }
+  }
+
+  // --- BUILD ---
+
+  @override
+  Widget build(BuildContext context) {
+    final firmName = _hasValue(_order['F_FirmName'])
+        ? _order['F_FirmName'].toString()
+        : 'ORDER';
+
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _blue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              firmName,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const Text(
+              'ORDER DETAILS',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: ListView(
+        children: [
+          _buildAccountStrip(),
+          _buildStepper(),
+          _buildOrderDetailsCard(),
+          _buildInvoiceCard(),
+          _buildItemsCard(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  // --- ACCOUNT STRIP ---
+
+  Widget _buildAccountStrip() {
+    final acName = _order['Ac_Name']?.toString() ?? '';
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Text(
+        acName,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+      ),
+    );
+  }
+
+  // --- STATUS STEPPER ---
+
+  Widget _buildStepper() {
+    final status = _order['OrderStatus']?.toString() ?? '';
+    final current = _statusIndex(status);
+
+    const steps = <_StepInfo>[
+      _StepInfo('Placed', Icons.shopping_bag_outlined),
+      _StepInfo('Invoiced', Icons.receipt_long_outlined),
+      _StepInfo('Shipped', Icons.local_shipping_outlined),
+      _StepInfo('Delivered', Icons.check_circle_outline),
+    ];
+
+    final List<Widget> row = [];
+    for (int i = 0; i < steps.length; i++) {
+      final active = i <= current;
+      row.add(Expanded(child: _buildStep(steps[i], active)));
+      if (i < steps.length - 1) {
+        final connectorActive = (i + 1) <= current;
+        row.add(Expanded(
+          child: Container(
+            height: 2,
+            margin: const EdgeInsets.only(bottom: 22),
+            color: connectorActive ? _blue : Colors.grey.shade300,
+          ),
+        ));
+      }
+    }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 18),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(isPending ? Icons.pending_actions : Icons.check_circle_outline, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            safeStatus.toUpperCase(),
-            style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: row,
+      ),
+    );
+  }
+
+  Widget _buildStep(_StepInfo step, bool active) {
+    final color = active ? _blue : Colors.grey.shade400;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: active ? _blue : Colors.grey.shade200,
+            shape: BoxShape.circle,
           ),
+          child: Icon(
+            step.icon,
+            size: 19,
+            color: active ? Colors.white : Colors.grey.shade500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          step.label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: active ? FontWeight.bold : FontWeight.w500,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- ORDER DETAILS CARD ---
+
+  Widget _buildOrderDetailsCard() {
+    final orderId = _order['OrderId']?.toString() ?? '';
+    // DiscValue is the all-inclusive discount total — it already contains the
+    // Disc1/Disc2 breakdowns, so it must NOT be summed with them.
+    final discTotal = _num(_order['DiscValue']);
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sectionHeader('ORDER DETAILS'),
+          const SizedBox(height: 12),
+          if (_hasValue(orderId))
+            _detailRow('Order Id', '#$orderId', emphasiseValue: true),
+          _detailRow('Placed On', _order['PlacedOn']?.toString()),
+          _detailRow('Number Of Items', '${_products.length}',
+              emphasiseValue: true),
+          _amountRow('Product Value', _money(_order['ItemAmt'])),
+          _amountRow('Scheme', _money(_order['SchAmt'])),
+          _amountRow('Discount', _money(discTotal)),
+          _amountRow('Delivery Charges', _money(_order['DelCharges'])),
+          _amountRow('GST Amount', _money(_order['TaxAmt'])),
+          const Divider(height: 24),
+          _amountRow('Total Amount', _money(_order['OrderValue']),
+              isTotal: true),
+          const SizedBox(height: 4),
+          _detailRow('Delivery Date', _order['DeliveryDate']?.toString()),
+          _detailRow('Delivery Mode', _order['DeliveryMode']?.toString()),
+          _detailRow('Status', _order['OrderStatus']?.toString()),
         ],
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title, IconData icon, ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
+  // --- INVOICE DETAILS CARD ---
+
+  Widget _buildInvoiceCard() {
+    if (!_hasValue(_order['InvNo'])) return const SizedBox.shrink();
+
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withOpacity(0.6),
+          _sectionHeader('INVOICE DETAILS'),
+          const SizedBox(height: 12),
+          _detailRow('Invoice Number', _order['InvNo']?.toString(),
+              emphasiseValue: true),
+          _detailRow('Invoice Date', _order['INVDt']?.toString()),
+          _amountRow('Invoice Amount', _money(_order['InvAmt'])),
+          const SizedBox(height: 12),
+          Center(
+            child: InkWell(
+              onTap: _isSharingInvoice ? null : _viewInvoice,
               borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: _isSharingInvoice
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.red,
+                        ),
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: const [
+                          Icon(Icons.receipt_long,
+                              size: 18, color: Colors.red),
+                          SizedBox(width: 6),
+                          Text(
+                            'View Invoice',
+                            style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
             ),
-            child: Icon(icon, size: 18, color: cs.primary),
           ),
-          const SizedBox(width: 12),
-          Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 0.3)),
         ],
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String? value, ColorScheme cs,
-      {IconData? icon, bool isBold = false, Color? valueColor}) {
-    if (value == null || value.trim().isEmpty || value == 'null') return const SizedBox.shrink();
+  // --- ITEM PURCHASED CARD ---
+
+  Widget _buildItemsCard() {
+    return _card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _itemsExpanded = !_itemsExpanded),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'ITEM PURCHASED',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: _blue,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _itemsExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: _blue,
+                ),
+              ],
+            ),
+          ),
+          if (_itemsExpanded) ...[
+            const SizedBox(height: 8),
+            if (_products.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'No items',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
+              )
+            else
+              for (int i = 0; i < _products.length; i++)
+                _buildItem(_products[i] as Map<String, dynamic>,
+                    isLast: i == _products.length - 1),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildItem(Map<String, dynamic> product, {required bool isLast}) {
+    final name = product['Name']?.toString() ?? '';
+    final mfg = product['MfgComp']?.toString() ?? '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          name,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: _blue,
+          ),
+        ),
+        if (_hasValue(mfg))
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              mfg.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _inlineStat('Price', _money(product['Rate'])),
+            _inlineStat('Value', _money(product['Amt']), alignEnd: true),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: _blue.withValues(alpha: 0.06),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _qtyStat('Order Qty', product['Qty']),
+              ),
+              Expanded(
+                child: _qtyStat('Invoice Qty', product['InvQty']),
+              ),
+              Expanded(
+                child: _qtyStat('Balance Qty', product['BalQty']),
+              ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Divider(height: 16),
+          ),
+      ],
+    );
+  }
+
+  Widget _inlineStat(String label, String value, {bool alignEnd = false}) {
+    return Column(
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _qtyStat(String label, dynamic value) {
+    final n = _num(value);
+    // Show whole numbers without decimals (e.g. "5 Unit", "0 Unit").
+    final qtyStr = n == n.truncateToDouble()
+        ? n.toInt().toString()
+        : n.toStringAsFixed(2);
+    return Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '$qtyStr Unit',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- SHARED UI HELPERS ---
+
+  Widget _card({required Widget child}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _sectionHeader(String title) {
+    return Text(
+      title,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.bold,
+        color: _blue,
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  /// A label/value row. Hidden entirely when [value] is null/empty/"null".
+  Widget _detailRow(String label, String? value,
+      {bool emphasiseValue = false}) {
+    if (!_hasValue(value)) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 16, color: cs.onSurfaceVariant.withOpacity(0.7)),
-            const SizedBox(width: 8),
-          ],
-          Text(label, style: TextStyle(fontSize: 13.5, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              value!,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 13.5,
+                fontWeight: FontWeight.bold,
+                color: emphasiseValue ? _blue : Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// An amount row. Always rendered (shows ₹0.00 when there is no value).
+  Widget _amountRow(String label, String value, {bool isTotal = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: isTotal ? 14.5 : 13,
+              color: isTotal ? Colors.black87 : Colors.grey.shade600,
+              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
               value,
               textAlign: TextAlign.right,
               style: TextStyle(
-                fontSize: isBold ? 15 : 13.5,
-                color: valueColor ?? cs.onSurface,
-                fontWeight: isBold ? FontWeight.w800 : FontWeight.w600,
+                fontSize: isTotal ? 17 : 13.5,
+                fontWeight: FontWeight.bold,
+                color: _blue,
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCard({required Widget child, required ColorScheme cs}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
-        boxShadow: [
-          BoxShadow(color: cs.shadow.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
-        ],
-      ),
-      child: child,
-    );
-  }
-
-  Widget _buildMiniStat(String label, String value, ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
-        const SizedBox(height: 2),
-        Text(value, style: TextStyle(fontSize: 15, color: cs.onSurface, fontWeight: FontWeight.w800)),
-      ],
-    );
-  }
-
-  Widget _buildProductCard(Map<String, dynamic> product, int index, ColorScheme cs) {
-    final name = product['Name']?.toString() ?? 'Product ${index + 1}';
-    final mfg = product['MfgComp']?.toString() ?? '';
-    final qty = _fmt(product['Qty']);
-    final fQty = _fmt(product['FQty']);
-    final rate = _fmt(product['Rate']);
-    // API `Amt` is OD_NET_AMT — per-line value after tax and after all discounts.
-    // The gross/base (OD_Amt) isn't returned, so compute Qty × Rate.
-    final double rawQty = double.tryParse(product['Qty']?.toString() ?? '0') ?? 0;
-    final double rawRate = double.tryParse(product['Rate']?.toString() ?? '0') ?? 0;
-    final double baseAmt = rawQty * rawRate;
-    final String baseAmtStr = baseAmt.toStringAsFixed(2);
-    final netAmt = _fmt(product['Amt']);
-    final discAmt = product['DiscAmt']?.toString() ?? '';
-    final discPer = product['DiscPer']?.toString() ?? '';
-    final disc1Per = product['Disc1Per']?.toString() ?? '';
-    final disc1Amt = product['Disc1Amt']?.toString() ?? '';
-    final disc2Per = product['Disc2Per']?.toString() ?? '';
-    final disc2Amt = product['Disc2Amt']?.toString() ?? '';
-    final icode = product['Icode']?.toString() ?? '';
-    final invQty = _fmt(product['InvQty']);
-    final balQty = _fmt(product['BalQty']);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
-        boxShadow: [
-          BoxShadow(color: cs.shadow.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Product header
-          Container(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-            decoration: BoxDecoration(
-              color: cs.primaryContainer.withOpacity(0.2),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: cs.primary,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    '${index + 1}',
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 13),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: cs.onSurface, height: 1.3),
-                      ),
-                      if (mfg.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 3),
-                          child: Text(mfg, style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w600)),
-                        ),
-                      if (icode.isNotEmpty)
-                        Text('Code: $icode', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Qty / FQty / Rate row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildMiniStat('QTY', qty, cs),
-                  Container(width: 1, height: 32, color: cs.outlineVariant),
-                  _buildMiniStat('FREE QTY', fQty, cs),
-                  Container(width: 1, height: 32, color: cs.outlineVariant),
-                  _buildMiniStat('RATE', '₹$rate', cs),
-                ],
-              ),
-            ),
-          ),
-
-          // Financial details
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Column(
-              children: [
-                _buildProductDetailRow('Base Amount', '₹$baseAmtStr', cs),
-                if (_isNonZero(discPer) || _isNonZero(discAmt))
-                  _buildProductDetailRow('Discount ($discPer%)', '- ₹$discAmt', cs, valueColor: Colors.green.shade700),
-                if (_isNonZero(disc1Per) || _isNonZero(disc1Amt))
-                  _buildProductDetailRow('Disc 1 ($disc1Per%)', '- ₹$disc1Amt', cs, valueColor: Colors.green.shade700),
-                if (_isNonZero(disc2Per) || _isNonZero(disc2Amt))
-                  _buildProductDetailRow('Disc Per Pc ($disc2Per)', '- ₹$disc2Amt', cs, valueColor: Colors.green.shade700),
-                if (invQty != '0' && invQty.isNotEmpty)
-                  _buildProductDetailRow('Invoice Qty', invQty, cs),
-                if (balQty != '0' && balQty.isNotEmpty)
-                  _buildProductDetailRow('Balance Qty', balQty, cs),
-              ],
-            ),
-          ),
-
-          // Net Amount footer
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: cs.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Net Amount (incl. tax)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface)),
-                Text(
-                  '₹$netAmt',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs.primary),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductDetailRow(String label, String value, ColorScheme cs, {Color? valueColor}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5.0),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant, fontWeight: FontWeight.w500)),
-          const Spacer(),
-          Text(
-            value,
-            style: TextStyle(fontSize: 13, color: valueColor ?? cs.onSurface, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final shippingAddress = [orderDetail['Ac_Address1'], orderDetail['Ac_Address2'], orderDetail['Ac_Address3']]
-        .where((e) => e != null && e.toString().trim().isNotEmpty)
-        .join(', ');
-
-    final firmAddress = [orderDetail['F_FirmAdd1'], orderDetail['F_FirmAdd2'], orderDetail['F_FirmAdd3']]
-        .where((e) => e != null && e.toString().trim().isNotEmpty)
-        .join(', ');
-
-    final String orderId = orderDetail['OrderId']?.toString() ?? 'N/A';
-
-    // All summary figures are order-level roll-ups duplicated across rows; read once.
-    final double itemAmt = double.tryParse(orderDetail['ItemAmt']?.toString() ?? '0') ?? 0;
-    final double discValue = double.tryParse(orderDetail['DiscValue']?.toString() ?? '0') ?? 0;
-    final double disc1Value = double.tryParse(orderDetail['Disc1Value']?.toString() ?? '0') ?? 0;
-    final double disc2Value = double.tryParse(orderDetail['Disc2Value']?.toString() ?? '0') ?? 0;
-    final double orderTaxAmt = double.tryParse(orderDetail['TaxAmt']?.toString() ?? '0') ?? 0;
-    final double orderSchAmt = double.tryParse(orderDetail['SchAmt']?.toString() ?? '0') ?? 0;
-    final double orderValue = double.tryParse(orderDetail['OrderValue']?.toString() ?? '0') ?? 0;
-
-    return Scaffold(
-      backgroundColor: cs.surfaceContainerLowest,
-      appBar: AppBar(
-        title: const Text('Order Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-        centerTitle: true,
-        backgroundColor: cs.surfaceContainerLowest,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- HERO HEADER ---
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerLowest,
-                border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.5))),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              orderDetail['Ac_Name'] ?? 'Order',
-                              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: cs.onSurface, height: 1.2),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Order ID: #$orderId',
-                              style: TextStyle(fontSize: 13, color: cs.primary, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      _buildStatusChip(orderDetail['OrderStatus']),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _buildInfoChip(Icons.inventory_2_outlined, '${products.length} item${products.length == 1 ? '' : 's'}', cs),
-                      const SizedBox(width: 8),
-                      _buildInfoChip(Icons.currency_rupee, orderValue.toStringAsFixed(2), cs),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // --- SECTION 1: LOGISTICS ---
-            _buildCard(
-              cs: cs,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionHeader('Logistics & Tracking', Icons.local_shipping_outlined, cs),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: cs.surfaceContainerHighest.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('ORDER ID', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cs.onSurfaceVariant, letterSpacing: 0.5)),
-                            const SizedBox(height: 2),
-                            Text(orderId, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: cs.onSurface)),
-                          ],
-                        ),
-                        Builder(
-                          builder: (context) => IconButton(
-                            icon: const Icon(Icons.copy_rounded, size: 18),
-                            color: cs.primary,
-                            onPressed: () {
-                              Clipboard.setData(ClipboardData(text: orderId));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Order ID copied to clipboard'), behavior: SnackBarBehavior.floating),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildDetailRow('Placed On', orderDetail['PlacedOn'], cs, icon: Icons.calendar_today_rounded),
-                  _buildDetailRow('Delivery Date', orderDetail['DeliveryDate'], cs, icon: Icons.event_available_rounded),
-                  _buildDetailRow('Delivery Mode', orderDetail['DeliveryMode'], cs, icon: Icons.directions_car_rounded),
-                  _buildDetailRow('Payment Mode', orderDetail['PaymentMode'], cs, icon: Icons.payments_outlined),
-                ],
-              ),
-            ),
-
-            // --- SECTION 2: PRODUCTS LIST ---
-            Container(
-              margin: const EdgeInsets.only(bottom: 8, left: 16, right: 16),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: cs.primaryContainer.withOpacity(0.6),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(Icons.medication_outlined, size: 18, color: cs.primary),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Products (${products.length})',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: cs.onSurface, letterSpacing: 0.3),
-                  ),
-                ],
-              ),
-            ),
-
-            // Product cards
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: [
-                  for (int i = 0; i < products.length; i++)
-                    _buildProductCard(products[i] as Map<String, dynamic>, i, cs),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // --- SECTION 3: ORDER SUMMARY ---
-            _buildCard(
-              cs: cs,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionHeader('Order Summary', Icons.receipt_long_rounded, cs),
-                  _buildDetailRow('Item Amount', '₹${itemAmt.toStringAsFixed(2)}', cs),
-                  if (discValue != 0)
-                    _buildDetailRow('Discount', '- ₹${discValue.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
-                  if (disc1Value != 0)
-                    _buildDetailRow('Disc 1', '- ₹${disc1Value.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
-                  if (disc2Value != 0)
-                    _buildDetailRow('Add Disc', '- ₹${disc2Value.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
-                  if (orderSchAmt != 0)
-                    _buildDetailRow('Scheme Amount', '- ₹${orderSchAmt.toStringAsFixed(2)}', cs, valueColor: Colors.green.shade700),
-                  _buildDetailRow('Tax Amount', '+ ₹${orderTaxAmt.toStringAsFixed(2)}', cs),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: Divider(color: cs.outlineVariant, thickness: 1, height: 1),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Net Payable', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface)),
-                      Text(
-                        '₹${orderValue.toStringAsFixed(2)}',
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs.primary),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // --- INVOICE NO (order-level, shown only if available) ---
-            if ((orderDetail['InvNo']?.toString() ?? '').isNotEmpty &&
-                orderDetail['InvNo']?.toString() != 'null')
-              _buildCard(
-                cs: cs,
-                child: _buildDetailRow(
-                  'Invoice No',
-                  orderDetail['InvNo']?.toString(),
-                  cs,
-                  icon: Icons.receipt_outlined,
-                  isBold: true,
-                ),
-              ),
-
-            // --- SECTION 4: ACCOUNT & FIRM ---
-            /*_buildCard(
-              cs: cs,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionHeader('Parties Involved', Icons.storefront_outlined, cs),
-                  Row(
-                    children: [
-                      Icon(Icons.person_outline, size: 16, color: cs.primary),
-                      const SizedBox(width: 8),
-                      Text('ACCOUNT DETAILS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildDetailRow('Name', orderDetail['Ac_Name'], cs, isBold: true),
-                  _buildDetailRow('Account No.', orderDetail['Ac_AcNo'], cs),
-                  _buildDetailRow('GSTIN', orderDetail['AC_GST_NUMBER'], cs),
-                  _buildDetailRow('Shipping Address', shippingAddress, cs),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Divider(color: cs.outlineVariant.withOpacity(0.5)),
-                  ),
-                  Row(
-                    children: [
-                      Icon(Icons.domain_rounded, size: 16, color: cs.primary),
-                      const SizedBox(width: 8),
-                      Text('FIRM DETAILS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: cs.primary, letterSpacing: 1)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _buildDetailRow('Name', orderDetail['F_FirmName'], cs, isBold: true),
-                  _buildDetailRow('GSTIN', orderDetail['F_GST_Number'], cs),
-                  _buildDetailRow('Mobile', orderDetail['F_Firm_Mobile']?.toString(), cs),
-                  _buildDetailRow('Firm Address', firmAddress, cs),
-                ],
-              ),
-            ),*/
-
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoChip(IconData icon, String label, ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.4),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: cs.primary),
-          const SizedBox(width: 5),
-          Text(label, style: TextStyle(fontSize: 12, color: cs.primary, fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
 }
 
+/// Static description of one stepper step.
+class _StepInfo {
+  final String label;
+  final IconData icon;
+  const _StepInfo(this.label, this.icon);
+}

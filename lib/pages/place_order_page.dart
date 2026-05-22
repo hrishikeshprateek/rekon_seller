@@ -250,12 +250,12 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
-        title: Text('Review Order', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18, color: cs.onSurface)),
+        title: const Text('REVIEW ORDER', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18, color: Colors.white)),
         centerTitle: true,
-        backgroundColor: cs.surfaceContainerLowest,
+        backgroundColor: const Color(0xFF1E88E5),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        iconTheme: IconThemeData(color: cs.onSurface),
+        iconTheme: const IconThemeData(color: Colors.white),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: cs.outlineVariant.withValues(alpha: 0.5), height: 1),

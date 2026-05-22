@@ -535,14 +535,14 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text(
-          'Assigned Deliveries',
+          'ASSIGNED DELIVERIES',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
         ),
         centerTitle: true,
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: const Color(0xFF1E88E5),
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Color(0xFFFF6F00)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -550,7 +550,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: const Icon(Icons.tune, color: Color(0xFFFF6F00)),
+                icon: const Icon(Icons.tune, color: Colors.white),
                 onPressed: _openFilterPage,
                 tooltip: 'Filters',
               ),

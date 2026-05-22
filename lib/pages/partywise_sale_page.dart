@@ -6,7 +6,7 @@ class PartywiseSalePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Partywise Sale')),
+      appBar: AppBar(title: const Text('PARTYWISE SALE')),
       body: const Center(child: Text('Partywise Sale page (empty)')),
     );
   }

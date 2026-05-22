@@ -274,11 +274,11 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: cs.surface,
+        backgroundColor: const Color(0xFF1E88E5),
         scrolledUnderElevation: 0,
         title: Text(
-          'Select Account',
-          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+          'SELECT ACCOUNT',
+          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
         ),
         centerTitle: true,
       ),

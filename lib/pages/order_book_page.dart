@@ -269,15 +269,15 @@ class _OrderBookPageState extends State<OrderBookPage> {
     return Scaffold(
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
-        title: const Text('Order Book', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+        title: const Text('ORDER BOOK', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
         centerTitle: true,
-        backgroundColor: cs.surfaceContainerLowest,
+        backgroundColor: const Color(0xFF1E88E5),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         actions: [
           if (_selectedAccount != null)
             IconButton(
-              icon: Icon(Icons.switch_account_outlined, color: cs.primary),
+              icon: const Icon(Icons.switch_account_outlined, color: Colors.white),
               onPressed: _selectAccountAndFetchOrders,
               tooltip: 'Change Account',
             ),

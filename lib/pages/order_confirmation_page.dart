@@ -99,9 +99,9 @@ class OrderConfirmationPage extends StatelessWidget {
       backgroundColor: cs.surfaceContainerLowest,
       appBar: AppBar(
         automaticallyImplyLeading: false, // Remove default back button for a confirmation screen
-        title: const Text('Order Confirmed', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
+        title: const Text('ORDER CONFIRMED', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
         centerTitle: true,
-        backgroundColor: cs.surfaceContainerLowest,
+        backgroundColor: const Color(0xFF1E88E5),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),

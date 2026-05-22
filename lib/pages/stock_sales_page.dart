@@ -6,7 +6,7 @@ class StockSalesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Stock & Sales')),
+      appBar: AppBar(title: const Text('STOCK & SALES')),
       body: const Center(child: Text('Stock & Sales page (empty)')),
     );
   }

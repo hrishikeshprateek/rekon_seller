@@ -554,19 +554,19 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerLowest,
       appBar: AppBar(
-        title: Text('Product Details',
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        title: Text('PRODUCT DETAILS',
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: Colors.white)),
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: colorScheme.surfaceContainerLowest,
+        backgroundColor: const Color(0xFF1E88E5),
         surfaceTintColor: Colors.transparent,
         actions: [
           Stack(
             alignment: Alignment.center,
             children: [
               IconButton(
-                icon: Icon(Icons.shopping_cart_outlined, color: colorScheme.onSurface),
+                icon: const Icon(Icons.shopping_cart_outlined, color: Colors.white),
                 tooltip: 'Open Cart',
                 onPressed: () {
                   final acCode = widget.selectedAccount.code ??

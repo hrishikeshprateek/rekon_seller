@@ -925,13 +925,13 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
             expandedHeight: 56.0,
             floating: false,
             pinned: true,
-            backgroundColor: colorScheme.surface,
-            iconTheme: IconThemeData(color: colorScheme.onSurface),
+            backgroundColor: const Color(0xFF1E88E5),
+            iconTheme: const IconThemeData(color: Colors.white),
             title: Text(
-              'Mark Delivery',
-              style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w700, fontSize: 18),
+              'MARK DELIVERY',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 18),
             ),
-            centerTitle: false,
+            centerTitle: true,
           ),
 
           // Content

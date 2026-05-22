@@ -6,7 +6,7 @@ class DumpStockPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Dump Stock')),
+      appBar: AppBar(title: const Text('DUMP STOCK')),
       body: const Center(child: Text('Dump Stock page (empty)')),
     );
   }

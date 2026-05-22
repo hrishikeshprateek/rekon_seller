@@ -6,7 +6,7 @@ class NearExpiryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Near Expiry')),
+      appBar: AppBar(title: const Text('NEAR EXPIRY')),
       body: const Center(child: Text('Near Expiry page (empty)')),
     );
   }

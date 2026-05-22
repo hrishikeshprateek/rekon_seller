@@ -6,7 +6,7 @@ class ItemwiseSalePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Itemwise Sale')),
+      appBar: AppBar(title: const Text('ITEMWISE SALE')),
       body: const Center(child: Text('Itemwise Sale page (empty)')),
     );
   }

@@ -950,9 +950,9 @@ class _StatementPageState extends State<StatementPage> {
             onChanged: (val) => setState(() => _txnSearchText = val),
           ),
         )
-            : const Text('Account Statement', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+            : const Text('ACCOUNT STATEMENT', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+        backgroundColor: const Color(0xFF1E88E5),
+        foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 2,
         actions: [

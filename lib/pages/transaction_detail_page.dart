@@ -105,8 +105,8 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text('Transaction Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: const Color(0xFF1E88E5),
+        foregroundColor: Colors.white,
         elevation: 1,
       ),
       body: FutureBuilder<Map<String, dynamic>?>(

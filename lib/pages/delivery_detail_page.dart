@@ -112,20 +112,20 @@ class DeliveryDetailPage extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 0,
             pinned: true,
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
+            backgroundColor: const Color(0xFF1E88E5),
+            foregroundColor: Colors.white,
             elevation: 0,
             scrolledUnderElevation: 1,
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Color(0xFF1E88E5)),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(
-              _getString('billno', 'Delivery Details'),
+              _getString('billno', 'Delivery Details').toUpperCase(),
               style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF212121),
+                color: Colors.white,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

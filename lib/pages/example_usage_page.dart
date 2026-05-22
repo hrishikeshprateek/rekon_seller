@@ -48,7 +48,7 @@ class _ExampleUsagePageState extends State<ExampleUsagePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Example: Select Account'),
+        title: const Text('EXAMPLE: SELECT ACCOUNT'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),

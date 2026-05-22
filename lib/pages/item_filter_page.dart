@@ -300,7 +300,7 @@ class _ItemFilterPageState extends State<ItemFilterPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Filter'),
+        title: const Text('FILTER'),
         elevation: 0.5,
         actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _loadFilters)],
       ),

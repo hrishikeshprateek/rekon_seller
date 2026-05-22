@@ -198,6 +198,14 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
     if (_formKey.currentState == null) return;
     if (!_formKey.currentState!.validate()) return;
 
+    // A receipt must have at least one bill attached.
+    if (_lines.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please attach at least one bill before submitting.')),
+      );
+      return;
+    }
+
     // Show confirmation dialog first
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1095,7 +1103,8 @@ class _ReceiptSubmissionConfirmationState
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: const Color(0xFF1E88E5),
+        foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
         title: const Text(

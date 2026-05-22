@@ -6,7 +6,7 @@ class OutstandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Outstanding')),
+      appBar: AppBar(title: const Text('OUTSTANDING')),
       body: const Center(child: Text('Outstanding page (empty)')),
     );
   }

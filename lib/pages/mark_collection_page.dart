@@ -105,12 +105,12 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text(
-          'Pending for Collection',
+          'PENDING FOR COLLECTION',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
         centerTitle: true,
-        backgroundColor: colorScheme.surface,
-        foregroundColor: colorScheme.onSurface,
+        backgroundColor: const Color(0xFF1E88E5),
+        foregroundColor: Colors.white,
         scrolledUnderElevation: 0,
         elevation: 0,
         surfaceTintColor: colorScheme.surface,

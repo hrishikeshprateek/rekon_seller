@@ -103,13 +103,14 @@ class _CreateMpinScreenState extends State<CreateMpinScreen> {
       appBar: AppBar(
         title: Text(
             'Security Setup',
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.white)
         ),
         centerTitle: true,
-        backgroundColor: cs.surface,
+        backgroundColor: const Color(0xFF1E88E5),
+        foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: cs.onSurface),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
         bottom: PreferredSize(

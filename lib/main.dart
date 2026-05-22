@@ -69,23 +69,23 @@ class _MyAppState extends State<MyApp> {
               // Enhanced AppBar styling
               appBarTheme: AppBarTheme(
                 backgroundColor: const Color(0xFF1E88E5),
-                foregroundColor: Colors.black,
+                foregroundColor: Colors.white,
                 elevation: 2,
                 scrolledUnderElevation: 4,
                 shadowColor: const Color(0xFF1E88E5).withValues(alpha: 0.3),
-                centerTitle: false,
+                centerTitle: true,
                 titleTextStyle: const TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: Colors.black,
+                  color: Colors.white,
                   letterSpacing: 0.5,
                 ),
                 iconTheme: const IconThemeData(
-                  color: Colors.black,
+                  color: Colors.white,
                   size: 24,
                 ),
                 actionsIconTheme: const IconThemeData(
-                  color: Colors.black,
+                  color: Colors.white,
                   size: 24,
                 ),
               ),

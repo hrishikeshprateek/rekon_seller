@@ -321,14 +321,14 @@ class _CompletedDeliveriesPageState extends State<CompletedDeliveriesPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    if (_isLoading && _bills.isEmpty) return Scaffold(backgroundColor: colorScheme.surface, appBar: AppBar(title: const Text('Delivery Book'), backgroundColor: colorScheme.surface), body: const Center(child: CircularProgressIndicator()));
+    if (_isLoading && _bills.isEmpty) return Scaffold(backgroundColor: colorScheme.surface, appBar: AppBar(title: const Text('DELIVERY BOOK'), backgroundColor: const Color(0xFF1E88E5)), body: const Center(child: CircularProgressIndicator()));
     final bool hasActiveFilters = _apiFilters.isNotEmpty;
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text('Delivery Book', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+        title: const Text('DELIVERY BOOK', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
         centerTitle: true,
-        backgroundColor: colorScheme.surface,
+        backgroundColor: const Color(0xFF1E88E5),
         scrolledUnderElevation: 0,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22), onPressed: () => Navigator.pop(context)),
         actions: [

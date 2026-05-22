@@ -79,7 +79,7 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
     });
   }
 
-  void _goToReceiptEntry() {
+  Future<void> _goToReceiptEntry() async {
     if (_selectedIndexes.isEmpty) return;
 
     final data = _outstandingData;
@@ -100,7 +100,7 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
         })
         .toList();
 
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => CreateReceiptScreen(
@@ -110,6 +110,12 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
         ),
       ),
     );
+
+    // Returned from the receipt-entry flow — refresh the outstanding list so
+    // bills paid via the new receipt drop off, and clear the old selection.
+    if (!mounted) return;
+    setState(() => _selectedIndexes.clear());
+    _loadOutstandingDetails(reset: true);
   }
 
   // Called when the list is scrolled. Triggers loading next page when near bottom.
@@ -738,14 +744,19 @@ class _LedgerHeader extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-            decoration: BoxDecoration(color: Colors.blueGrey.shade800),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: Colors.grey.shade300),
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.business, color: Colors.white70, size: 18),
+                    const Icon(Icons.business, color: Colors.black54, size: 18),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -753,7 +764,7 @@ class _LedgerHeader extends StatelessWidget {
                         style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: Colors.black87,
                           height: 1.2,
                         ),
                       ),
@@ -769,7 +780,7 @@ class _LedgerHeader extends StatelessWidget {
                       data.accAddress,
                       style: const TextStyle(
                         fontSize: 12,
-                        color: Colors.white70,
+                        color: Colors.black54,
                       ),
                     ),
                   ),
@@ -867,7 +878,6 @@ class _LedgerItem extends StatelessWidget {
       decimalDigits: 2,
     );
     final isNegative = item.amount < 0;
-    final isOverdue = item.overDue.isNotEmpty && item.overDue != "0";
     const labelStyle = TextStyle(fontSize: 11, color: Color(0xFF757575));
     const valueStyle = TextStyle(
       fontSize: 12,
@@ -916,7 +926,7 @@ class _LedgerItem extends StatelessWidget {
                             children: [
                               Expanded(
                                 child: Text(
-                                  item.date,
+                                  formatDateDmy(item.date),
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
@@ -973,9 +983,11 @@ class _LedgerItem extends StatelessWidget {
                                     // Fall back to CREDIT/DEBIT for backward compatibility.
                                     Builder(builder: (context) {
                                       final rawType = item.trantype.trim();
-                                      final display = rawType.isNotEmpty
+                                      var display = rawType.isNotEmpty
                                           ? rawType.toUpperCase()
                                           : (isNegative ? 'CREDIT' : 'DEBIT');
+                                      // 'OPP' is the opening-balance code — show it spelled out.
+                                      if (display == 'OPP') display = 'OPENING';
                                       return Text(
                                         display,
                                         style: TextStyle(
@@ -992,52 +1004,23 @@ class _LedgerItem extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Flexible(
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.calendar_today_outlined,
-                                      size: 12,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Expanded(
-                                      child: Text(
-                                        "Due: ${item.dueDate.isEmpty ? 'NA' : item.dueDate}",
-                                        style: const TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.black54,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
+                              const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 12,
+                                color: Colors.grey,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  "Due: ${item.dueDate.isEmpty ? 'NA' : formatDateDmy(item.dueDate)}",
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black54,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (isOverdue)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 1,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
-                                    borderRadius: BorderRadius.circular(2),
-                                    border: Border.all(
-                                      color: Colors.grey.shade300,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    "${item.overDue} DAYS OVERDUE",
-                                    style: const TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
                             ],
                           ),
                         ],
@@ -1128,6 +1111,18 @@ class OutstandingData {
           .toList(),
     );
   }
+}
+
+/// Reformats a date string to `dd-MM-yyyy`. Accepts ISO `yyyy-MM-dd`
+/// (and similar parseable forms); returns the input unchanged if it can't parse.
+String formatDateDmy(String raw) {
+  final s = raw.trim();
+  if (s.isEmpty) return s;
+  final d = DateTime.tryParse(s);
+  if (d == null) return s;
+  final dd = d.day.toString().padLeft(2, '0');
+  final mm = d.month.toString().padLeft(2, '0');
+  return '$dd-$mm-${d.year}';
 }
 
 class OutstandingItem {

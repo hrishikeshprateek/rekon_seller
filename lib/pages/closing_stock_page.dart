@@ -6,7 +6,7 @@ class ClosingStockPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Closing Stock')),
+      appBar: AppBar(title: const Text('CLOSING STOCK')),
       body: const Center(child: Text('Closing Stock page (empty)')),
     );
   }

@@ -470,12 +470,12 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Select Account', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20)),
+        title: const Text('SELECT ACCOUNT', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
-        backgroundColor: colorScheme.surface,
+        backgroundColor: const Color(0xFF1E88E5),
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Color(0xFF1E88E5)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
       ),

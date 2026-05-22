@@ -6,7 +6,7 @@ class TrialBalancePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Trial Balance')),
+      appBar: AppBar(title: const Text('TRIAL BALANCE')),
       body: const Center(child: Text('Trial Balance page (empty)')),
     );
   }
