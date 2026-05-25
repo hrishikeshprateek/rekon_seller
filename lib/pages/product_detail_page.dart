@@ -1044,25 +1044,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _KeyboardAwareSheet(
-        child: _AddToCartSheet(
-          product: product,
-          selectedAccount: widget.selectedAccount,
-          cartDetails: cartDetails,
-          cartQty: cartQty,
-          onCartUpdated: () async {
-            debugPrint('[ProductDetailPage] onCartUpdated called');
-            Navigator.pop(ctx);
-            await fetchCartAndSetQty();
-            debugPrint('[ProductDetailPage] After fetchCartAndSetQty, cartQty = $cartQty');
-            if (mounted) {
-              setState(() {
-                // Explicitly update state to reflect cartQty change
-                debugPrint('[ProductDetailPage] setState called, cartQty = $cartQty');
-              });
-            }
-          },
-        ),
+      // _AddToCartSheet handles the keyboard inset itself (its container pads
+      // for viewInsets) — no extra keyboard-aware wrapper, else padding doubles.
+      builder: (ctx) => _AddToCartSheet(
+        product: product,
+        selectedAccount: widget.selectedAccount,
+        cartDetails: cartDetails,
+        cartQty: cartQty,
+        onCartUpdated: () async {
+          debugPrint('[ProductDetailPage] onCartUpdated called');
+          Navigator.pop(ctx);
+          await fetchCartAndSetQty();
+          debugPrint('[ProductDetailPage] After fetchCartAndSetQty, cartQty = $cartQty');
+          if (mounted) {
+            setState(() {
+              // Explicitly update state to reflect cartQty change
+              debugPrint('[ProductDetailPage] setState called, cartQty = $cartQty');
+            });
+          }
+        },
       ),
     );
   }
@@ -1365,18 +1365,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Keyboard-aware wrapper — isolates viewInsets so sheet never resets on KB dismiss
 // ─────────────────────────────────────────────────────────────────────────────
-class _KeyboardAwareSheet extends StatelessWidget {
-  final Widget child;
-  const _KeyboardAwareSheet({required this.child});
-  @override
-  Widget build(BuildContext context) => AnimatedPadding(
-    duration: const Duration(milliseconds: 150),
-    curve: Curves.easeOut,
-    padding: MediaQuery.of(context).viewInsets,
-    child: child,
-  );
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Add/Update cart bottom sheet — StatefulWidget so controllers live in initState
 // ─────────────────────────────────────────────────────────────────────────────

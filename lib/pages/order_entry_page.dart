@@ -917,10 +917,28 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   }
 
   // Updated to accept index for mock ratings
+  // A small labelled spec line (icon + text) used in the product card to
+  // tell brand / composition / description / category apart at a glance.
+  Widget _specLine(IconData icon, String text, ColorScheme cs) => Padding(
+        padding: const EdgeInsets.only(top: 4.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 1.0),
+              child: Icon(icon, size: 13, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(text, style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
+            ),
+          ],
+        ),
+      );
+
   Widget _buildCompactProductCard(Product product, int index) {
     final colorScheme = Theme.of(context).colorScheme;
     final qty = _getCartQuantity(product);
-    final bool hasStock = product.stockQuantity > 0;
 
     final flags = context.watch<SalesmanFlagsService>().flags;
     final showProductDesc = flags?.showProductDescSalesMan ?? false;
@@ -976,13 +994,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     ),
                   Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: Color(0xFF1E88E5))),
                   const SizedBox(height: 6),
-                  if (showItemMfgComp && (product.manufacturer ?? '').isNotEmpty)
-                    Text(product.manufacturer ?? '', style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
-                  // Price · MRP · GST line — each part gated by the API's Show* flags
+                  // Price · MRP · GST — right below the name; each part gated by the API's Show* flags
                   if (product.showRate || product.showMrp)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4.0),
-                    child: Wrap(
+                    Wrap(
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         if (product.showRate)
@@ -1002,70 +1016,20 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                         ],
                       ],
                     ),
-                  ),
+                  // Brand / manufacturer
+                  if (showItemMfgComp && (product.manufacturer ?? '').isNotEmpty)
+                    _specLine(Icons.business_outlined, product.manufacturer ?? '', colorScheme),
+                  // Salt / composition
                   if (showItemComposition && (product.salt ?? '').isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(product.salt!, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
-                    ),
+                    _specLine(Icons.science_outlined, product.salt!, colorScheme),
+                  // Description
                   if (showProductDesc && (product.description ?? '').trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text((product.description ?? ''), style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
-                    ),
+                    _specLine(Icons.notes_rounded, product.description ?? '', colorScheme),
+                  // Category
                   if (showItemCategory && product.category.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(product.category, style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant)),
-                    ),
+                    _specLine(Icons.category_outlined, product.category, colorScheme),
                   if (showItemRemark && false)
                     const SizedBox.shrink(),
-                  // Firm name + rating badge
-                  if ((product.firmName ?? '').isNotEmpty || product.rating > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6.0),
-                      child: Row(
-                        children: [
-                          if ((product.firmName ?? '').isNotEmpty)
-                            Flexible(
-                              child: Text(
-                                product.firmName!.toUpperCase(),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          if (product.rating > 0) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF0A500),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    product.rating.toStringAsFixed(1),
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const Icon(Icons.star, size: 11, color: Colors.white),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
                 ],
               ),
             ),
@@ -1112,13 +1076,13 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                       height: 32,
                       child: qty == 0
                           ? OutlinedButton(
-                              onPressed: hasStock ? () => _showBulkAddBottomSheet(product, null) : null,
+                              onPressed: () => _showBulkAddBottomSheet(product, null),
                               style: OutlinedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(horizontal: 16),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                side: BorderSide(color: hasStock ? colorScheme.primary : colorScheme.outlineVariant),
+                                side: BorderSide(color: colorScheme.primary),
                               ),
-                              child: Text(hasStock ? "ADD" : "NO STOCK", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: hasStock ? colorScheme.primary : colorScheme.outline)),
+                              child: Text("ADD", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: colorScheme.primary)),
                             )
                           : FilledButton(
                               onPressed: () => _showBulkAddBottomSheet(product, _cartMeta[product.id]),
@@ -2085,7 +2049,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                       final qty = int.tryParse(qtyController.text) ?? 1;
                                       final enteredPrice = double.tryParse(priceController.text) ?? product.price;
                                       final finalGoodsValue = enteredPrice * qty;
-                                      if (qty > available) {
+                                      if (available > 0 && qty > available) {
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(content: Text('Cannot add more than available stock ($available)')),
                                         );

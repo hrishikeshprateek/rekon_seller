@@ -1082,7 +1082,8 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     // scheme: map SchQty / SchDQty
     schemeController     = TextEditingController(text: (it.schQty ?? 0).toStringAsFixed(0));
     dSchemeController    = TextEditingController(text: (it.dSchQty ?? 0).toStringAsFixed(0));
-    // discounts: map the *Per fields (inputs), not Amt fields
+    // Discounts prefilled from the saved cart line; editing any of them
+    // recalculates the totals from the server (see _onChanged).
     discPcsController    = TextEditingController(text: (it.disc2Per ?? 0).toStringAsFixed(2));
     discPerController    = TextEditingController(text: (it.discPer  ?? 0).toStringAsFixed(2));
     addDiscPerController = TextEditingController(text: (it.disc1Per ?? 0).toStringAsFixed(2));
@@ -1129,6 +1130,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       'lFirmCode':            firmCode,
       'AcCode':               widget.acCode,
       'ItemCode':             widget.item.code,
+      'Icode':                widget.item.code,
       'IdCol':                widget.item.idCol,
       'ItemQty':              qtyController.text.trim(),
       'ItemRate':             priceController.text.trim(),
@@ -1142,8 +1144,11 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       'discount_pcs':         discPcsController.text.trim().isEmpty    ? '0' : discPcsController.text.trim(),
       'remark':               remarkController.text.trim(),
       'insert_record':        insertRecord,
-      // false → server uses the user-entered discount instead of the item's
-      // default. This is an edit sheet, so the entered values must be honored.
+      // false → the server honours the discount/qty/rate values sent in this
+      // request. true makes it ignore them and re-apply the item's defaults
+      // (confirmed via logs: sending discount_percentage:10 with true returned
+      // the default 5%). The cart sheet always has values prefilled, so it
+      // never needs a "default hit".
       'default_hit':          false,
     };
   }
@@ -1646,11 +1651,11 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              minimumSize: const Size(double.infinity, 54),
                               side: BorderSide(color: colorScheme.outlineVariant),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             ),
-                            child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                            child: const Text('Close', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1665,13 +1670,11 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
                               await _submit();
                             },
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E88E5),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: Text('UPDATE CART', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                            child: const Text('Update Cart', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
                       ],

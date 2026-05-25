@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class DeliveryDetailPage extends StatelessWidget {
@@ -49,54 +48,6 @@ class DeliveryDetailPage extends StatelessWidget {
       return '$day $month $hour:$minute $period';
     } catch (e) {
       return updatedat;
-    }
-  }
-
-
-  Future<void> _openMapsNavigation(BuildContext context) async {
-    try {
-      // Try using coordinates first
-      final lat = _getString('latitude');
-      final lng = _getString('longitude');
-
-      if (lat != 'N/A' && lng != 'N/A') {
-        final googleMapsUrl = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
-        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-        return;
-      }
-
-      // Fallback to address-based navigation
-      final queryParts = <String>[];
-      final station = _getString('station');
-      final area = _getString('area');
-
-      if (station != 'N/A') queryParts.add(station);
-      if (area != 'N/A') queryParts.add(area);
-
-      if (queryParts.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Location not available for this delivery'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-        return;
-      }
-
-      final query = Uri.encodeComponent(queryParts.join(', '));
-      final googleMapsUrl = Uri.parse('google.navigation:q=$query&mode=d');
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not open Google Maps. Please make sure it is installed.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
     }
   }
 
@@ -179,47 +130,6 @@ class DeliveryDetailPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
 
-                // Account Details Card
-                _buildSectionCard(
-                  'Account Details',
-                  [
-                    _buildInfoRow('Account No', _getString('acno')),
-                    _buildInfoRow('Account Name', _getString('acname')),
-                    _buildInfoRow('Mobile', _getString('mobile')),
-                  ],
-                  colorScheme,
-                ),
-                const SizedBox(height: 16),
-
-                // Address Card
-                _buildSectionCard(
-                  'Address',
-                  [
-                    _buildInfoRow('Address Line 1', _getString('address1')),
-                    _buildInfoRow('Address Line 2', _getString('address2')),
-                    _buildInfoRow('Address Line 3', _getString('address3')),
-                    _buildInfoRow('Station', _getString('station')),
-                    _buildInfoRow('Area', _getString('area')),
-                    _buildInfoRow('Route', _getString('route')),
-                  ],
-                  colorScheme,
-                ),
-                const SizedBox(height: 16),
-
-                // Location Card
-                if (_getString('latitude') != 'N/A' && _getString('longitude') != 'N/A')
-                  _buildSectionCard(
-                    'Location',
-                    [
-                      _buildInfoRow('Latitude', _getString('latitude')),
-                      _buildInfoRow('Longitude', _getString('longitude')),
-                      _buildInfoRow('Google Address', _getString('googleaddress')),
-                    ],
-                    colorScheme,
-                  ),
-                if (_getString('latitude') != 'N/A' && _getString('longitude') != 'N/A')
-                  const SizedBox(height: 16),
-
                 // Delivery Status Card
                 _buildSectionCard(
                   'Delivery Status',
@@ -240,31 +150,6 @@ class DeliveryDetailPage extends StatelessWidget {
                 if (_getString('imageurl') != 'N/A' || _getString('image1url') != 'N/A')
                   const SizedBox(height: 16),
 
-                // Navigation Button
-                if (_getString('latitude') != 'N/A' && _getString('longitude') != 'N/A')
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: () => _openMapsNavigation(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF6F00),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 2,
-                      ),
-                      icon: const Icon(Icons.navigation, size: 24),
-                      label: const Text(
-                        'Navigate to Location',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
                 const SizedBox(height: 32),
               ]),
             ),

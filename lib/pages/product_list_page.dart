@@ -491,7 +491,11 @@ class _ProductListPageState extends State<ProductListPage> {
                         '${product.stockQuantity} in stock',
                         style: TextStyle(
                           fontSize: 11,
-                          color: product.stockQuantity < 10 ? colorScheme.error : colorScheme.onSurfaceVariant,
+                          color: product.stockQuantity < 0
+                              ? Colors.red.shade700
+                              : (product.stockQuantity >= 10
+                                  ? const Color(0xFFB58900) // yellow / amber
+                                  : Colors.green.shade700),
                         ),
                       ),
                     ],
