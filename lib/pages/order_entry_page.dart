@@ -1102,9 +1102,10 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
+                      // Negative → red, < 10 → yellow/amber, ≥ 10 → green.
                       color: product.stockQuantity < 0
                           ? Colors.red.shade700
-                          : (product.stockQuantity >= 10
+                          : (product.stockQuantity < 10
                               ? const Color(0xFFB58900) // yellow / amber
                               : Colors.green.shade700),
                     ),
@@ -1653,9 +1654,28 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                 );
                 final currentToken = ++previewToken;
                 setModalState(() => isPreviewLoading = true);
+                final service = _draftOrderServiceFor(acCode);
+                final wireBody = jsonEncode(request.copyWith(insertRecord: 0).toPayload(service.context));
+                debugPrint('[OrderEntry preview] >>> SENT '
+                    'item=$itemCode acCode=$acCode '
+                    'qty="${qtyController.text}" rate="${priceController.text}" '
+                    'discPer="${discPerController.text}" '
+                    'addDiscPer="${addDiscPerController.text}" '
+                    'discPcs="${discPcsController.text}" '
+                    'freeQty="${freeQtyController.text}" '
+                    'sch="${schemeController.text}" dSch="${dSchemeController.text}"');
+                debugPrint('[OrderEntry preview] >>> BODY $wireBody');
                 try {
-                  final result = await _draftOrderServiceFor(acCode).calculate(request);
+                  final result = await service.calculate(request);
                   if (!mounted || currentToken != previewToken) return;
+                  debugPrint('[OrderEntry preview] <<< GOT '
+                      'success=${result.success} '
+                      'goodsAmt=${result.amt} schemeAmt=${result.schemeAmt} '
+                      'discAmt=${result.discAmt} disc1Amt=${result.disc1Amt} '
+                      'disc2Amt=${result.disc2Amt} totalDisc=${result.totalDisc} '
+                      'taxAmt=${result.taxAmt} netAmt=${result.netAmt} '
+                      'discPer=${result.discPer} disc1Per=${result.disc1Per} '
+                      'disc2Per=${result.disc2Per}');
                   setModalState(() {
                     preview = result;
                     isPreviewLoading = false;
@@ -1673,8 +1693,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                       seed(discPcsController, result.disc2Per);
                     }
                   });
-                } catch (_) {
+                } catch (e) {
                   if (!mounted || currentToken != previewToken) return;
+                  debugPrint('[OrderEntry preview] !!! ERROR $e');
                   setModalState(() {
                     isPreviewLoading = false;
                     // No fallback calculation - values stay at 0.0
@@ -2027,18 +2048,18 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                               const LinearProgressIndicator(minHeight: 3),
                               const SizedBox(height: 12),
                             ],
-                            // Action buttons
+                            // Action buttons — matches cart_page._CartUpdateBottomSheet
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
                                     onPressed: () => Navigator.pop(context),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      minimumSize: const Size(double.infinity, 54),
                                       side: BorderSide(color: colorScheme.outlineVariant),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                     ),
-                                    child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                                    child: const Text('Close', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                                 const SizedBox(width: 12),
@@ -2058,17 +2079,15 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                                       _submitOrder(context, product, qtyController, enteredPrice, freeQtyController, schemeController, dSchemeController, finalGoodsValue, discPerController, addDiscPerController, discPcsController, remarkController);
                                     },
                                     style: FilledButton.styleFrom(
-                                      backgroundColor: currentQuantity != null ? colorScheme.secondary : colorScheme.primary,
-                                      foregroundColor: currentQuantity != null ? colorScheme.onSecondary : colorScheme.onPrimary,
-                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      minimumSize: const Size(double.infinity, 54),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                       elevation: 0,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                     ),
                                     child: _isSubmittingDraft
                                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                                         : Text(
-                                            currentQuantity != null ? 'UPDATE CART' : 'ADD TO CART',
-                                            style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                                            currentQuantity != null ? 'Update Cart' : 'Add to Cart',
+                                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                           ),
                                   ),
                                 ),

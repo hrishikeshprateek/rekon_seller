@@ -82,7 +82,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   ListTile(
                     leading: const Icon(Icons.pin_outlined),
                     title: const Text('Change MPIN'),
-                    subtitle: const Text('Change your 4-6 digit MPIN'),
+                    subtitle: const Text('Change your 6-digit MPIN'),
                     onTap: _changeMpin,
                   ),
                   const Divider(height: 0),
@@ -122,22 +122,53 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _changeMpin() async {
     final auth = Provider.of<AuthService>(context, listen: false);
-    final currentCtrl = TextEditingController();
+
+    // Resolve and normalise the account mobile (last 10 digits).
+    String mobile = auth.currentUser?.mobileNumber ?? '';
+    mobile = mobile.replaceAll(RegExp(r'[^0-9]'), '');
+    if (mobile.length > 10) mobile = mobile.substring(mobile.length - 10);
+    if (mobile.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mobile number not available')),
+      );
+      return;
+    }
+
+    // 1) Send an OTP to the account mobile before allowing the change.
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    final send = await auth.generateOTPForMobile(mobile: mobile);
+    if (!mounted) return;
+    Navigator.of(context).pop(); // close the spinner
+    if (send['success'] != true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(send['message']?.toString() ?? 'Failed to send OTP. Please try again.')),
+      );
+      return;
+    }
+
+    final otpCtrl = TextEditingController();
     final newCtrl = TextEditingController();
     final confirmCtrl = TextEditingController();
     String? error;
+    bool submitting = false;
+    bool resending = false;
 
-    final ok = await showDialog<bool>(
+    await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setStateDialog) {
-          void validateAndSubmit() async {
-            final cur = currentCtrl.text.trim();
+          Future<void> validateAndSubmit() async {
+            final otp = otpCtrl.text.trim();
             final nw = newCtrl.text.trim();
             final cf = confirmCtrl.text.trim();
 
-            if (cur.isEmpty || nw.isEmpty || cf.isEmpty) {
+            if (otp.isEmpty || nw.isEmpty || cf.isEmpty) {
               setStateDialog(() => error = 'Please fill all fields');
               return;
             }
@@ -145,75 +176,130 @@ class _SettingsPageState extends State<SettingsPage> {
               setStateDialog(() => error = 'New MPIN and confirm do not match');
               return;
             }
-            if (nw.length < 4 || nw.length > 6) {
-              setStateDialog(() => error = 'MPIN must be 4 to 6 digits');
+            if (nw.length != 6) {
+              setStateDialog(() => error = 'MPIN must be 6 digits');
               return;
             }
 
-            setStateDialog(() => error = null); // Clear error before API call
+            setStateDialog(() {
+              error = null;
+              submitting = true;
+            });
 
             try {
-              final resp = await auth.changeMpin(oldMpin: cur, newMpin: nw);
+              // 2) Verify the OTP (does not touch the active session).
+              final verify = await auth.verifyMobileOtp(mobile: mobile, otp: otp);
+              if (verify['success'] != true) {
+                setStateDialog(() {
+                  submitting = false;
+                  error = verify['message']?.toString() ?? 'Invalid OTP. Please try again.';
+                });
+                return;
+              }
+
+              // 3) OTP verified → set the new MPIN (no current MPIN required).
+              final resp = await auth.changeMpin(mobile: mobile, newMpin: nw);
               if (resp['success'] == true) {
                 Navigator.of(ctx).pop(true);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'MPIN changed successfully')));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(resp['message']?.toString() ?? 'MPIN changed successfully')),
+                  );
+                }
               } else {
-                setStateDialog(() => error = resp['message'] ?? 'Failed to change MPIN');
+                setStateDialog(() {
+                  submitting = false;
+                  error = resp['message']?.toString() ?? 'Failed to change MPIN';
+                });
               }
             } catch (e) {
-              setStateDialog(() => error = 'Unexpected error: ${e.toString()}');
+              setStateDialog(() {
+                submitting = false;
+                error = 'Unexpected error: ${e.toString()}';
+              });
             }
+          }
+
+          Future<void> resendOtp() async {
+            setStateDialog(() {
+              resending = true;
+              error = null;
+            });
+            final r = await auth.generateOTPForMobile(mobile: mobile);
+            setStateDialog(() {
+              resending = false;
+              error = r['success'] == true ? null : (r['message']?.toString() ?? 'Failed to resend OTP');
+            });
           }
 
           return AlertDialog(
             title: const Text('Change MPIN'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                Text(
+                  'Enter the OTP sent to +91 $mobile and set your new MPIN.',
+                  style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 12),
                 TextField(
-                  controller: currentCtrl,
+                  controller: otpCtrl,
                   keyboardType: TextInputType.number,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Current MPIN'),
+                  maxLength: 6,
+                  decoration: const InputDecoration(labelText: 'OTP', counterText: ''),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: newCtrl,
                   keyboardType: TextInputType.number,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'New MPIN (4-6 digits)'),
+                  maxLength: 6,
+                  decoration: const InputDecoration(labelText: 'New MPIN (6 digits)', counterText: ''),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: confirmCtrl,
                   keyboardType: TextInputType.number,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Confirm MPIN'),
+                  maxLength: 6,
+                  decoration: const InputDecoration(labelText: 'Confirm MPIN', counterText: ''),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: resending ? null : resendOtp,
+                    child: Text(resending ? 'Sending...' : 'Resend OTP'),
+                  ),
                 ),
                 if (error != null) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(error!, style: const TextStyle(color: Colors.red)),
                 ]
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-              ElevatedButton(onPressed: validateAndSubmit, child: const Text('Change')),
+              TextButton(
+                onPressed: submitting ? null : () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: submitting ? null : validateAndSubmit,
+                child: submitting
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Change'),
+              ),
             ],
           );
         });
       },
     );
-
-    if (ok == true) {
-      // Success handled in dialog
-    }
   }
 
   void _showAbout() {
     showAboutDialog(
       context: context,
-      applicationName: 'Reckon BIZ360',
+      applicationName: 'Reckon Seller 2.0',
       applicationVersion: '1.0.0',
       applicationIcon: const FlutterLogo(size: 48),
       children: const [Text('A sample settings page implemented with Material 3.')],

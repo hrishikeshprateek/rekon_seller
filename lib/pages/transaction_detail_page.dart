@@ -1,13 +1,13 @@
 import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:cross_file/cross_file.dart';
 import '../auth_service.dart';
 import '../models/ledger_entry_model.dart';
+import 'pdf_viewer_page.dart';
 
 /// Full-screen transaction detail page that fetches detail via provided callback
 /// Matches the Android app SaleVoucherFragment UI structure
@@ -30,6 +30,9 @@ class  TransactionDetailPage extends StatefulWidget {
 class _TransactionDetailPageState extends State<TransactionDetailPage> {
   late Future<Map<String, dynamic>?> _future;
   bool _isSharingBill = false;
+  // Set once GetFile confirms this invoice has no tm_base64_pdf, so the
+  // button is disabled and not retried.
+  bool _billUnavailable = false;
 
   @override
   void initState() {
@@ -37,8 +40,8 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     _future = widget.fetchDetail(widget.entry);
   }
 
-  /// Fetches the bill as a PDF via GetTranDetail with lSharePdf: 1 and opens
-  /// the OS share sheet.
+  /// Fetches the bill PDF via GetFile (response is JSON carrying a
+  /// base64-encoded PDF), decodes it and opens it in the in-app PDF viewer.
   Future<void> _viewBill() async {
     if (_isSharingBill) return;
     setState(() => _isSharingBill = true);
@@ -52,42 +55,92 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       final payload = {
         'lLicNo': auth.currentUser?.licenseNumber ?? '',
         'lKeyEntryNo': keyEntryNo,
-        'lIsEntryRecord': (e.isEntryRecord != null) ? e.isEntryRecord.toString() : '1',
-        'lKeyEntrySrNo': e.keyEntrySrNo,
-        'lSharePdf': 1,
       };
 
+      // Log the exact request as a ready-to-run curl (auth + keys filled in).
+      final fullUrl = '${dio.options.baseUrl}/GetFile';
+      final authHeader = auth.getAuthHeader() ?? '';
+      final curl = "curl --location '$fullUrl' "
+          "--header 'Content-Type: application/json' "
+          "--header 'package_name: ${auth.packageNameHeader}' "
+          "--header 'Authorization: $authHeader' "
+          "--data '${jsonEncode(payload)}'";
+      debugPrint('[ViewBill][CURL] $curl');
+
       final response = await dio.post(
-        '/GetTranDetail',
+        '/GetFile',
         data: payload,
         options: Options(
-          responseType: ResponseType.bytes,
           headers: {
             'Content-Type': 'application/json',
             'package_name': auth.packageNameHeader,
             if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
           },
+          // The backend replies 400 when an invoice has no bill PDF. Accept
+          // 4xx so we can inspect the body and show "Bill not found" instead
+          // of throwing into the generic error handler.
+          validateStatus: (status) => status != null && status < 500,
         ),
       );
 
-      Uint8List? bytes;
-      if (response.data is Uint8List) {
-        bytes = response.data as Uint8List;
-      } else if (response.data is List<int>) {
-        bytes = Uint8List.fromList(List<int>.from(response.data));
+      // Response is JSON with the PDF as a base64 string.
+      final raw = response.data;
+      dynamic parsed;
+      try {
+        parsed = raw is Map
+            ? raw
+            : jsonDecode(raw.toString().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim());
+      } catch (_) {
+        parsed = null;
       }
 
-      if (bytes == null || bytes.isEmpty) {
-        throw 'No PDF data received.';
+      // Log the response shape (without dumping the huge base64) so we can see
+      // whether tm_base64_pdf came back for this invoice.
+      final bodyPreview = raw.toString();
+      debugPrint('[ViewBill] status=${response.statusCode} '
+          'topKeys=${parsed is Map ? parsed.keys.toList() : parsed.runtimeType} '
+          'body=${bodyPreview.length > 300 ? '${bodyPreview.substring(0, 300)}…' : bodyPreview}');
+
+      final b64 = _extractBase64(parsed);
+      debugPrint('[ViewBill] tm_base64_pdf '
+          '${b64.isEmpty ? 'MISSING/empty' : 'present, length=${b64.length}'}');
+      if (b64.isEmpty) {
+        // No tm_base64_pdf for this invoice. Surface the server's own message
+        // (e.g. "No PDF available for this transaction") in a dialog and
+        // disable the button so it isn't retried.
+        final serverMsg = (parsed is Map
+                ? (parsed['message'] ?? parsed['Message'])
+                : null)
+            ?.toString();
+        final dialogMsg = (serverMsg != null && serverMsg.trim().isNotEmpty)
+            ? serverMsg
+            : 'No PDF available for this transaction';
+        if (mounted) {
+          setState(() => _billUnavailable = true);
+          await _showBillDialog(dialogMsg);
+        }
+        return;
       }
+
+      Uint8List bytes;
+      try {
+        bytes = base64Decode(b64);
+      } catch (_) {
+        throw 'Bill data is not a valid PDF.';
+      }
+      if (bytes.isEmpty) throw 'Bill PDF is empty.';
 
       final dir = await getTemporaryDirectory();
       final safeNo = keyEntryNo.toString().replaceAll(RegExp(r'[^A-Za-z0-9]'), '_');
       final file = File('${dir.path}/bill_${safeNo}_${DateTime.now().millisecondsSinceEpoch}.pdf');
       await file.writeAsBytes(bytes, flush: true);
 
-      final xfile = XFile(file.path, mimeType: 'application/pdf');
-      await Share.shareXFiles([xfile], text: 'Bill $keyEntryNo');
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => PdfViewerPage(filePath: file.path, title: 'Bill $keyEntryNo'),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -97,6 +150,63 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     } finally {
       if (mounted) setState(() => _isSharingBill = false);
     }
+  }
+
+  /// Shows the bill-unavailable reason returned by GetFile in a dialog.
+  Future<void> _showBillDialog(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Bill Not Available'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Extracts the base64 PDF from the GetFile JSON. The backend returns the
+  /// PDF in the `tm_base64_pdf` field; invoices without a PDF simply omit it.
+  /// Searches recursively so the field is found whether it sits at the top
+  /// level, under `data`, or inside an array. Strips any `...;base64,`
+  /// data-URI prefix and whitespace, and pads for decoding. Returns '' when
+  /// the field is absent or empty.
+  String _extractBase64(dynamic parsed) {
+    String? raw;
+    void search(dynamic node) {
+      if (raw != null) return;
+      if (node is Map) {
+        final v = node['tm_base64_pdf'];
+        if (v is String && v.trim().isNotEmpty) {
+          raw = v;
+          return;
+        }
+        for (final value in node.values) {
+          search(value);
+        }
+      } else if (node is List) {
+        for (final item in node) {
+          search(item);
+        }
+      }
+    }
+
+    search(parsed);
+    if (raw == null) return '';
+
+    var s = raw!.trim();
+    final idx = s.indexOf('base64,');
+    if (idx != -1) s = s.substring(idx + 7);
+    s = s.replaceAll(RegExp(r'\s'), '');
+    // Pad to a multiple of 4 so base64Decode accepts it.
+    while (s.isNotEmpty && s.length % 4 != 0) {
+      s += '=';
+    }
+    return s;
   }
 
   @override
@@ -828,10 +938,12 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       margin: const EdgeInsets.symmetric(horizontal: 12),
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: _isSharingBill ? null : _viewBill,
+        onPressed: (_isSharingBill || _billUnavailable) ? null : _viewBill,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF1976D2),
           foregroundColor: Colors.white,
+          disabledBackgroundColor: const Color(0xFFBDBDBD),
+          disabledForegroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(8),
@@ -844,9 +956,9 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
                 width: 20,
                 child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
               )
-            : const Text(
-                'View Bill',
-                style: TextStyle(
+            : Text(
+                _billUnavailable ? 'Bill Not Available' : 'View Bill',
+                style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,

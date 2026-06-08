@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
 import '../services/account_selection_service.dart';
+import '../services/draft_order_service.dart';
 import '../services/salesman_flags_service.dart';
 import 'select_account_page.dart';
 import 'place_order_page.dart';
@@ -1071,6 +1072,9 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   int     _token   = 0;
   bool    _loading = false;
   bool    _firstBuild = true;
+  // Guards the one-shot prefill of discount fields from the first preview
+  // response — mirrors the seeding logic in order_entry_page.
+  bool    _discountPrefilled = false;
 
   @override
   void initState() {
@@ -1114,45 +1118,43 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     super.dispose();
   }
 
-  Map<String, dynamic> _buildPayload(int insertRecord) {
+  DraftOrderService _service() {
     final auth = Provider.of<AuthService>(context, listen: false);
-    final user = auth.currentUser;
-    final cuId = int.tryParse(user?.userId ?? '') ?? 0;
-    String firmCode = '';
-    try {
-      if (user != null && user.stores.isNotEmpty) {
-        firmCode = user.stores.firstWhere((s) => s.primary, orElse: () => user.stores.first).firmCode;
-      }
-    } catch (_) {}
-    return {
-      'UserId':               user?.mobileNumber ?? user?.userId ?? '',
-      'LicNo':                user?.licenseNumber ?? '',
-      'lFirmCode':            firmCode,
-      'AcCode':               widget.acCode,
-      'ItemCode':             widget.item.code,
-      'Icode':                widget.item.code,
-      'IdCol':                widget.item.idCol,
-      'ItemQty':              qtyController.text.trim(),
-      'ItemRate':             priceController.text.trim(),
-      'cu_id':                cuId,
-      'ItemFQty':             freeQtyController.text.trim().isEmpty    ? '0' : freeQtyController.text.trim(),
-      'ItemSchQty':           schemeController.text.trim().isEmpty     ? '0' : schemeController.text.trim(),
-      'ItemDSchQty':          dSchemeController.text.trim().isEmpty    ? '0' : dSchemeController.text.trim(),
-      'ItemAmt':              ((double.tryParse(priceController.text) ?? 0) * (int.tryParse(qtyController.text) ?? 0)).toStringAsFixed(2),
-      'discount_percentage':  discPerController.text.trim().isEmpty    ? '0' : discPerController.text.trim(),
-      'discount_percentage1': addDiscPerController.text.trim().isEmpty ? '0' : addDiscPerController.text.trim(),
-      'discount_pcs':         discPcsController.text.trim().isEmpty    ? '0' : discPcsController.text.trim(),
-      'remark':               remarkController.text.trim(),
-      'insert_record':        insertRecord,
-      // false → the server honours the discount/qty/rate values sent in this
-      // request. true makes it ignore them and re-apply the item's defaults
-      // (confirmed via logs: sending discount_percentage:10 with true returned
-      // the default 5%). The cart sheet always has values prefilled, so it
-      // never needs a "default hit".
-      'default_hit':          false,
-    };
+    return DraftOrderService(
+      dio: auth.getDioClient(),
+      context: DraftOrderContext.fromAuth(auth: auth, acCode: widget.acCode),
+    );
   }
 
+  // Mirrors order_entry_page._buildDraftOrderRequest verbatim — empty
+  // inputs coerce to "0" via `orZero`, defaultHit stays at its `true`
+  // default (set in DraftOrderRequest), and Icode is carried by
+  // DraftOrderRequest.toPayload.
+  DraftOrderRequest _buildRequest({required int insertRecord}) {
+    String orZero(String s) => s.trim().isEmpty ? '0' : s.trim();
+    final qty = int.tryParse(qtyController.text.trim()) ?? 0;
+    final rate = double.tryParse(priceController.text.trim()) ?? 0;
+    return DraftOrderRequest(
+      itemCode: widget.item.code,
+      idCol: widget.item.idCol,
+      itemQty: orZero(qtyController.text),
+      itemRate: orZero(priceController.text),
+      itemFQty: orZero(freeQtyController.text),
+      itemSchQty: orZero(schemeController.text),
+      itemDSchQty: orZero(dSchemeController.text),
+      itemAmt: (rate * qty).toStringAsFixed(2),
+      discountPercentage: orZero(discPerController.text),
+      discountPercentage1: orZero(addDiscPerController.text),
+      discountPcs: orZero(discPcsController.text),
+      remark: remarkController.text.trim(),
+      insertRecord: insertRecord,
+      // defaultHit defaults to true in DraftOrderRequest — matches
+      // order_entry exactly. Server runs its own discount calc and returns
+      // fresh amounts; user-typed discount % is just an input hint.
+    );
+  }
+
+  // Mirrors order_entry_page.runPreview verbatim.
   void _onChanged() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () async {
@@ -1164,81 +1166,93 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
       final t = ++_token;
       if (mounted) setState(() => _loading = true);
       try {
-        final auth = Provider.of<AuthService>(context, listen: false);
-        final reqPayload = _buildPayload(0);
-        debugPrint('[CartUpdate preview] REQUEST: $reqPayload');
-        final resp = await auth.getDioClient().post(
-          '/AddDraftOrder',
-          data: reqPayload,
-          options: Options(headers: {
-            'Content-Type': 'application/json',
-            'package_name': auth.packageNameHeader,
-            if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-          }),
-        );
+        final result = await _service().calculate(_buildRequest(insertRecord: 0));
         if (!mounted || t != _token) return;
-        debugPrint('[CartUpdate preview] RESPONSE: ${resp.data}');
-        final parsed = _parseResp(resp.data);
-        if (parsed['success'] == true && parsed['data'] != null) {
-          final d = parsed['data'];
-          double pd(dynamic v) => v is num ? v.toDouble() : double.tryParse(v?.toString() ?? '') ?? 0.0;
-          setState(() {
-            _goodsValue    = pd(d['Amt']);
-            _schemeValue   = pd(d['ItemSchAmt']);
-            _discountValue = pd(d['totalDisc']);
-            _gst           = pd(d['ItemTaxAmt']);
-            _netValue      = pd(d['ItemNetAmt']);
-            _discAmt       = pd(d['ItemDiscAmt']);
-            _disc1Amt      = pd(d['ItemDisc1Amt']);
-            _disc2Amt      = pd(d['ItemDisc2Amt']);
-            _loading       = false;
-          });
-        } else {
-          if (mounted) setState(() => _loading = false);
+        setState(() {
+          _goodsValue    = result.amt;
+          _schemeValue   = result.schemeAmt;
+          _discountValue = result.totalDisc;
+          _gst           = result.taxAmt;
+          _netValue      = result.netAmt;
+          _discAmt       = result.discAmt;
+          _disc1Amt      = result.disc1Amt;
+          _disc2Amt      = result.disc2Amt;
+          _loading       = false;
+        });
+        // One-shot prefill of discount % boxes from the first preview's
+        // server-applied values — only seeds a field that's still empty/zero,
+        // so a saved cart override or a value the user just typed stays put.
+        if (!_discountPrefilled) {
+          _discountPrefilled = true;
+          void seed(TextEditingController c, double v) {
+            final cur = double.tryParse(c.text.trim()) ?? 0;
+            if (cur == 0 && v > 0) c.text = v.toStringAsFixed(2);
+          }
+          seed(discPerController, result.discPer);
+          seed(addDiscPerController, result.disc1Per);
+          seed(discPcsController, result.disc2Per);
         }
       } catch (_) {
-        if (mounted) setState(() => _loading = false);
+        if (!mounted || t != _token) return;
+        setState(() => _loading = false);
       }
     });
   }
 
+  // Mirrors order_entry_page._submitOrder verbatim — raw dio POST with
+  // both `ItemCode` and `Icode`, `default_hit: true`, `insert_record: 1`.
   Future<void> _submit() async {
+    final auth = Provider.of<AuthService>(context, listen: false);
+    final dio = auth.getDioClient();
+    final user = auth.currentUser;
+    final acCode = widget.acCode;
+    final cuId = int.tryParse(user?.userId ?? '') ?? 0;
+    final firmCode = user?.stores.isNotEmpty == true ? user!.stores.first.firmCode : '';
+    String orZero(String s) => s.trim().isEmpty ? '0' : s.trim();
+    final qty = int.tryParse(qtyController.text.trim()) ?? 0;
+    final rate = double.tryParse(priceController.text.trim()) ?? 0;
+    final goodsValue = rate * qty;
+    final payload = {
+      'UserId': user?.mobileNumber ?? user?.userId ?? '',
+      'LicNo': user?.licenseNumber ?? '',
+      'lFirmCode': firmCode,
+      'AcCode': acCode,
+      'ItemCode': widget.item.code,
+      // Intentionally NOT sending `Icode` — see the note in
+      // DraftOrderRequest.toPayload. Including it makes the server
+      // resolve the per-account discount rule and ignore the
+      // discount_percentage we send.
+      'IdCol': widget.item.idCol,
+      'ItemQty': orZero(qtyController.text),
+      'ItemRate': rate.toStringAsFixed(2),
+      'cu_id': cuId,
+      'ItemFQty': orZero(freeQtyController.text),
+      'ItemSchQty': orZero(schemeController.text),
+      'ItemDSchQty': orZero(dSchemeController.text),
+      'ItemAmt': goodsValue.toStringAsFixed(2),
+      'discount_percentage': orZero(discPerController.text),
+      'discount_percentage1': orZero(addDiscPerController.text),
+      'discount_pcs': orZero(discPcsController.text),
+      'remark': remarkController.text,
+      'insert_record': 1,
+      'default_hit': true,
+    };
+    final headers = {
+      'Content-Type': 'application/json',
+      'package_name': auth.packageNameHeader,
+      if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
+    };
     try {
-      final auth = Provider.of<AuthService>(context, listen: false);
-      final payload = _buildPayload(1);
-      print('===== AddDraftOrder REQUEST (cart_page _submit) =====');
-      print(jsonEncode(payload));
-      print('======================================================');
-      final response = await auth.getDioClient().post(
-        '/AddDraftOrder',
-        data: payload,
-        options: Options(headers: {
-          'Content-Type': 'application/json',
-          'package_name': auth.packageNameHeader,
-          if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
-        }),
-      );
-      final parsed = _parseResp(response.data);
-      print('===== AddDraftOrder RESPONSE (cart_page _submit) =====');
-      print(response.data);
-      print('=======================================================');
-      if (parsed['success'] == true) {
+      await dio.post('/AddDraftOrder', data: payload, options: Options(headers: headers));
+      if (mounted) {
         widget.onUpdated();
-      } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: ${parsed['message'] ?? 'Unknown error'}')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cart updated')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: $e')));
+      }
     }
-  }
-
-  Map<String, dynamic> _parseResp(dynamic raw) {
-    if (raw is Map<String, dynamic>) return raw;
-    if (raw is String) {
-      final clean = raw.replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim();
-      return jsonDecode(clean) as Map<String, dynamic>;
-    }
-    return jsonDecode(jsonEncode(raw)) as Map<String, dynamic>;
   }
 
   // Explicit FocusNodes so the keyboard "Next" key reliably hops to every

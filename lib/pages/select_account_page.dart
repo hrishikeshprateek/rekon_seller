@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart'; // Ensure share_plus is in pubspec.
 import '../models/account_model.dart';
 import '../auth_service.dart';
 import 'location_picker_sheet.dart';
+import 'account_filter_page.dart';
 class SelectAccountPage extends StatefulWidget {
   final String title;
   final String? accountType;
@@ -463,6 +464,22 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
 
   // --- UI IMPLEMENTATION ---
 
+  /// Opens the Station/Area/Route filter (GetFilterList, lFlag "Account").
+  /// The returned selection ([{id, items}]) is stored in [_appliedFilters] and
+  /// sent to GetAccount, then the list is reloaded.
+  Future<void> _openFilterPage() async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AccountFilterPage(initialSelectedFilters: _appliedFilters),
+      ),
+    );
+    if (!mounted) return;
+    if (result is List<Map<String, dynamic>>) {
+      setState(() => _appliedFilters = result);
+      _loadAccounts(reset: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -478,6 +495,34 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          // Filter (Station / Area / Route) — opens AccountFilterPage and sends
+          // the selected codes to GetAccount via the `filters` payload field.
+          IconButton(
+            tooltip: 'Filter',
+            onPressed: _openFilterPage,
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.tune, color: Colors.white),
+                if (_appliedFilters.isNotEmpty)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      width: 9,
+                      height: 9,
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFFF6F00),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: SafeArea(
         child: Column(
@@ -580,11 +625,26 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
     );
   }
 
+  String? _formattedDistanceKm(Account account) {
+    final pos = _cachedPosition;
+    if (pos == null) return null;
+    if (account.latitude == null || account.longitude == null) return null;
+    if (account.latitude == 0 && account.longitude == 0) return null;
+    final meters = Geolocator.distanceBetween(
+      pos.latitude,
+      pos.longitude,
+      account.latitude!,
+      account.longitude!,
+    );
+    return '${(meters / 1000).toStringAsFixed(2)} Km';
+  }
+
   Widget _buildProfessionalCard(BuildContext context, Account account) {
     final isSelected = widget.selectedAccount?.id == account.id;
     final hasLocation = (account.latitude != null && account.longitude != null && account.latitude != 0 && account.longitude != 0);
     final displayBalance = account.closBal ?? account.balance ?? 0.0;
     final isNegative = displayBalance < 0;
+    final distance = _formattedDistanceKm(account);
 
     return Card(
       elevation: 0,
@@ -638,6 +698,33 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                       ],
                     ),
                   ),
+                  if (hasLocation) ...[
+                    const SizedBox(width: 8),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Material(
+                          color: Colors.white,
+                          shape: const CircleBorder(side: BorderSide(color: Color(0xFFE0E0E0))),
+                          child: InkWell(
+                            onTap: () => _openMapsNavigation(account),
+                            customBorder: const CircleBorder(),
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              alignment: Alignment.center,
+                              child: const Icon(Icons.navigation, size: 18, color: Color(0xFF1E88E5)),
+                            ),
+                          ),
+                        ),
+                        if (distance != null) ...[
+                          const SizedBox(height: 4),
+                          Text(distance, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        ],
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -855,11 +942,17 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       }
       if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
         // Use medium accuracy and 5 second timeout for quick location
-        _cachedPosition = await Geolocator.getCurrentPosition(
+        final pos = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.medium,
           timeLimit: const Duration(seconds: 5),
         );
-        debugPrint('[GetAccount] Location initialized: ${_cachedPosition?.latitude}, ${_cachedPosition?.longitude}');
+        debugPrint('[GetAccount] Location initialized: ${pos.latitude}, ${pos.longitude}');
+        // Rebuild so each account card can compute & show its distance.
+        if (mounted) {
+          setState(() => _cachedPosition = pos);
+        } else {
+          _cachedPosition = pos;
+        }
       }
     } catch (e) {
       debugPrint('[GetAccount] Location initialization failed (non-blocking): $e');

@@ -86,115 +86,317 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
-
       setState(() => _isLoading = false);
 
       debugPrint('[LoginScreen] ValidateLicense result success: ${result['success']}');
       debugPrint('[LoginScreen] ValidateLicense result: $result');
 
-      if (result['success']) {
-        // Persist license and mobile for autofill next time
-        try {
-          await _secureStorage.write(key: 'license', value: _licenseController.text.trim());
-          await _secureStorage.write(key: 'mobile', value: _mobileController.text.trim());
-        } catch (e) {
-          debugPrint('[LoginScreen] Failed to save credentials: $e');
-        }
-        // ValidateLicense succeeded, check flags to decide next screen
-        final data = result['data'];
-        debugPrint('[LoginScreen] ValidateLicense success, data: $data');
-        debugPrint('[LoginScreen] data type: ${data.runtimeType}');
-        debugPrint('[LoginScreen] CreatePasswd raw value: ${data is Map ? data['CreatePasswd'] : 'data is not a Map'}');
-        debugPrint('[LoginScreen] CreatePasswd type: ${data is Map ? data['CreatePasswd']?.runtimeType : 'N/A'}');
-
-        // More robust flag detection - check multiple variations
-        bool createPass = false;
-        bool createMPin = false;
-
-        if (data is Map) {
-          // Check CreatePasswd
-          final cpValue = data['CreatePasswd'];
-          if (cpValue == true) {
-            createPass = true;
-          } else if (cpValue is String && cpValue.toLowerCase() == 'true') {
-            createPass = true;
-          } else if (cpValue is bool && cpValue) {
-            createPass = true;
-          }
-
-          // Check CreateMPin
-          final cmValue = data['CreateMPin'];
-          if (cmValue == true) {
-            createMPin = true;
-          } else if (cmValue is String && cmValue.toLowerCase() == 'true') {
-            createMPin = true;
-          } else if (cmValue is bool && cmValue) {
-            createMPin = true;
-          }
-        }
-
-        debugPrint('[LoginScreen] CreatePasswd=$createPass, CreateMPin=$createMPin');
-
-        if (createPass) {
-          debugPrint('[LoginScreen] Navigating to CreatePasswordScreen');
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => CreatePasswordScreen(
-            mobile: _mobileController.text.trim(),
-            licenseNumber: _licenseController.text.trim(),
-          )));
-          return;
-        }
-        if (createMPin) {
-          debugPrint('[LoginScreen] Navigating to CreateMpinScreen');
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => CreateMpinScreen(
-            mobile: _mobileController.text.trim(),
-            licenseNumber: _licenseController.text.trim(),
-          )));
-          return;
-        }
-
-        // Fetch salesman flags before navigating to home
-        debugPrint('[LoginScreen] Fetching salesman flags...');
-        if (!mounted) return;
-        final authService = Provider.of<AuthService>(context, listen: false);
-        final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
-
-        final flagsSuccess = await flagsService.fetchAndCacheSalesmanFlags(
-          authService: authService,
-          packageName: authService.packageNameHeader,
-        );
-
-        if (flagsSuccess) {
-          debugPrint('[LoginScreen] ✅ Salesman flags fetched successfully');
-        } else {
-          debugPrint('[LoginScreen] ⚠️ Failed to fetch salesman flags: ${flagsService.error}');
-          // Don't block navigation even if flags fetch fails
-        }
-
-        // Navigate to home
-        if (!mounted) return;
-        debugPrint('[LoginScreen] Navigating to HomeScreen');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
-        return;
-       } else {
-         // Login failed - show a clean inline error
-         debugPrint('[LoginScreen] ValidateLicense FAILED: $result');
-
-         String message = '';
-         if (result['message'] != null && result['message'].toString().trim().isNotEmpty) {
-           message = result['message'].toString();
-         } else if (result['data'] is Map && result['data']['Message'] != null) {
-           message = result['data']['Message'].toString();
-         } else if (result['data'] is Map && result['data']['message'] != null) {
-           message = result['data']['message'].toString();
-         }
-
-         if (mounted) {
-           setState(() => _errorMessage = _humanizeLoginError(message));
-         }
-       }
+      await _processLoginResult(result);
     }
+  }
+
+  bool _isTrue(dynamic v) => v == true || v?.toString().toLowerCase() == 'true';
+
+  /// Pulls the other device's name out of the backend message, e.g.
+  /// "User allready registered with other device realme RMX3388 want to change!".
+  String _extractOtherDeviceName(String msg) {
+    final m = RegExp(r'other device\s+(.*?)\s+want to change', caseSensitive: false).firstMatch(msg);
+    return (m?.group(1) ?? '').trim();
+  }
+
+  /// Routes a ValidateLicense result: success → navigate; device-conflict
+  /// (AllReadyLogin) → prompt to switch device; anything else → inline error.
+  /// [allowDeviceChangePrompt] is false on the post-switch retry so a repeated
+  /// conflict can't loop the dialog forever.
+  Future<void> _processLoginResult(Map<String, dynamic> result, {bool allowDeviceChangePrompt = true}) async {
+    if (result['success'] == true) {
+      await _onLoginSuccess(result);
+      return;
+    }
+
+    final data = result['data'];
+    if (allowDeviceChangePrompt && data is Map && _isTrue(data['AllReadyLogin'])) {
+      await _promptDeviceChange(data);
+      return;
+    }
+
+    // Generic failure - show a clean inline error
+    debugPrint('[LoginScreen] ValidateLicense FAILED: $result');
+    String message = '';
+    if (result['message'] != null && result['message'].toString().trim().isNotEmpty) {
+      message = result['message'].toString();
+    } else if (data is Map && data['Message'] != null) {
+      message = data['Message'].toString();
+    } else if (data is Map && data['message'] != null) {
+      message = data['message'].toString();
+    }
+    if (mounted) {
+      setState(() => _errorMessage = _humanizeLoginError(message));
+    }
+  }
+
+  /// Shows the "already signed in on another device" confirmation. On confirm,
+  /// an OTP is sent to the account mobile and the user must enter it. Verifying
+  /// the OTP with updatedevice_id:true (mirroring the old native app) unbinds the
+  /// old device, binds this one, and logs the user in — all inside the single
+  /// ValidateMobileOTP call. No separate ChangeDevice request is made.
+  Future<void> _promptDeviceChange(Map data) async {
+    final otherDevice = _extractOtherDeviceName(data['Message']?.toString() ?? '');
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Already signed in elsewhere'),
+        content: Text(
+          otherDevice.isNotEmpty
+              ? 'This account is currently active on "$otherDevice". Sign out from that device and continue on this one?'
+              : 'This account is active on another device. Sign out from that device and continue on this one?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Continue here'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    final mobile = _mobileController.text.trim();
+    final authService = Provider.of<AuthService>(context, listen: false);
+
+    // CUID from the AllReadyLogin response — the old native app passes this back
+    // as cu_id when verifying the device-change OTP.
+    String cuid = '';
+    final profile = data['Profile'];
+    if (profile is Map && profile['CUID'] != null) {
+      cuid = profile['CUID'].toString();
+    }
+
+    // 1) Send the OTP to the account's mobile before allowing the switch.
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    final otpSend = await authService.generateOTPForMobile(mobile: mobile);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    debugPrint('[LoginScreen] Device-change OTP send result: $otpSend');
+    if (otpSend['success'] != true) {
+      setState(() => _errorMessage =
+          otpSend['message']?.toString() ?? 'Failed to send OTP. Please try again.');
+      return;
+    }
+
+    // 2) Ask the user to enter the OTP that was just sent.
+    final otp = await _promptOtpEntry(mobile);
+    if (otp == null || !mounted) return; // user cancelled
+
+    // 3) Verify the OTP with updatedevice_id:true. On success this unbinds the
+    //    old device, binds this one, and returns the login profile/token.
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    final otpResult = await authService.validateMobileOTP(
+      mobile: mobile,
+      otp: otp,
+      licenseNumber: _licenseController.text.trim(),
+      cuId: cuid,
+      updateDeviceId: true,
+    );
+    if (!mounted) return;
+    debugPrint('[LoginScreen] Device-change OTP verify result: $otpResult');
+    if (otpResult['success'] != true) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = otpResult['message']?.toString() ?? 'Invalid OTP. Please try again.';
+      });
+      return;
+    }
+
+    // 4) OTP verified → re-run ValidateLicense with the credentials entered on
+    //    the login screen. The ValidateMobileOTP response doesn't carry the full
+    //    Profile/LicNo/Store data, so logging in off it leaves a blank license.
+    //    Re-validating yields a clean, fully-populated session; changeDevice:true
+    //    ensures the binding moves to this device.
+    final retry = await authService.validateLicense(
+      licenseNumber: _licenseController.text.trim(),
+      mobile: mobile,
+      password: _passwordController.text.trim(),
+      changeDevice: true,
+    );
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    debugPrint('[LoginScreen] Post-OTP ValidateLicense result: $retry');
+    if (retry['success'] == true) {
+      // Already-registered account → straight to Home, skip the setup screens.
+      await _onLoginSuccess(retry, skipSetupGates: true);
+    } else {
+      setState(() => _errorMessage = _humanizeLoginError(
+          retry['message']?.toString() ??
+              'Could not complete sign-in after device change. Please try again.'));
+    }
+  }
+
+  /// Dialog to enter the OTP sent for the device-change verification. Returns
+  /// the entered OTP, or null if the user cancelled. Includes a "Resend OTP"
+  /// action that re-triggers GenerateOTPForMobile.
+  Future<String?> _promptOtpEntry(String mobile) async {
+    final otpController = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        bool resending = false;
+        String? dialogError;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Verify it\'s you'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('Enter the OTP sent to +91 $mobile to switch to this device.'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: otpController,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 6,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(6),
+                  ],
+                  style: const TextStyle(fontSize: 16, letterSpacing: 4, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    labelText: 'OTP',
+                    counterText: '',
+                    errorText: dialogError,
+                    prefixIcon: const Icon(Icons.sms_outlined, size: 20),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: resending
+                        ? null
+                        : () async {
+                            setDialogState(() => resending = true);
+                            final auth = Provider.of<AuthService>(ctx, listen: false);
+                            final r = await auth.generateOTPForMobile(mobile: mobile);
+                            setDialogState(() {
+                              resending = false;
+                              dialogError = r['success'] == true ? null : 'Failed to resend OTP';
+                            });
+                          },
+                    child: Text(resending ? 'Sending...' : 'Resend OTP'),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final v = otpController.text.trim();
+                  if (v.length < 4) {
+                    setDialogState(() => dialogError = 'Enter a valid OTP');
+                    return;
+                  }
+                  Navigator.pop(ctx, v);
+                },
+                child: const Text('Verify'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    otpController.dispose();
+    return result;
+  }
+
+  /// Handles a successful ValidateLicense: persists creds, honours the
+  /// create-password / create-mpin flags, fetches salesman flags, navigates home.
+  ///
+  /// [skipSetupGates] bypasses the create-password / create-mpin redirects and
+  /// goes straight home. Used by the device-change flow: that account is already
+  /// registered (it was logged in on another device), so it must not be sent to
+  /// the first-time password/MPIN setup screens after switching devices.
+  Future<void> _onLoginSuccess(Map<String, dynamic> result, {bool skipSetupGates = false}) async {
+    // Persist license and mobile for autofill next time
+    try {
+      await _secureStorage.write(key: 'license', value: _licenseController.text.trim());
+      await _secureStorage.write(key: 'mobile', value: _mobileController.text.trim());
+    } catch (e) {
+      debugPrint('[LoginScreen] Failed to save credentials: $e');
+    }
+
+    final data = result['data'];
+    debugPrint('[LoginScreen] ValidateLicense success, data: $data');
+
+    bool createPass = false;
+    bool createMPin = false;
+    if (data is Map) {
+      final cpValue = data['CreatePasswd'];
+      if (cpValue == true || (cpValue is String && cpValue.toLowerCase() == 'true')) {
+        createPass = true;
+      }
+      final cmValue = data['CreateMPin'];
+      if (cmValue == true || (cmValue is String && cmValue.toLowerCase() == 'true')) {
+        createMPin = true;
+      }
+    }
+
+    debugPrint('[LoginScreen] CreatePasswd=$createPass, CreateMPin=$createMPin, skipSetupGates=$skipSetupGates');
+    if (!mounted) return;
+
+    // Device-change logins are for already-registered accounts → go straight home.
+    if (!skipSetupGates) {
+      if (createPass) {
+        debugPrint('[LoginScreen] Navigating to CreatePasswordScreen');
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => CreatePasswordScreen(
+          mobile: _mobileController.text.trim(),
+          licenseNumber: _licenseController.text.trim(),
+        )));
+        return;
+      }
+      if (createMPin) {
+        debugPrint('[LoginScreen] Navigating to CreateMpinScreen');
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => CreateMpinScreen(
+          mobile: _mobileController.text.trim(),
+          licenseNumber: _licenseController.text.trim(),
+        )));
+        return;
+      }
+    }
+
+    // Fetch salesman flags before navigating to home
+    debugPrint('[LoginScreen] Fetching salesman flags...');
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final flagsService = Provider.of<SalesmanFlagsService>(context, listen: false);
+    final flagsSuccess = await flagsService.fetchAndCacheSalesmanFlags(
+      authService: authService,
+      packageName: authService.packageNameHeader,
+    );
+    debugPrint('[LoginScreen] Salesman flags fetched: $flagsSuccess');
+
+    if (!mounted) return;
+    debugPrint('[LoginScreen] Navigating to HomeScreen');
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
   }
 
   /// Strips noise (license code, role prefix) the API tacks onto error
@@ -272,13 +474,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             Image.asset(
                               'assets/images/reckon.png',
-                              width: 96,
-                              height: 96,
+                              width: 180,
+                              height: 180,
                               fit: BoxFit.contain,
                             ),
                             const SizedBox(height: 20),
                             Text(
-                              "Reckon BIZ360",
+                              "Reckon Seller 2.0",
                               textAlign: TextAlign.center,
                               style: theme.textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,

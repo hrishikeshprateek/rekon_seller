@@ -1,7 +1,7 @@
 /// API Constants - Centralized configuration for all API endpoints
 class ApiConstants {
   // API Base Configuration
-  static const String apiHost = 'https://mobileappsandbox.reckonsales.com:8443';
+  static const String apiHost = 'http://mobileappsandbox.reckonsales.com:8080';
   static const String apiBasePath = '/reckon-biz/api';
 
   // API Endpoints

@@ -146,7 +146,7 @@ class DashboardData {
 
   factory DashboardData.fromJson(Map<String, dynamic> json) {
     return DashboardData(
-      appTitle: json['appTitle'] ?? 'Reckon BIZ360',
+      appTitle: json['appTitle'] ?? 'Reckon Seller 2.0',
       userInfo: UserInfoData.fromJson(json['userInfo'] ?? {}),
       brands: BrandsData.fromJson(json['brands'] ?? {}),
       tenantDetail: TenantDetail.fromJson(json['tenantDetail'] ?? {}),

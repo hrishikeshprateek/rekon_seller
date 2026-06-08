@@ -53,6 +53,16 @@ class _HomeScreenState extends State<HomeScreen> {
   late PageController _bannerPageController;
   Timer? _bannerTimer;
 
+  // Tracks which sections are expanded (Amazon Pay style "See more / See less").
+  final Set<String> _expandedSections = <String>{};
+  // Collapsed sections show two rows (4 columns × 2) before "See more" appears.
+  static const int _collapsedItemCount = 8;
+
+  // App palette
+  static const Color _kBlue = Color(0xFF1E88E5);
+  static const Color _kIcon = Color(0xFF1565C0); // deep blue for the line icons
+  static const Color _kPageBg = Color(0xFFF0F2F5);
+
   @override
   void initState() {
     super.initState();
@@ -290,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         DashboardItem(
           id: 'refer_and_earn',
-          label: 'Refer and Earn',
+          label: 'Share and Rate',
           icon: 'card_giftcard_rounded',
           route: 'ReferAndEarnPage',
           visible: true,
@@ -508,8 +518,8 @@ class _HomeScreenState extends State<HomeScreen> {
       'shortage': const ShortagePage(),
       'itemwisesale': const ItemwiseSalePage(),
       'notification': const NotificationPage(),
-      'referandearn': const ReferAndEarnPage(),
-      'contactsupport': const ContactSupportPage(),
+      // 'referandearn' (Share and Rate) and 'contactsupport' are handled
+      // separately via bottom sheets (see _openItem)
 
       // Add new routes here, e.g.:
       // 'newpage': const NewPage(),
@@ -527,6 +537,33 @@ class _HomeScreenState extends State<HomeScreen> {
     return null;
   }
 
+  bool _isContactSupport(String? route, String? label) {
+    String norm(String? s) => (s ?? '').toLowerCase().replaceAll(RegExp(r'[_\s-]+'), '');
+    return norm(route).contains('contactsupport') || norm(label).contains('contactsupport');
+  }
+
+  bool _isShareAndRate(String? route, String? label) {
+    String norm(String? s) => (s ?? '').toLowerCase().replaceAll(RegExp(r'[_\s-]+'), '');
+    return norm(route).contains('referandearn') || norm(label).contains('shareandrate');
+  }
+
+  /// Handles a dashboard item tap: Contact Support and Share & Rate open bottom
+  /// sheets (no page); everything else navigates to its mapped route.
+  void _openItem(String? route, String label) {
+    if (_isContactSupport(route, label)) {
+      ContactSupportSheet.show(context);
+      return;
+    }
+    if (_isShareAndRate(route, label)) {
+      ShareAndRateSheet.show(context);
+      return;
+    }
+    final widget = _getRouteWidget(route, label: label);
+    if (widget != null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => widget));
+    }
+  }
+
   List<SearchableItem> _buildSearchableItems(BuildContext context) {
     final items = <SearchableItem>[];
     if (_config == null) return items;
@@ -538,10 +575,7 @@ class _HomeScreenState extends State<HomeScreen> {
             title: item.label,
             category: section.title,
             icon: _getIconData(item.icon),
-            onTap: () {
-              final widget = _getRouteWidget(item.route, label: item.label);
-              if (widget != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => widget));
-            },
+            onTap: () => _openItem(item.route, item.label),
           ));
         }
       }
@@ -553,10 +587,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: extra.label,
           category: 'General',
           icon: _getIconData(extra.icon),
-          onTap: () {
-            final widget = _getRouteWidget(extra.route, label: extra.label);
-            if (widget != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => widget));
-          },
+          onTap: () => _openItem(extra.route, extra.label),
         ));
       }
     }
@@ -625,7 +656,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: _kPageBg,
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           // --- MATERIAL DESIGN SLIVER APP BAR WITH APP LOGO ---
@@ -833,28 +864,34 @@ class _HomeScreenState extends State<HomeScreen> {
         body: RefreshIndicator(
           onRefresh: _loadConfig,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+            padding: const EdgeInsets.only(top: 6, bottom: 8),
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
-            if (_config!.bannerList.visible && _config!.bannerList.banners.where((b) => b.visible).isNotEmpty)
-              _buildBannerCarousel(),
+              if (_config!.bannerList.visible && _config!.bannerList.banners.where((b) => b.visible).isNotEmpty)
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: _buildBannerCarousel(),
+                ),
 
-            ..._config!.sections.where((s) => s.visible).map((section) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionHeader(context, section.title, bgColor: section.bgColor, levelColor: section.levelColor),
-                  _buildIconGridFromConfig(context, section.items.where((item) => item.visible).toList()),
-                  const SizedBox(height: 12),
-                ],
-              );
-            }),
+              ..._config!.sections.where((s) => s.visible).map((section) {
+                return _buildSection(
+                  context,
+                  title: section.title,
+                  sectionKey: 'sec_${section.id}',
+                  items: section.items.where((item) => item.visible).toList(),
+                );
+              }),
 
-            if (_config!.extras.where((item) => item.visible && item.isActive).isNotEmpty) ...[
-              _buildSectionHeader(context, 'More'),
-              _buildIconGridFromConfig(context, _config!.extras.where((item) => item.visible && item.isActive).toList()),
+              if (_config!.extras.where((item) => item.visible && item.isActive).isNotEmpty)
+                _buildSection(
+                  context,
+                  title: 'More',
+                  sectionKey: 'extras',
+                  items: _config!.extras.where((item) => item.visible && item.isActive).toList(),
+                ),
             ],
-          ],
           ),
         ),
       ),
@@ -1000,173 +1037,133 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 4),
       ],
     );
   }
 
-  Widget _buildSectionHeader(BuildContext context, String title, {String? bgColor, String? levelColor}) {
-    // Default to blue for primary sections, orange for secondary
-    Color headerColor;
-    if (levelColor != null) {
-      headerColor = _parseColor(levelColor);
-    } else {
-      headerColor = const Color(0xFF1E88E5); // Default blue
-    }
+  /// Amazon Pay-style section: a full-width white block with a title row,
+  /// an optional "See more / See less" toggle, and a 4-column icon grid.
+  Widget _buildSection(
+    BuildContext context, {
+    required String title,
+    required String sectionKey,
+    required List<DashboardItem> items,
+  }) {
+    if (items.isEmpty) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 6),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: headerColor.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: headerColor.withValues(alpha: 0.25),
-            width: 1,
+    final bool expanded = _expandedSections.contains(sectionKey);
+    final bool hasMore = items.length > _collapsedItemCount;
+    final List<DashboardItem> visibleItems =
+        (expanded || !hasMore) ? items : items.sublist(0, _collapsedItemCount);
+
+    return Container(
+      width: double.infinity,
+      color: Colors.white,
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // --- Header: title + See more / See less ---
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1A1A),
+                    letterSpacing: 0.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (hasMore)
+                InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => setState(() {
+                    if (expanded) {
+                      _expandedSections.remove(sectionKey);
+                    } else {
+                      _expandedSections.add(sectionKey);
+                    }
+                  }),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                    child: Text(
+                      expanded ? 'See less' : 'See more',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _kBlue,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 3,
-              height: 14,
-              decoration: BoxDecoration(
-                color: headerColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              title.toUpperCase(),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: headerColor,
-                letterSpacing: 1.0,
-              ),
-            ),
-          ],
-        ),
+          const SizedBox(height: 16),
+          _buildIconGrid(context, visibleItems),
+        ],
       ),
     );
   }
 
-  Widget _buildIconGridFromConfig(BuildContext context, List<DashboardItem> items) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    const horizontalMargin = 16.0 * 2;
-    const defaultSpacing = 12.0;
-    const preferredTileWidth = 100.0;
-    final usableWidth = screenWidth - horizontalMargin;
-
-    int crossAxisCount = (usableWidth + defaultSpacing) ~/ (preferredTileWidth + defaultSpacing);
-    if (crossAxisCount < 3) crossAxisCount = 3;
-    if (crossAxisCount > 5) crossAxisCount = 5;
-
-    final totalSpacing = defaultSpacing * (crossAxisCount - 1);
-    final actualTileWidth = (usableWidth - totalSpacing) / crossAxisCount;
-
-    const targetTileHeight = 110.0;
-    final childAspectRatio = actualTileWidth / targetTileHeight;
-
+  Widget _buildIconGrid(BuildContext context, List<DashboardItem> items) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: EdgeInsets.zero,
       itemCount: items.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: defaultSpacing,
-        mainAxisSpacing: defaultSpacing,
-        childAspectRatio: childAspectRatio,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 4,
+        mainAxisSpacing: 14,
+        // Fixed row height (icon + label) so wide screens don't stretch the
+        // cells vertically and leave large empty gaps below each row.
+        mainAxisExtent: 76,
       ),
-      itemBuilder: (context, index) => _buildIconTileFromConfig(context, items[index]),
+      itemBuilder: (context, index) => _buildIconTile(context, items[index]),
     );
   }
 
-  Widget _buildIconTileFromConfig(BuildContext context, DashboardItem item) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final cardBgColor = _parseColor(item.bgCard);
-
-    // Modern color palette - alternate between blue and orange accents
-    final accentColor = item.label.length % 2 == 0 ? const Color(0xFF1E88E5) : const Color(0xFFFF6F00);
-
-    // Determine card background - use subtle gradient if white
-    final cardColor = cardBgColor == const Color(0xFFFFFFFF)
-        ? const Color(0xFFFAFBFC)
-        : cardBgColor;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          final widget = _getRouteWidget(item.route, label: item.label);
-          if (widget != null) Navigator.of(context).push(MaterialPageRoute(builder: (_) => widget));
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: accentColor.withValues(alpha: 0.15),
-              width: 1.2,
+  Widget _buildIconTile(BuildContext context, DashboardItem item) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _openItem(item.route, item.label),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Bare line icon (Amazon Pay style) in the app's blue.
+          SizedBox(
+            height: 40,
+            child: Icon(
+              _getIconData(item.icon),
+              size: 34,
+              color: _kIcon,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: accentColor.withValues(alpha: 0.08),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+          ),
+          const SizedBox(height: 6),
+          Flexible(
+            child: Text(
+              item.label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF2B2B2B),
+                height: 1.15,
               ),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Icon container with gradient background
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        accentColor.withValues(alpha: 0.15),
-                        accentColor.withValues(alpha: 0.05),
-                      ],
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _getIconData(item.icon),
-                    size: 24,
-                    color: accentColor,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  item.label,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: colorScheme.onSurface,
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }

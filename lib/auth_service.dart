@@ -1,10 +1,13 @@
 // filepath: /Users/hrishikeshprateek/AndroidStudioProjects/reckon_seller_2_0/lib/auth_service.dart
-import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:dio/dio.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:android_id/android_id.dart';
 import 'models/user_model.dart';
 import 'app_navigator.dart';
 import 'pages/mpin_entry_page.dart';
@@ -63,6 +66,9 @@ class AuthService with ChangeNotifier {
     _dio.options.baseUrl = apiBaseUrl; // Uses direct HTTP for both web and mobile
     _dio.options.connectTimeout = const Duration(seconds: 30);
     _dio.options.receiveTimeout = const Duration(seconds: 30);
+
+    // Warm the device-id cache early so it's ready by the time login fires.
+    ensureDeviceInfo();
 
     // Add interceptor to handle 401 errors globally
     _dio.interceptors.add(
@@ -273,9 +279,40 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  // Get device info (you can enhance this with device_info_plus package)
-  String get deviceId => '14319366a2e9f11';
-  String get deviceName => 'unknown Android Android SDK built for arm64';
+  // Real per-device identity, resolved once and cached. The fallbacks are
+  // only used if the platform lookup fails (e.g. unsupported platform) so a
+  // login attempt never sends an empty device id.
+  String? _cachedDeviceId;
+  String? _cachedDeviceName;
+  Future<void>? _deviceInfoFuture;
+
+  String get deviceId => (_cachedDeviceId?.isNotEmpty ?? false) ? _cachedDeviceId! : 'unknown-device';
+  String get deviceName => (_cachedDeviceName?.isNotEmpty ?? false) ? _cachedDeviceName! : 'Unknown Device';
+
+  /// Resolve the real device id/name once. Idempotent — repeated calls await
+  /// the same in-flight future. Call (and await) before any auth request so
+  /// the payload carries this device's actual id instead of a shared constant.
+  Future<void> ensureDeviceInfo() => _deviceInfoFuture ??= _loadDeviceInfo();
+
+  Future<void> _loadDeviceInfo() async {
+    try {
+      final plugin = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        final a = await plugin.androidInfo;
+        _cachedDeviceName = '${a.manufacturer} ${a.model}'.trim();
+        // Settings.Secure.ANDROID_ID — stable, unique per device+app-signing
+        // key, and matches the 15-hex format the backend already stores.
+        _cachedDeviceId = await const AndroidId().getId();
+      } else if (Platform.isIOS) {
+        final i = await plugin.iosInfo;
+        _cachedDeviceName = '${i.name} (${i.model})';
+        _cachedDeviceId = i.identifierForVendor;
+      }
+      debugPrint('[AuthService] device resolved: id=$_cachedDeviceId name=$_cachedDeviceName');
+    } catch (e) {
+      debugPrint('[AuthService] device info load failed (using fallback): $e');
+    }
+  }
 
   /// Validate license / login using the new ValidateLicense API
   Future<Map<String, dynamic>> validateLicense({
@@ -288,8 +325,11 @@ class AuthService with ChangeNotifier {
     int vCode = 31,
     String versionName = '1.7.23',
     String lRole = 'SalesMan',
+    bool changeDevice = false,
   }) async {
     try {
+      // Make sure the real device id is resolved before we build the payload.
+      await ensureDeviceInfo();
       final payload = {
         'lApkName': apkName,
         'LicNo': licenseNumber,
@@ -302,6 +342,10 @@ class AuthService with ChangeNotifier {
         'v_code': vCode,
         'version_name': versionName,
         'lRole': lRole,
+        // When the account is bound to another device the backend returns
+        // AllReadyLogin:true. Re-sending with ChangeDevice:true tells it to
+        // unbind the old device and register this one.
+        if (changeDevice) 'ChangeDevice': true,
       };
 
       final response = await _dio.post(
@@ -511,7 +555,18 @@ class AuthService with ChangeNotifier {
         'message': data['Message'] ?? 'Login failed',
         'data': data,
       };
-    } on DioException catch (e) {
+    } on DioException catch (e, st) {
+      // Dump the raw API failure so we can see what actually came back before
+      // the generic "Network error" fallback hides it.
+      debugPrint('[AuthService.validateLicense] DioException');
+      debugPrint('  type        : ${e.type}');
+      debugPrint('  statusCode  : ${e.response?.statusCode}');
+      debugPrint('  statusMsg   : ${e.response?.statusMessage}');
+      debugPrint('  responseData: ${e.response?.data}');
+      debugPrint('  errMessage  : ${e.message}');
+      debugPrint('  request URL : ${e.requestOptions.uri}');
+      debugPrint('  underlying  : ${e.error} (${e.error?.runtimeType})');
+      debugPrint('  stackTrace  :\n${e.stackTrace ?? st}');
       return {
         'success': false,
         // try to get a useful message from error response
@@ -534,6 +589,7 @@ class AuthService with ChangeNotifier {
     String countryCode = '91',
   }) async {
     try {
+      await ensureDeviceInfo();
       final response = await _dio.post(
         '/login/otp',
         data: {
@@ -591,6 +647,7 @@ class AuthService with ChangeNotifier {
     String countryCode = '91',
   }) async {
     try {
+      await ensureDeviceInfo();
       final response = await _dio.post(
         '/login/verify',
         data: {
@@ -716,19 +773,47 @@ class AuthService with ChangeNotifier {
   }
 
   /// Validate mobile OTP endpoint (new API)
+  ///
+  /// For the device-change flow (account already logged in on another device),
+  /// pass [updateDeviceId] = true along with [cuId] (the CUID from the
+  /// AllReadyLogin ValidateLicense response) and [licenseNumber]. This mirrors
+  /// the old native app, where verifying the OTP with `updatedevice_id: true`
+  /// unbinds the old device, binds this one, and returns the login profile in
+  /// the same call — there is no separate ChangeDevice endpoint.
   Future<Map<String, dynamic>> validateMobileOTP({
     required String mobile,
     required String otp,
     String countryCode = '91',
+    String? licenseNumber,
+    String? cuId,
+    bool updateDeviceId = false,
+    String apkName = 'com.reckon.reckonbiz',
+    String appRole = 'SalesMan',
+    int vCode = 31,
+    String versionName = '1.7.23',
   }) async {
     try {
+      await ensureDeviceInfo();
+      final payload = <String, dynamic>{
+        'lApkName': apkName,
+        'MobileNo': mobile,
+        'OTP': otp,
+        'CountryCode': countryCode,
+        'device_id': deviceId,
+        'device_name': deviceName,
+        'v_code': vCode,
+        'app_role': appRole,
+        'version_name': versionName,
+        // updatedevice_id:true tells the backend to unbind the old device and
+        // bind this one (device-change flow).
+        'updatedevice_id': updateDeviceId,
+        if (cuId != null && cuId.isNotEmpty) 'cu_id': cuId,
+        if (licenseNumber != null && licenseNumber.isNotEmpty) 'LicNo': licenseNumber,
+      };
+      debugPrint('[AuthService.validateMobileOTP] payload: $payload');
       final response = await _dio.post(
         '/ValidateMobileOTP',
-        data: {
-          'MobileNo': mobile,
-          'OTP': otp,
-          'CountryCode': countryCode,
-        },
+        data: payload,
         options: Options(
           headers: {
             'Content-Type': 'application/json',
@@ -755,7 +840,7 @@ class AuthService with ChangeNotifier {
         _accessToken = data['AccessToken']?.toString();
         _jwtToken = _accessToken;
         final profile = data['Profile'] is Map<String, dynamic> ? data['Profile'] as Map<String, dynamic> : null;
-        if (profile != null) _currentUser = UserModel.fromProfileJson(profile, storesData: data);
+        if (profile != null) _currentUser = UserModel.fromProfileJson(profile, licenseNumber: licenseNumber, storesData: data);
         if (_accessToken != null) await _storage.write(key: 'access_token', value: _accessToken);
         if (_jwtToken != null) await _storage.write(key: 'jwt_token', value: _jwtToken);
         if (_currentUser != null) {
@@ -884,8 +969,58 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  /// Verify a mobile OTP WITHOUT mutating the session.
+  ///
+  /// Unlike [validateMobileOTP], this does NOT touch tokens or the current user
+  /// — it only returns whether the OTP is valid. Use it for in-app flows where
+  /// the user is already logged in (e.g. OTP-gated MPIN change), so verifying
+  /// the OTP can never accidentally clear the active session.
+  Future<Map<String, dynamic>> verifyMobileOtp({
+    required String mobile,
+    required String otp,
+    String countryCode = '91',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/ValidateMobileOTP',
+        data: {
+          'lApkName': packageNameHeader,
+          'MobileNo': mobile,
+          'OTP': otp,
+          'CountryCode': countryCode,
+        },
+        options: Options(headers: {
+          'Content-Type': 'application/json',
+          'package_name': packageNameHeader,
+          if (getAuthHeader() != null) 'Authorization': getAuthHeader(),
+        }),
+      );
+
+      final data = _normalizeResponse(response.data);
+      final statusFalse = data.containsKey('Status') &&
+          (data['Status'] == false || data['Status']?.toString().toLowerCase() == 'false');
+      final hasAccessToken = (data['AccessToken'] != null && data['AccessToken'].toString().isNotEmpty);
+      final statusTrue = data['Status'] == true || (data['Status']?.toString().toLowerCase() == 'true');
+      final success = !statusFalse && (hasAccessToken || statusTrue);
+      return {
+        'success': success,
+        'message': data['Message'] ?? data['message'] ?? (success ? 'OTP verified' : 'Invalid OTP. Please try again.'),
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {'success': false, 'message': e.response?.data?.toString() ?? e.message ?? 'Network error', 'data': null};
+    } catch (e) {
+      return {'success': false, 'message': 'An unexpected error occurred: ${e.toString()}', 'data': null};
+    }
+  }
+
   /// Change MPIN API wrapper. Uses user's mobile number.
-  Future<Map<String, dynamic>> changeMpin({String? mobile, required String oldMpin, required String newMpin, String countryCode = '91'}) async {
+  ///
+  /// [oldMpin] is optional: when the change is authorised another way (e.g. an
+  /// OTP has already been verified) it can be omitted and is left out of the
+  /// payload entirely.
+  Future<Map<String, dynamic>> changeMpin({String? mobile, String? oldMpin, required String newMpin, String countryCode = '91'}) async {
     try {
       String mob = mobile ?? _currentUser?.mobileNumber ?? '';
       if (mob.isEmpty) {
@@ -900,7 +1035,7 @@ class AuthService with ChangeNotifier {
         'mobileNo': mob,
         'countryCode': countryCode,
         'mPin': newMpin,
-        'oldMpin': oldMpin,
+        if (oldMpin != null && oldMpin.isNotEmpty) 'oldMpin': oldMpin,
       };
 
       final response = await _dio.post(
@@ -1028,7 +1163,7 @@ class AuthService with ChangeNotifier {
     }
 
     try {
-      final refreshUrl = 'https://mobileappsandbox.reckonsales.com:8443/reckon-biz/api/refresh';
+      final refreshUrl = '${ApiConstants.apiHost}${ApiConstants.apiBasePath}/refresh';
       final payload = {'refresh_token': _refreshToken};
       debugPrint('[AuthService] Refresh URL: $refreshUrl');
       debugPrint('[AuthService] Refresh payload: {refresh_token: ***}');

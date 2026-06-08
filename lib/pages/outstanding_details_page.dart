@@ -1003,26 +1003,53 @@ class _LedgerItem extends StatelessWidget {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.calendar_today_outlined,
-                                size: 12,
-                                color: Colors.grey,
-                              ),
-                              const SizedBox(width: 4),
-                              Expanded(
-                                child: Text(
-                                  "Due: ${item.dueDate.isEmpty ? 'NA' : formatDateDmy(item.dueDate)}",
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.black54,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
+                          Builder(builder: (_) {
+                            final due = item.dueDate.isEmpty ? null : DateTime.tryParse(item.dueDate);
+                            String? rightText;
+                            if (due != null) {
+                              final now = DateTime.now();
+                              final today = DateTime(now.year, now.month, now.day);
+                              final dueDay = DateTime(due.year, due.month, due.day);
+                              final days = dueDay.difference(today).inDays;
+                              if (days < 0) {
+                                rightText = '${-days} day${-days == 1 ? '' : 's'} overdue';
+                              } else if (days == 0) {
+                                rightText = 'Due today';
+                              } else {
+                                rightText = 'Due in $days day${days == 1 ? '' : 's'}';
+                              }
+                            }
+                            return Row(
+                              children: [
+                                const Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 12,
+                                  color: Colors.grey,
                                 ),
-                              ),
-                            ],
-                          ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    "Due: ${item.dueDate.isEmpty ? 'NA' : formatDateDmy(item.dueDate)}",
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.black54,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (rightText != null) ...[
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    rightText,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            );
+                          }),
                         ],
                       ),
                     ),

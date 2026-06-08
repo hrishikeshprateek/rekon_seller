@@ -55,7 +55,7 @@ class _MyAppState extends State<MyApp> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             navigatorKey: appNavigatorKey,
-            title: 'Reckon BIZ360',
+            title: 'Reckon Seller 2.0',
             theme: ThemeData(
               useMaterial3: true,
               // Modern Blue-Orange theme with Material Design 3
@@ -521,13 +521,13 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 children: [
                   Image.asset(
                     'assets/images/reckon.png',
-                    width: 96,
-                    height: 96,
+                    width: 128,
+                    height: 128,
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Reckon BIZ360',
+                    'Reckon Seller 2.0',
                     style: textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,

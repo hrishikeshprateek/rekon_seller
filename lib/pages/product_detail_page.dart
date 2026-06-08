@@ -1980,18 +1980,18 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
                       const LinearProgressIndicator(minHeight: 3),
                       const SizedBox(height: 12),
                     ],
-                    // Action buttons
+                    // Action buttons — matches cart_page._CartUpdateBottomSheet
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              minimumSize: const Size(double.infinity, 54),
                               side: BorderSide(color: colorScheme.outlineVariant),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             ),
-                            child: Text('CLOSE', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+                            child: const Text('Close', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -2006,13 +2006,14 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
                               await _submit();
                             },
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E88E5),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              minimumSize: const Size(double.infinity, 54),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               elevation: 0,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            child: Text(widget.cartQty > 0 ? 'UPDATE CART' : 'ADD TO CART', style: textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+                            child: Text(
+                              widget.cartQty > 0 ? 'Update Cart' : 'Add to Cart',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                       ],

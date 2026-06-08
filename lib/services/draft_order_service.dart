@@ -122,6 +122,13 @@ class DraftOrderRequest {
       'lFirmCode': context.firmCode,
       'AcCode': context.acCode,
       'ItemCode': itemCode,
+      // NOTE: do NOT add `Icode` here. When present, the backend resolves
+      // the item's stored per-account discount rule and discards the
+      // `discount_percentage` we send. Postman calls without `Icode`
+      // honour the user-typed discount; sending it locks the % to the
+      // server default. Confirmed via paired Postman/Flutter test (May
+      // 2026): same payload, only differing by `Icode`, returned 7.0
+      // vs the sent 8.0.
       'IdCol': idCol,
       'cu_id': context.cuId,
       'ItemQty': itemQty,
@@ -255,33 +262,19 @@ class DraftOrderService {
       if (context.authHeader != null) 'Authorization': context.authHeader,
     };
 
+    final mode = payload['insert_record'] == 0 ? 'PREVIEW' : 'INSERT';
+    print('[DraftOrderService $mode] >>> BODY ${jsonEncode(payload)}');
+
     final response = await dio.post(
       '/AddDraftOrder',
       data: payload,
       options: Options(headers: headers),
     );
 
-    final normalized = _normalizeResponse(response.data);
-    final data = normalized['data'] is Map ? normalized['data'] as Map : {};
     final rawStr = response.data is String ? response.data as String : jsonEncode(response.data);
-    print('=== AddDraftOrder RAW RESPONSE ===');
-    for (int i = 0; i < rawStr.length; i += 800) {
-      print(rawStr.substring(i, i + 800 > rawStr.length ? rawStr.length : i + 800));
-    }
-    print('=== END (total ${rawStr.length} chars) ===');
-    print('=== AddDraftOrder RAW discount fields ===');
-    print('discount_pcs sent     : ${payload['discount_pcs']}');
-    print('discount_percentage   : ${payload['discount_percentage']}');
-    print('discount_percentage1  : ${payload['discount_percentage1']}');
-    print('ItemDiscAmt  (Pcs?)   : ${data['ItemDiscAmt']}');
-    print('ItemDisc1Amt (Dis%?)  : ${data['ItemDisc1Amt']}');
-    print('ItemDisc2Amt (AddDis?): ${data['ItemDisc2Amt']}');
-    print('ItemDiscPer           : ${data['ItemDiscPer']}');
-    print('ItemDisc1Per          : ${data['ItemDisc1Per']}');
-    print('ItemDisc2Per          : ${data['ItemDisc2Per']}');
-    print('=========================================');
+    print('[DraftOrderService $mode] <<< RESPONSE $rawStr');
 
-    return DraftOrderPreviewResult.fromResponse(normalized);
+    return DraftOrderPreviewResult.fromResponse(_normalizeResponse(response.data));
   }
 
   static Map<String, dynamic> normalizeResponse(dynamic raw) => _normalizeResponse(raw);
