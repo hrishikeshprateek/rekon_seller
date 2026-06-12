@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".NewDesign.NewFragments.UserProfileFragment">
+
+<!--    <ScrollView-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content">-->
+<androidx.core.widget.NestedScrollView
+    android:layout_width="match_parent"
+    android:layout_above="@+id/cardUpdateProfile"
+    android:layout_height="match_parent">
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/light_grey"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_150dp"
+                android:background="@color/new_blue"
+                android:orientation="horizontal">
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/_20dp"
+                    android:layout_marginTop="@dimen/_20dp"
+                    app:cardCornerRadius="@dimen/_50dp">
+
+                    <ImageView
+                        android:layout_width="@dimen/_100dp"
+                        android:layout_height="@dimen/_100dp"
+                        android:contentDescription="@string/userImage"
+                        android:src="@drawable/selected_user" />
+                </androidx.cardview.widget.CardView>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/_10dp"
+                    android:layout_marginTop="@dimen/_30dp">
+
+                    <EditText
+                        android:id="@+id/nameStore"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@null"
+                        android:padding="@dimen/_5dp"
+                        android:text="@string/storeName"
+                        android:hint="@string/storeName"
+                        android:inputType="text"
+                        android:textColor="@color/white"
+                        android:textSize="@dimen/_15sp"
+                        android:enabled="false"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <EditText
+                        android:id="@+id/mobile"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@null"
+                        android:enabled="false"
+                        android:inputType="text"
+                        android:padding="@dimen/_5dp"
+                        android:text="@string/test_Number"
+                        android:hint="@string/mobileNumber"
+                        android:textColor="@color/white"
+                        android:textSize="@dimen/_15sp"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toBottomOf="@+id/nameStore" />
+
+                    <ImageView
+                        android:id="@+id/mobileChange"
+                        android:layout_width="@dimen/_30dp"
+                        android:layout_height="@dimen/_30dp"
+                        android:padding="@dimen/_5dp"
+                        android:visibility="gone"
+                        android:contentDescription="@string/editMobile"
+                        android:src="@drawable/ic_edit_white"
+                        app:layout_constraintBottom_toBottomOf="parent"
+                        app:layout_constraintStart_toEndOf="@+id/mobile" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+            </LinearLayout>
+
+            <include
+                android:id="@+id/storeName"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/address1"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/address2"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/postal"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/area"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/state"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/city"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/gst"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/gstBgImage"
+                layout="@layout/image_upload_layout" />
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/imageRecyclerGST"
+                android:layout_width="match_parent"
+                android:nestedScrollingEnabled="false"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                android:orientation="horizontal"
+                android:layout_height="wrap_content"
+                app:layout_constraintTop_toTopOf="parent" />
+
+<!--            <include-->
+<!--                android:id="@+id/gstImages"-->
+<!--                layout="@layout/upload_image_layout" />-->
+
+            <include
+                android:id="@+id/drug"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/dlBgImage"
+                layout="@layout/image_upload_layout" />
+
+<!--            <include-->
+<!--                android:id="@+id/drugImages"-->
+<!--                layout="@layout/upload_image_layout" />-->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/imageRecyclerDrug"
+                android:layout_width="match_parent"
+                android:nestedScrollingEnabled="false"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                android:orientation="horizontal"
+                android:layout_height="wrap_content"
+                app:layout_constraintTop_toTopOf="parent" />
+
+        <include
+            android:id="@+id/drug2"
+            layout="@layout/my_profile_layout" />
+
+        <include
+            android:id="@+id/dl2BgImage"
+            layout="@layout/image_upload_layout" />
+
+        <!--            <include-->
+        <!--                android:id="@+id/drugImages"-->
+        <!--                layout="@layout/upload_image_layout" />-->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/imageRecyclerDrug2"
+            android:layout_width="match_parent"
+            android:nestedScrollingEnabled="false"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+            android:orientation="horizontal"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toTopOf="parent" />
+
+            <include
+                android:id="@+id/foodLl"
+                layout="@layout/my_profile_layout" />
+
+            <include
+                android:id="@+id/flBgImage"
+                layout="@layout/image_upload_layout" />
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/imageRecyclerFood"
+                android:layout_width="match_parent"
+                android:nestedScrollingEnabled="false"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                android:orientation="horizontal"
+                android:layout_height="wrap_content"
+                app:layout_constraintTop_toTopOf="parent" />
+
+<!--            <include-->
+<!--                android:id="@+id/foodImages"-->
+<!--                layout="@layout/upload_image_layout" />-->
+
+
+        </LinearLayout>
+</androidx.core.widget.NestedScrollView>
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardUpdateProfile"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginStart="@dimen/_30dp"
+        android:layout_marginTop="@dimen/_10dp"
+        android:layout_marginEnd="@dimen/_30dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="@dimen/_10dp"
+
+        app:cardCornerRadius="@dimen/_10dp"
+        app:cardElevation="@dimen/_4dp"
+        app:cardUseCompatPadding="true">
+
+        <TextView
+            android:id="@+id/updateProfile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:background="@color/reconGrey"
+            android:padding="@dimen/_10dp"
+            android:enabled="false"
+            android:text="@string/update_profile"
+            android:textColor="@color/white"
+            android:textStyle="bold" />
+    </androidx.cardview.widget.CardView>
+<!--    </ScrollView>-->
+
+</RelativeLayout>

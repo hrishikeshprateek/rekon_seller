@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".NewDesign.NewFragments.PaymentDetails">
+
+
+<include layout="@layout/payment_details_layout"
+    android:id="@+id/paymentDetailsIncluder"/>
+    <androidx.cardview.widget.CardView
+        android:id="@+id/paymentOptionsCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/Order_status_ll"
+        android:layout_marginStart="@dimen/_12dp"
+        android:layout_marginEnd="@dimen/_12dp"
+        app:cardCornerRadius="@dimen/_5dp"
+        android:visibility="gone"
+        app:cardElevation="@dimen/_4dp"
+        app:cardUseCompatPadding="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:orientation="vertical"
+            android:padding="@dimen/_10dp">
+
+            <TextView
+                style="@style/MontserratBoldFontSetup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingTop="@dimen/_20dp"
+                android:text="@string/payment_options"
+                android:textSize="@dimen/_18sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/paymentOptionsRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/addMoreParentCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/cartRecycler"
+        android:layout_marginStart="@dimen/_10dp"
+        android:layout_marginTop="@dimen/_10dp"
+        android:layout_marginEnd="@dimen/_10dp"
+        app:cardCornerRadius="@dimen/_5dp"
+        app:cardElevation="@dimen/_5dp"
+        app:cardUseCompatPadding="true">
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/addMoreItemCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/_10dp"
+            android:layout_marginTop="@dimen/_20dp"
+            android:layout_marginEnd="@dimen/_10dp"
+            android:layout_marginBottom="@dimen/_20dp"
+            app:cardBackgroundColor="@color/red"
+            app:cardCornerRadius="@dimen/_5dp"
+            app:cardElevation="@dimen/_5dp">
+
+            <LinearLayout
+                android:id="@+id/placeYourOrderLl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/MontserratBoldFontSetup"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="@dimen/_10dp"
+                    android:text="@string/place_your_order"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_15sp" />
+
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+    </androidx.cardview.widget.CardView>
+
+</LinearLayout>

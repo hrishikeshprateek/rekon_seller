@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".NewDesign.NewFragments.NewArrivalFragment">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/newArrivalsRecycler"
+        android:layout_width="match_parent"
+        android:layout_marginStart="@dimen/_10dp"
+        android:layout_marginEnd="@dimen/_10dp"
+        android:layout_height="wrap_content"
+        android:nestedScrollingEnabled="false" />
+
+</androidx.core.widget.NestedScrollView>

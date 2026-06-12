@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:paddingBottom="@dimen/_29dp">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/popupSelect_recyclerView"
+        android:layout_width="match_parent"
+        android:padding="@dimen/_5dp"
+        android:layout_height="match_parent"
+        android:background="@drawable/shape_border_radius_light_grey" />
+
+</LinearLayout>

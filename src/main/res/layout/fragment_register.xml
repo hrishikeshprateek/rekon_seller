@@ -1,0 +1,617 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:clickable="true"
+    android:orientation="vertical">
+
+    <include layout="@layout/actionbar_base_dark"/>
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <ScrollView
+            android:id="@+id/scroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/bottom_row_rl">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="@dimen/_10dp"
+                android:layout_marginTop="@dimen/_5dp"
+                android:layout_marginRight="@dimen/_10dp"
+                android:layout_marginBottom="20dp"
+                app:cardElevation="@dimen/_10dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical"
+                    android:paddingLeft="@dimen/_10dp"
+                    android:paddingRight="@dimen/_10dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_20dp"
+                        android:background="@color/white"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:id="@+id/select_type_ll"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@drawable/shape_border_grey_light"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/select_tv"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_5dp"
+                                android:layout_marginTop="@dimen/_12dp"
+                                android:gravity="start|center"
+                                android:text="Select Role"
+                                android:textColor="@color/black"
+                                android:textSize="14sp"
+                                android:textStyle="normal" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="end|center"
+                                android:orientation="horizontal">
+
+                                <ImageView
+                                    android:id="@+id/select_img"
+                                    android:layout_width="@dimen/_35dp"
+                                    android:layout_height="@dimen/_35dp"
+                                    android:layout_marginTop="@dimen/_4dp"
+                                    android:gravity="center"
+                                    android:src="@drawable/ic_select_down" />
+                            </LinearLayout>
+
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:id="@+id/spinner_ll"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <com.reckon.reckonorders.Others.view.MySpinner
+                                android:id="@+id/role_type_spinner"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@color/white">
+
+                            </com.reckon.reckonorders.Others.view.MySpinner>
+
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <EditText
+                        android:id="@+id/fragmentLogin_edtLicNo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/shape_border_grey_light"
+                        android:gravity="start|center"
+                        android:hint="Enter licence Number"
+                        android:inputType="text"
+                        android:maxLength="10"
+                        android:padding="12dp"
+                        android:textSize="14sp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_15dp"
+                        android:gravity="start|center"
+                        android:paddingLeft="@dimen/_7dp"
+                        android:text="@string/business_type"
+                        android:textColor="@color/colorBlack"
+                        android:textSize="14sp" />
+
+                    <LinearLayout
+                        android:id="@+id/fragmentRegister_edtCategory"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="start|center"
+                        android:orientation="horizontal"
+                        android:paddingLeft="@dimen/_7dp"
+                        android:paddingTop="@dimen/_12dp"
+                        android:paddingRight="@dimen/_12dp"
+                        android:paddingBottom="@dimen/_12dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight=".3"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/select_business_type"
+                            android:textSize="14sp"
+                            android:visibility="gone" />
+
+                        <Spinner
+                            android:id="@+id/business_type_spinner"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@color/white">
+
+                        </Spinner>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_10dp"
+                            android:layout_weight=".8"
+                            android:gravity="end"
+                            android:visibility="gone">
+
+                            <ImageView
+                                android:layout_width="@dimen/_15dp"
+                                android:layout_height="@dimen/_15dp"
+                                android:src="@drawable/ic_select" />
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <include layout="@layout/view_line" />
+
+                    <EditText
+                        android:id="@+id/fragmentRegister_edtDLLicNo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@null"
+                        android:gravity="start|center"
+                        android:hint="@string/enter_drug_licence_number"
+                        android:inputType="text"
+                        android:maxLength="10"
+                        android:paddingLeft="@dimen/_7dp"
+                        android:paddingTop="@dimen/_12dp"
+                        android:paddingRight="@dimen/_12dp"
+                        android:paddingBottom="@dimen/_12dp"
+                        android:textSize="14sp"
+                        android:visibility="gone" />
+
+                    <include layout="@layout/view_line" />
+
+                    <EditText
+                        android:id="@+id/fragmentRegister_edtName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_12dp"
+                        android:background="@null"
+                        android:gravity="start|center"
+                        android:hint="@string/your_name"
+                        android:maxLength="50"
+                        android:paddingLeft="@dimen/_7dp"
+                        android:paddingTop="@dimen/_12dp"
+                        android:paddingRight="@dimen/_12dp"
+                        android:paddingBottom="@dimen/_12dp"
+                        android:singleLine="true"
+                        android:textSize="14sp" />
+
+                    <include layout="@layout/view_line" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_12dp"
+                        android:gravity="start|center"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center"
+                            android:paddingLeft="@dimen/_7dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp">
+
+                            <TextView
+                                android:id="@+id/country_code_txt"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="+91"
+                                android:textColor="@color/black"
+                                android:textSize="14sp" />
+
+                            <FrameLayout
+                                android:layout_width="35dp"
+                                android:layout_height="match_parent"
+                                android:visibility="gone">
+
+                                <ImageView
+                                    android:layout_width="@dimen/_15dp"
+                                    android:layout_height="@dimen/_15dp"
+                                    android:layout_gravity="center"
+                                    android:src="@drawable/ic_select" />
+                            </FrameLayout>
+
+
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/fragmentRegister_edtMobileNumber"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/enter_mobile"
+                            android:maxLength="12"
+                            android:paddingLeft="@dimen/_10dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_10dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:singleLine="true"
+                            android:textColor="@color/black"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <include layout="@layout/view_line" />
+
+                    <EditText
+                        android:id="@+id/fragmentRegister_edtEmail"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_12dp"
+                        android:background="@null"
+                        android:gravity="start|center"
+                        android:hint="@string/enter_email_address"
+                        android:inputType="textEmailAddress"
+                        android:paddingLeft="@dimen/_7dp"
+                        android:paddingTop="@dimen/_12dp"
+                        android:paddingRight="@dimen/_12dp"
+                        android:paddingBottom="@dimen/_12dp"
+                        android:singleLine="true"
+
+                        android:textSize="14sp" />
+
+                    <include layout="@layout/view_line" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_12dp"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginRight="@dimen/_5dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <EditText
+                                android:id="@+id/fragmentRegister_edtPassword"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@null"
+                                android:gravity="start|center"
+                                android:hint="@string/password"
+                                android:inputType="textPassword"
+                                android:maxLength="20"
+                                android:paddingLeft="@dimen/_7dp"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingRight="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:singleLine="true"
+                                android:textSize="14sp" />
+
+                            <include layout="@layout/view_line" />
+                        </LinearLayout>
+
+                        <View
+                            android:layout_width=".5dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/grey" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_5dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <EditText
+                                android:id="@+id/fragmentRegister_edtConfirmPass"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@null"
+                                android:ellipsize="end"
+                                android:gravity="start|center"
+                                android:hint="@string/confirm_password"
+                                android:inputType="textPassword"
+                                android:maxLength="20"
+                                android:paddingLeft="@dimen/_7dp"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingRight="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:singleLine="true"
+                                android:textSize="14sp" />
+
+                            <include layout="@layout/view_line" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+
+                    <RelativeLayout
+                        android:id="@+id/select_country_rl"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_marginTop="@dimen/_12dp">
+
+                        <TextView
+                            android:id="@+id/country_title"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_7dp"
+                            android:gravity="start|center"
+                            android:text="@string/country"
+                            android:textColor="@color/colorBlack"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:id="@+id/countryTV"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_below="@+id/country_title"
+                            android:layout_marginLeft="@dimen/_7dp"
+                            android:layout_marginRight="@dimen/_30dp"
+                            android:ellipsize="end"
+                            android:hint="@string/select_county"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:singleLine="true"
+                            android:text=""
+                            android:textColor="@color/black"
+                            android:textSize="@dimen/_14dp" />
+
+                        <ImageView
+                            android:id="@+id/countryImg"
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_below="@+id/country_title"
+                            android:layout_alignEnd="@+id/country_title"
+                            android:layout_alignRight="@+id/country_title"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:layout_marginRight="@dimen/_10dp"
+                            android:src="@drawable/ic_select" />
+
+                    </RelativeLayout>
+
+                    <include layout="@layout/view_line" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <RelativeLayout
+                            android:id="@+id/select_state_rl"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:layout_weight="1">
+
+                            <TextView
+                                android:id="@+id/state_title"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_7dp"
+                                android:gravity="start|center"
+                                android:text="@string/state"
+                                android:textColor="@color/colorBlack"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/stateTV"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_below="@+id/state_title"
+                                android:layout_marginLeft="@dimen/_7dp"
+                                android:layout_marginRight="@dimen/_30dp"
+                                android:ellipsize="end"
+                                android:hint="@string/select_state"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:singleLine="true"
+                                android:text=""
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_14dp" />
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_below="@+id/state_title"
+                                android:layout_alignEnd="@+id/state_title"
+                                android:layout_alignRight="@+id/state_title"
+                                android:layout_marginTop="@dimen/_12dp"
+                                android:layout_marginRight="@dimen/_10dp"
+                                android:src="@drawable/ic_select" />
+
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:id="@+id/select_city_rl"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:layout_weight="1">
+
+                            <TextView
+                                android:id="@+id/city_title"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_7dp"
+                                android:gravity="start|center"
+                                android:text="@string/city"
+                                android:textColor="@color/colorBlack"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/cityTV"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_below="@+id/city_title"
+                                android:layout_marginLeft="@dimen/_7dp"
+                                android:layout_marginRight="@dimen/_30dp"
+                                android:ellipsize="end"
+                                android:hint="@string/select_city"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:singleLine="true"
+                                android:text=""
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_14dp" />
+
+                            <ImageView
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_below="@+id/city_title"
+                                android:layout_alignEnd="@+id/city_title"
+                                android:layout_alignRight="@+id/city_title"
+                                android:layout_marginTop="@dimen/_12dp"
+                                android:layout_marginRight="@dimen/_10dp"
+                                android:src="@drawable/ic_select" />
+
+                        </RelativeLayout>
+                    </LinearLayout>
+
+                    <include layout="@layout/view_line" />
+
+                    <EditText
+                        android:id="@+id/fragmentRegister_edtPinCode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_12dp"
+                        android:background="@null"
+                        android:gravity="start|center"
+                        android:hint="@string/enter_your_pincode"
+                        android:inputType="number"
+                        android:maxLength="10"
+                        android:paddingLeft="@dimen/_7dp"
+                        android:paddingTop="@dimen/_12dp"
+                        android:paddingRight="@dimen/_12dp"
+                        android:paddingBottom="@dimen/_12dp"
+                        android:textSize="14sp" />
+
+                    <include layout="@layout/view_line" />
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_14dp">
+
+                        <CheckBox
+                            android:id="@+id/fragmentRegister_cbTermAndCondition"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="-6dp"
+                            android:checked="true" />
+
+                        <TextView
+                            android:id="@+id/fragmentRegister_tvTermAndCondition"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_centerVertical="true"
+                            android:layout_marginLeft="@dimen/_3dp"
+                            android:layout_toEndOf="@+id/fragmentRegister_cbTermAndCondition"
+                            android:layout_toRightOf="@+id/fragmentRegister_cbTermAndCondition"
+                            android:gravity="start|center"
+                            android:text="@string/terms_and_conditions"
+                            android:textSize="11sp" />
+                    </RelativeLayout>
+
+
+                    <FrameLayout
+                        android:id="@+id/fragmentRegister_frmCreateAccount"
+                        android:layout_width="match_parent"
+                        android:layout_height="@dimen/_40dp"
+                        android:layout_marginTop="@dimen/_16dp"
+                        android:layout_marginBottom="@dimen/_20dp"
+                        android:background="@drawable/shape_radius_dark_khaki"
+                        android:clickable="true"
+                        android:foreground="?android:attr/selectableItemBackground">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:text="@string/create_account"
+                            android:textAllCaps="true"
+                            android:textColor="@color/white"
+                            android:textSize="14sp" />
+                    </FrameLayout>
+
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </ScrollView>
+
+        <RelativeLayout
+            android:id="@+id/bottom_row_rl"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:background="@color/warm_grey"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/fragmentRegister_tvLogin"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="@dimen/_10dp"
+                android:layout_marginTop="@dimen/_10dp"
+                android:layout_marginRight="@dimen/_10dp"
+                android:layout_marginBottom="@dimen/_10dp"
+                app:cardElevation="@dimen/_10dp">
+
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_margin="@dimen/_10dp"
+                    android:gravity="center">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/already_registered"
+                        android:textColor="@color/black"
+                        android:textSize="14sp" />
+
+                    <TextView
+
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginLeft="@dimen/_6dp"
+                        android:text="@string/login"
+                        android:textColor="@color/new_blue"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </RelativeLayout>
+
+    </RelativeLayout>
+
+
+</LinearLayout>

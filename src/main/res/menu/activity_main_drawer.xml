@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:showIn="navigation_view">
+
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_home"
+            android:icon="@mipmap/home"
+            android:title="@string/menu_home" />
+        <item
+            android:id="@+id/nav_profile"
+            android:icon="@drawable/profile_icon"
+            android:title="@string/my_profile" />
+        <item
+            android:id="@+id/nav_Order_Entry"
+            android:icon="@mipmap/order_entry"
+            android:title="@string/new_order"
+            app:actionViewClass="android.widget.TextView" />
+        <item
+            android:id="@+id/nav_order_history"
+            android:icon="@mipmap/my_order_icon"
+            android:title="@string/my_order" />
+        <item
+            android:id="@+id/nav_my_bills"
+            android:icon="@mipmap/wallet"
+            android:title="@string/my_bills"
+            android:visible="false"/>
+        <item
+            android:id="@+id/nav_outstanding"
+            android:icon="@mipmap/outstanding"
+            android:title="@string/outstanding_small" />
+        <item
+            android:id="@+id/nav_receipt_book"
+            android:icon="@mipmap/outstanding"
+            android:title="@string/receipt_book" />
+        <item
+            android:id="@+id/nav_notification"
+            android:icon="@mipmap/notification"
+            android:title="@string/notifications" />
+        <item
+            android:id="@+id/nav_cart"
+            android:icon="@mipmap/cart_icon"
+            android:title="@string/_cart" />
+        <item
+            android:id="@+id/nav_feedback"
+            android:icon="@drawable/empty_cart"
+            android:title="@string/feedback" />
+        <item
+            android:id="@+id/nav_settings"
+            android:icon="@mipmap/settings"
+            android:title="@string/settings"
+            android:visible="false"/>
+        <item
+            android:id="@+id/nav_logout"
+            android:icon="@drawable/ic_logout"
+            android:title="@string/logout" />
+    </group>
+</menu>

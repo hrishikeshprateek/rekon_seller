@@ -1,0 +1,81 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar"><!--Theme.AppCompat.Light-->
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:statusBarColor">@color/new_blue</item>
+        <item name="android:navigationBarColor">@color/new_blue</item>
+        <item name="bottomSheetDialogTheme">@style/AppBottomSheetDialogTheme</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+
+    <style name="CustomDialogTheme" parent="@android:style/Theme.Dialog">
+        <item name="android:windowBackground">@color/white</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+    <style name="PartyDetailsListingStyle" parent="Theme.AppCompat.Light">
+        <item name="android:textColor">@color/reconGrey</item>
+        <item name="android:background">@color/white</item>
+        <item name="fontFamily">@font/montserrat_regular</item>
+        <item name="android:padding">@dimen/_5dp</item>
+<!--        <item name="android:paddingStart">@dimen/_5dp</item>-->
+<!--        <item name="android:paddingBottom">@dimen/_5dp</item>-->
+<!--        <item name="paddingEnd">@dimen/_5dp</item>-->
+    </style>
+    <style name="MyCheckbox" parent="@style/Widget.AppCompat.CompoundButton.CheckBox">
+        <item name="android:colorControlNormal">@color/reconGrey</item>
+        <item name="android:colorControlActivated">@color/green</item>
+        <item name="android:colorControlHighlight">@color/green</item>
+        <item name="buttonTint">@color/reconGrey</item>
+<!--        <item name="android:textAppearance">@style/TextAppearance.AppCompat</item>-->
+    </style>
+
+    <style name="MainActivity" parent="Theme.AppCompat.Light">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimary</item>
+        <item name="colorAccent">@color/colorPrimary</item>
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:statusBarColor">@color/colorPrimary</item>
+        <item name="colorNavigationItemSelected">@color/new_blue</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@color/new_blue</item>
+    </style>
+    <style name="NavigationTheme" parent="Theme.AppCompat.Light">
+        <item name="colorNavigationItemSelected">@color/new_blue</item>
+    </style>
+
+
+    <style name="AppBottomSheetDialogTheme"
+        parent="Theme.Design.Light.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/AppModalStyle</item>
+    </style>
+
+    <style name="AppModalStyle"
+        parent="Widget.Design.BottomSheet.Modal">
+        <item name="android:background">@drawable/rounded_dialog</item>
+    </style>
+
+    <style name="DialogStyle" parent="Theme.Design.Light.BottomSheetDialog">
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+<!--        <item name="android:background">@drawable/rounded_transparent_dialog</item>-->
+        <item name="android:windowBackground">@null</item>
+        <item name="android:background">@android:color/transparent</item>
+
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+    </style>
+</resources>

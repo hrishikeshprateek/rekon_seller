@@ -1,0 +1,612 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="@dimen/_5dp"
+    app:cardElevation="@dimen/_5dp"
+    app:cardUseCompatPadding="true"
+    tools:context=".NewDesign.NewFragments.AccountDetailsFragment">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/cardShareDetailsHolder"
+            android:layout_alignParentTop="true"
+            android:layout_marginTop="@dimen/_10dp"
+            android:padding="@dimen/_15dp">
+
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/divider_line_grey">
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/firmSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toTopOf="parent">
+
+                    <TextView
+                        android:id="@+id/tvFirmName"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/firm_name"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/firmName"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+
+                        android:text="@string/addressLine2"
+                        android:textColor="@color/black"
+                        android:textSize="@dimen/_20sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvFirmName" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/customerTypeSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/firmSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvCustomerGroup"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/group"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/tvCustomerType"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvCustomerGroup" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/addressSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/customerTypeSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvAddress"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/address"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/address"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvAddress" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/pinCodeSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/addressSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvPinCode"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/pinCode"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/pinCode"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/test_rating"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvPinCode" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/areaSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/pinCodeSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvArea"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/area"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/area"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/area"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvArea" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/citySeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/areaSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvCity"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/city"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/city"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/city"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvCity" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/stateSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/citySeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvState"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/state"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/state"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/state"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvState" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/contactPersonSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/stateSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvContactPerson"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/contact_person"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/tvFullName"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvContactPerson" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/mobileSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/contactPersonSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvMobile"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/mobile"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/mobileNumber"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvMobile" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/phoneSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/mobileSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvPhone"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/phone"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+
+                    <LinearLayout
+                        android:id="@+id/phoneHolder"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:layout_constraintTop_toBottomOf="@+id/tvPhone">
+
+                        <TextView
+                            android:id="@+id/tvStdCode"
+                            style="@style/PartyDetailsListingStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="match_parent"
+                            android:gravity="center"
+                            android:paddingStart="@dimen/_10dp"
+                            android:paddingEnd="@dimen/_0dp"
+                            android:text="@string/std_code"
+                            android:textSize="@dimen/_11sp"
+                            android:visibility="visible"
+
+                            />
+
+                        <TextView
+                            android:id="@+id/phoneNumber"
+                            style="@style/PartyDetailsListingStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:paddingStart="@dimen/_10dp"
+                            android:paddingEnd="@dimen/_0dp"
+                            android:text="@string/addressLine2"
+                            android:textSize="@dimen/_16sp"
+                            android:textStyle="bold"
+                            android:visibility="visible" />
+                    </LinearLayout>
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/gstSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/phoneSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvGSTNumber"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/gst_number"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/gstNumber"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvGSTNumber" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/emailSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/gstSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvEmail"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/email_address"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/emailTv"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvEmail" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/drugSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/emailSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvDrugLicense"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/drug_license_number"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/drugLicense"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvDrugLicense" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/foodSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="gone"
+                    app:layout_constraintTop_toBottomOf="@+id/drugSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvFoodLicense"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/food_licence_number"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/foodLicense"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        android:visibility="visible"
+                        app:layout_constraintTop_toBottomOf="@+id/tvFoodLicense" />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/creditLimitSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="visible"
+                    app:layout_constraintTop_toBottomOf="@+id/foodSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvCreditLimit"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/credit_limit"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/creditLimit"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        app:layout_constraintTop_toBottomOf="@+id/tvCreditLimit" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/creditDaysSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="visible"
+                    app:layout_constraintTop_toBottomOf="@+id/creditLimitSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvCreditDays"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/credit_days"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/creditDays"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        app:layout_constraintTop_toBottomOf="@+id/tvCreditDays" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/creditBillsSeparatorView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_1px"
+                    android:visibility="visible"
+                    app:layout_constraintTop_toBottomOf="@+id/creditDaysSeparatorView">
+
+                    <TextView
+                        android:id="@+id/tvCreditBills"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/credit_days"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                    <TextView
+                        android:id="@+id/creditBills"
+                        style="@style/PartyDetailsListingStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:paddingStart="@dimen/_10dp"
+                        android:paddingEnd="@dimen/_0dp"
+                        android:text="@string/addressLine2"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold"
+                        app:layout_constraintTop_toBottomOf="@+id/tvCreditBills" />
+                </androidx.constraintlayout.widget.ConstraintLayout>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+        </androidx.core.widget.NestedScrollView>
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/cardShareDetailsHolder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            app:cardCornerRadius="5dp"
+            app:cardElevation="@dimen/_3dp">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/shareDetailsCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_margin="@dimen/_15dp"
+                app:cardBackgroundColor="@color/red"
+                app:cardCornerRadius="@dimen/_5dp"
+                app:cardElevation="@dimen/_5dp">
+
+
+                <TextView
+                    android:id="@+id/shareDetails"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/montserrat_bold"
+                    android:gravity="center"
+                    android:padding="@dimen/_10dp"
+                    android:text="@string/share_details"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_15sp"
+                    android:visibility="visible" />
+
+            </androidx.cardview.widget.CardView>
+        </androidx.cardview.widget.CardView>
+    </RelativeLayout>
+</androidx.cardview.widget.CardView>

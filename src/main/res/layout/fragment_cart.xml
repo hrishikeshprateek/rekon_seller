@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/gray92"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/include_header"
+        layout="@layout/actionbar_base_dark"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/lll"
+        android:layout_width="match_parent"
+        android:layout_height="500dp"
+        android:layout_above="@+id/rl"
+        android:layout_below="@+id/include_header"
+        android:orientation="vertical">
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/scroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv_product_listing"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="visible">
+
+                </androidx.recyclerview.widget.RecyclerView>
+
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+
+        <LinearLayout
+            android:id="@+id/thank_ll"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/_300dp"
+            android:layout_gravity="center"
+            android:layout_marginTop="@dimen/_50dp"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="@dimen/_200dp"
+                android:layout_height="@dimen/_200dp"
+                android:src="@mipmap/bags" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginTop="@dimen/_10dp"
+                android:gravity="center"
+                android:text="@string/thank_you_for_your_shopping_please_visit_again"
+                android:textColor="@color/green"
+                android:textSize="@dimen/_20dp" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+
+    <RelativeLayout
+        android:id="@+id/rl"
+        android:layout_width="match_parent"
+        android:layout_height="92dp"
+        android:layout_alignParentBottom="true"
+        android:background="@color/cream_color"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/linearLayout2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/checkout_ll"
+            android:background="@drawable/shape_border_grey_light"
+            android:orientation="horizontal"
+            android:padding="10dp">
+
+            <TextView
+                android:id="@+id/TotalItem_tv"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="5"
+                android:background="@color/grey"
+                android:gravity="center"
+                android:text="ITEM (0)"
+                android:textColor="#ffffff" />
+
+
+            <TextView
+                android:id="@+id/TotalPrice_tv"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="5"
+                android:background="@color/grey"
+                android:gravity="center"
+                android:text="TOTAL 0.0"
+                android:textColor="#ffffff" />
+
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/checkout_ll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/shape_border_grey_light">
+
+            <Button
+                android:id="@+id/checkout_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#21a8d6"
+                android:text="Checkout and Pay"
+                android:textAllCaps="false"
+                android:textColor="#ffffff"
+                android:visibility="visible" />
+        </LinearLayout>
+    </RelativeLayout>
+
+
+</RelativeLayout>

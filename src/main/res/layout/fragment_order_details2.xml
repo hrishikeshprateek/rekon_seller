@@ -1,0 +1,948 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    tools:context="Fragment.Home.HomeFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start"
+        android:gravity="center"
+        android:orientation="vertical">
+
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <LinearLayout
+                android:id="@+id/orderDetailsLl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="visible">
+                <TextView
+                    android:id="@+id/partyNameTxt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    style="@style/MontserratBoldFontSetup"
+                    android:paddingStart="@dimen/_10dp"
+                    android:paddingEnd="@dimen/_10dp"
+                    android:paddingTop="@dimen/_10dp"
+                    android:paddingBottom="@dimen/_2dp"
+                    android:textColor="@color/black"
+                    android:textSize="@dimen/_16sp"
+                    android:layout_gravity="center"
+                    android:visibility="gone"
+                    android:textStyle="bold" />
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="@color/white"
+                    app:cardCornerRadius="@dimen/_5dp"
+                    app:cardElevation="@dimen/_5dp"
+                    app:cardUseCompatPadding="true">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:orientation="horizontal"
+                        android:paddingTop="@dimen/_10dp"
+                        android:paddingBottom="@dimen/_10dp">
+
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content">
+
+                            <TextView
+                                android:id="@+id/tvPlaced"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="@dimen/_10dp"
+                                android:paddingBottom="@dimen/_10dp"
+                                android:singleLine="true"
+                                android:text="@string/placed"
+                                android:textColor="@color/reconGrey"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                app:cardBackgroundColor="@color/reconGrey"
+                                app:cardCornerRadius="@dimen/_25dp"
+                                app:layout_constraintEnd_toEndOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toBottomOf="@+id/tvPlaced">
+
+                                <androidx.cardview.widget.CardView
+                                    android:id="@+id/orderPlacedCard"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_margin="@dimen/_1dp"
+                                    app:cardBackgroundColor="@color/white"
+                                    app:cardCornerRadius="@dimen/_25dp">
+
+                                    <ImageView
+                                        android:id="@+id/placedIv"
+                                        android:layout_width="@dimen/_40dp"
+                                        android:layout_height="@dimen/_41dp"
+                                        android:padding="@dimen/_8dp"
+                                        android:src="@drawable/placed" />
+
+
+                                </androidx.cardview.widget.CardView>
+                            </androidx.cardview.widget.CardView>
+
+
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
+                        <View
+                            android:id="@+id/placedToPackedLine"
+                            android:layout_width="@dimen/_40dp"
+                            android:layout_height="1dp"
+                            android:layout_gravity="start|center"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:background="@color/reconGrey" />
+
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:padding="0dp">
+
+                            <TextView
+                                android:id="@+id/tvPacked"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="@dimen/_10dp"
+                                android:paddingBottom="@dimen/_10dp"
+                                android:singleLine="true"
+                                android:text="@string/packed"
+                                android:textColor="@color/reconGrey"
+                                app:layout_constraintEnd_toEndOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+
+                            <androidx.cardview.widget.CardView
+                                android:id="@+id/orderPackedCard"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                app:cardBackgroundColor="@color/reconGrey"
+                                app:cardCornerRadius="@dimen/_25dp"
+
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toBottomOf="@+id/tvPacked">
+
+                                <androidx.cardview.widget.CardView
+                                    android:id="@+id/orderInvoicedCv"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_margin="@dimen/_1dp"
+                                    app:cardBackgroundColor="@color/white"
+                                    app:cardCornerRadius="@dimen/_25dp">
+
+                                    <ImageView
+                                        android:id="@+id/invoicedIv"
+                                        android:layout_width="@dimen/_40dp"
+                                        android:layout_height="@dimen/_41dp"
+                                        android:padding="@dimen/_8dp"
+                                        android:src="@drawable/packed" />
+
+
+                                </androidx.cardview.widget.CardView>
+                            </androidx.cardview.widget.CardView>
+
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
+                        <View
+                            android:id="@+id/packedToShippedLine"
+                            android:layout_width="@dimen/_45dp"
+                            android:layout_height="1dp"
+                            android:layout_gravity="start|center"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:background="@color/reconGrey" />
+
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content">
+
+                            <TextView
+                                android:id="@+id/tvShipped"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="@dimen/_10dp"
+                                android:paddingBottom="@dimen/_10dp"
+                                android:singleLine="true"
+                                android:text="@string/shipped"
+                                android:textColor="@color/grey"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                app:cardBackgroundColor="@color/grey"
+                                app:cardCornerRadius="@dimen/_25dp"
+                                app:layout_constraintEnd_toEndOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toBottomOf="@+id/tvShipped">
+
+                                <androidx.cardview.widget.CardView
+                                    android:id="@+id/orderShippedCard"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_margin="@dimen/_1dp"
+                                    app:cardBackgroundColor="@color/white"
+                                    app:cardCornerRadius="@dimen/_25dp">
+
+                                    <ImageView
+                                        android:id="@+id/shippedIv"
+                                        android:layout_width="@dimen/_40dp"
+                                        android:layout_height="@dimen/_41dp"
+                                        android:padding="@dimen/_8dp"
+                                        android:src="@mipmap/deliver_man" />
+
+
+                                </androidx.cardview.widget.CardView>
+                            </androidx.cardview.widget.CardView>
+
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
+                        <View
+                            android:id="@+id/shippedToDeliverLine"
+                            android:layout_width="@dimen/_40dp"
+                            android:layout_height="1dp"
+                            android:layout_gravity="start|center"
+                            android:layout_marginStart="@dimen/_minus2dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:background="@color/reconGrey" />
+
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/_minus5dp">
+
+                            <TextView
+                                android:id="@+id/tvDelivered"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="@dimen/_10dp"
+                                android:paddingBottom="@dimen/_10dp"
+                                android:singleLine="true"
+                                android:text="@string/delivered"
+                                android:textColor="@color/grey"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                app:cardBackgroundColor="@color/reconGrey"
+                                app:cardCornerRadius="@dimen/_25dp"
+                                app:layout_constraintEnd_toEndOf="parent"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toBottomOf="@+id/tvDelivered">
+
+                                <androidx.cardview.widget.CardView
+                                    android:id="@+id/orderDeliveredCard"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_margin="@dimen/_1dp"
+                                    app:cardBackgroundColor="@color/white"
+                                    app:cardCornerRadius="@dimen/_25dp">
+
+                                    <ImageView
+                                        android:id="@+id/deliveredIv"
+                                        android:layout_width="@dimen/_40dp"
+                                        android:layout_height="@dimen/_41dp"
+                                        android:padding="@dimen/_8dp"
+                                        android:src="@drawable/delivered" />
+
+
+                                </androidx.cardview.widget.CardView>
+                            </androidx.cardview.widget.CardView>
+
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/goToFeedback"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="@dimen/_10dp"
+                    android:layout_marginEnd="@dimen/_10dp"
+                    android:visibility="gone"
+                    app:cardBackgroundColor="@color/white"
+                    app:cardCornerRadius="@dimen/_5dp"
+                    app:cardElevation="@dimen/_5dp"
+                    app:cardUseCompatPadding="true"
+                    app:layout_constraintTop_toBottomOf="@+id/shippingInformationCard">
+
+                    <androidx.cardview.widget.CardView
+                        android:id="@+id/feedbackBtnCard"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_margin="@dimen/_10dp"
+                        app:cardBackgroundColor="@color/red"
+                        app:cardCornerRadius="@dimen/_5dp"
+                        app:cardElevation="@dimen/_5dp"
+                        app:cardUseCompatPadding="true">
+
+
+                        <TextView
+                            android:id="@+id/tvFeedback"
+                            style="@style/MontserratBoldFontSetup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:padding="@dimen/_10dp"
+                            android:text="@string/feedback"
+                            android:textColor="@color/white"
+                            android:textSize="@dimen/_15sp" />
+
+                    </androidx.cardview.widget.CardView>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/orderDetailsCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardBackgroundColor="@color/white"
+                    app:cardCornerRadius="@dimen/_5dp"
+                    app:cardElevation="@dimen/_4dp"
+                    app:cardUseCompatPadding="true"
+                    app:layout_constraintTop_toBottomOf="@+id/orderPlacedCard">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:orientation="vertical"
+                        android:padding="@dimen/_10dp">
+
+                        <TextView
+                            android:id="@+id/tvOrderDetails"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            style="@style/MontserratBoldFontSetup"
+                            android:gravity="center"
+                            android:padding="@dimen/_5dp"
+                            android:text="@string/order_details"
+                            android:textColor="@color/black"
+                            android:textSize="@dimen/_18sp"
+                            android:textStyle="bold" />
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/order_id"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/orderId"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_16sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/placed_on"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/orderPlacingDate"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+
+                        <RelativeLayout
+                            android:id="@+id/paymentModeRl"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/payment_mode"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/paymentMode"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/number_of_items"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvItemNumber"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/product_value"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/totalValueAmount"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:text="0.0"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/schemes"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/discountAmount"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:text="0.0"
+                                android:textColor="@color/green"
+                                android:textSize="@dimen/_13sp" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/discount_charges"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvDiscountCharges"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:text="0.0"
+                                android:textColor="@color/green"
+                                android:textSize="@dimen/_13sp" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/delivery_charges"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/deliveryCharges"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:text="0.0"
+                                android:textColor="@color/red"
+                                android:textSize="@dimen/_13sp" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/gstAmount"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/gstAmount"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:text="0.0"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/total_amount"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvTotalValue"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:text="0.0"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_18sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/delivery_date"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/deliveryDate"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/delivery_mode"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/delivery_mode"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/_10dp"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/order_status2"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/order_status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/paymentDetailCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@id/Order_status_ll"
+                    app:cardCornerRadius="@dimen/_5dp"
+                    app:cardElevation="@dimen/_5dp"
+                    app:cardUseCompatPadding="true">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:orientation="vertical"
+                        android:padding="@dimen/_10dp">
+
+                        <TextView
+                            android:id="@+id/orderSummaryHeaderText"
+                            style="@style/MontserratBoldFontSetup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:padding="@dimen/_5dp"
+                            android:text="@string/invoice_details"
+                            android:textSize="@dimen/_18sp"
+                            android:textStyle="bold" />
+
+                        <RelativeLayout
+                            android:id="@+id/rlInvoiceNo"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp"
+                            android:visibility="visible">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/invoice_number"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvInvoiceNumber"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_16sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:id="@+id/rlInvoiceDate"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp"
+                            android:visibility="visible">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/invoice_date"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvInvoiceDate"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/roboto_regular"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+                        <RelativeLayout
+                            android:id="@+id/rlInvoiceAmt"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:padding="@dimen/_5dp"
+                            android:visibility="visible">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:fontFamily="@font/roboto_regular"
+                                android:text="@string/invoice_amount"
+                                android:textSize="@dimen/_13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvInvoiceAmt"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_alignParentEnd="true"
+                                android:fontFamily="@font/montserrat_bold"
+                                android:text="0.0"
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_18sp"
+                                android:textStyle="bold" />
+                        </RelativeLayout>
+
+
+                        <TextView
+                            android:id="@+id/invoiceFileView"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:drawableEnd="@drawable/ic_outline_receipt_long_24"
+                            android:drawablePadding="@dimen/_5dp"
+                            android:drawableTint="@color/red"
+                            android:fontFamily="@font/roboto_regular"
+                            android:padding="@dimen/_5dp"
+                            android:text="@string/view_invoice"
+                            android:textColor="@color/red"
+                            android:textSize="@dimen/_15sp"
+                            android:textStyle="bold" />
+
+
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/cvItemPurchased"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:cardCornerRadius="@dimen/_5dp"
+                    app:cardElevation="@dimen/_5dp"
+                    app:cardUseCompatPadding="true">
+
+                  <LinearLayout
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:orientation="vertical">
+
+                      <TextView
+                          android:id="@+id/tvItemPurchase"
+                          style="@style/MontserratBoldFontSetup"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:drawableEnd="@drawable/ic_baseline_arrow_drop_down_24"
+                          android:drawableTint="@color/new_blue"
+                          android:gravity="start|center"
+                          android:padding="@dimen/_15dp"
+                          android:text="@string/item_purchased"
+                          android:textSize="@dimen/_13sp" />
+
+                      <androidx.core.widget.NestedScrollView
+                          android:id="@+id/scrollView"
+                          android:layout_width="match_parent"
+                          android:layout_height="match_parent"
+                          android:layout_marginStart="@dimen/_5dp"
+                          android:layout_marginEnd="@dimen/_5dp"
+                          android:visibility="gone"
+                          app:layout_constraintTop_toBottomOf="@+id/orderDetailsCard">
+
+                      <androidx.recyclerview.widget.RecyclerView
+                          android:id="@+id/cartRecycler"
+                          android:layout_width="match_parent"
+                          android:layout_height="match_parent"
+                          android:nestedScrollingEnabled="false" />
+                      </androidx.core.widget.NestedScrollView>
+
+                  </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+
+
+                <androidx.cardview.widget.CardView
+                    android:id="@+id/shippingInformationCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:layout_marginBottom="@dimen/_5dp"
+                    app:cardElevation="@dimen/_5dp"
+                    app:cardUseCompatPadding="true"
+                    app:cardCornerRadius="@dimen/_5dp"
+                    app:layout_constraintTop_toBottomOf="@+id/scrollView">
+
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/_10dp">
+
+                        <TextView
+                            android:id="@+id/shippingHeading"
+                            style="@style/MontserratBoldFontSetup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:paddingTop="@dimen/_10dp"
+                            android:paddingBottom="@dimen/_10dp"
+                            android:text="@string/shipping_information"
+                            android:textSize="@dimen/_18sp"
+                            app:layout_constraintTop_toTopOf="parent" />
+
+
+                        <TextView
+                            android:id="@+id/tvShippingAddress"
+                            style="@style/RobotoBoldFontSetup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/_20dp"
+                            android:layout_marginTop="@dimen/_10dp"
+                            android:layout_marginBottom="@dimen/_10dp"
+                            android:buttonTint="@color/red"
+                            android:checked="true"
+                            android:paddingBottom="@dimen/_5dp"
+                            android:text="@string/shipping_address"
+                            android:textSize="@dimen/_16sp"
+                            android:visibility="gone"
+                            app:layout_constraintTop_toBottomOf="@+id/shippingHeading" />
+
+                        <TextView
+                            android:id="@+id/tvCustomerName"
+                            style="@style/RobotoBoldFontSetup"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/_20dp"
+                            android:layout_marginEnd="@dimen/_10dp"
+                            android:layout_marginBottom="@dimen/_10dp"
+                            android:paddingTop="@dimen/_5dp"
+                            android:paddingBottom="@dimen/_5dp"
+                            android:text=""
+                            app:layout_constraintTop_toBottomOf="@+id/tvShippingAddress" />
+
+                        <TextView
+                            android:id="@+id/tvContactNumber"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/_20dp"
+                            android:layout_marginEnd="@dimen/_20dp"
+                            android:paddingBottom="@dimen/_5dp"
+                            android:text=""
+                            app:layout_constraintTop_toBottomOf="@+id/tvCustomerName" />
+
+                        <TextView
+                            android:id="@+id/tvShipAddress"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="@dimen/_20dp"
+                            android:layout_marginEnd="@dimen/_50dp"
+                            android:layout_marginBottom="@dimen/_10dp"
+                            android:paddingBottom="@dimen/_5dp"
+                            app:layout_constraintTop_toBottomOf="@+id/tvContactNumber" />
+
+
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+                </androidx.cardview.widget.CardView>
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+
+        <TextView
+            android:id="@+id/noRecordTV"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/_30dp"
+            android:gravity="center"
+            android:text="@string/noRecordFound"
+            android:textColor="@color/black"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+
+</LinearLayout>

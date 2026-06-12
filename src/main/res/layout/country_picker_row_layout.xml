@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:id="@+id/fl_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/white"
+        android:paddingLeft="@dimen/_5dp"
+        android:paddingRight="@dimen/_5dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/ll_check"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:gravity="center"
+                android:paddingLeft="@dimen/_5dp"
+                android:paddingRight="@dimen/_10dp"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/img_check"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/uncheck_box" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingTop="@dimen/_10dp"
+                android:paddingBottom="@dimen/_10dp">
+
+                <TextView
+                    android:id="@+id/itemSelection_tvTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="start"
+                    android:paddingLeft="@dimen/_5dp"
+                    android:text="All Countries"
+                    android:textColor="@color/black"
+                    android:textSize="14sp"
+                    android:textStyle="bold"/>
+
+                <TextView
+                    android:id="@+id/code"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="start"
+                    android:paddingLeft="@dimen/_10dp"
+                    android:paddingEnd="@dimen/_10dp"
+                    android:text="(00)"
+                    android:textColor="@color/title_color_primary"
+                    android:textSize="@dimen/_18sp"
+                    android:visibility="visible" />
+
+            </LinearLayout>
+        </LinearLayout>
+
+
+    </FrameLayout>
+
+
+    <FrameLayout
+        android:id="@+id/itemSelection_frmLine"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_4dp"
+        android:layout_marginLeft="@dimen/_14dp"
+        android:layout_marginRight="@dimen/_14dp"
+        android:background="@drawable/shape_dots_line"
+        android:layerType="software" />
+
+</LinearLayout>

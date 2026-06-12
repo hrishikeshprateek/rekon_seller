@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@android:color/transparent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="horizontal"
+        android:paddingLeft="@dimen/_5dp"
+        android:paddingRight="@dimen/_5dp">
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/dealsInCV"
+            android:layout_width="@dimen/_40dp"
+            android:layout_height="@dimen/_40dp"
+            android:layout_gravity="center"
+            android:layout_marginStart="@dimen/_2dp"
+            android:layout_marginTop="@dimen/_5dp"
+            android:layout_marginEnd="@dimen/_5dp"
+            android:layout_marginBottom="@dimen/_8dp"
+            app:cardCornerRadius="@dimen/_50dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="center">
+
+                <ImageView
+                    android:id="@+id/imageDeals"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/image1" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginStart="@dimen/_5dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/titleTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center|start"
+                android:layout_marginBottom="@dimen/_8dp"
+                android:fontFamily="@font/roboto_regular"
+                android:textAlignment="textStart"
+                android:text="Title"
+                android:textColor="@color/text_grey3"
+                android:textSize="@dimen/_18sp" />
+
+            <TextView
+                android:id="@+id/subTitleTv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:gravity="start"
+                android:paddingTop="@dimen/_2dp"
+                android:textColor="@color/text_grey2"
+                android:textSize="@dimen/_12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+
+</LinearLayout>

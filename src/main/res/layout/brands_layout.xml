@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="@dimen/_140dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:paddingStart="@dimen/_4dp"
+        android:paddingTop="@dimen/_5dp"
+        android:paddingEnd="@dimen/_5dp"
+        android:paddingBottom="@dimen/_5dp">
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/brandCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardElevation="@dimen/_3dp"
+            app:cardBackgroundColor="@color/white"
+            app:cardUseCompatPadding="true">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_135dp"
+                android:layout_marginTop="@dimen/_5dp"
+                android:layout_marginBottom="@dimen/_5dp"
+                android:gravity="center"
+                android:orientation="vertical">
+
+                <ImageView
+                    android:id="@+id/brandImg"
+                    android:layout_width="@dimen/_70dp"
+                    android:layout_height="@dimen/_70dp"
+                    android:layout_marginTop="@dimen/_5dp"
+                    android:src="@mipmap/order_entry" />
+
+                <TextView
+                    android:id="@+id/brand_name"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_10dp"
+                    android:layout_marginBottom="@dimen/_5dp"
+                    android:fontFamily="@font/montserrat_regular"
+                    android:gravity="center"
+                    android:layout_marginStart="@dimen/_3dp"
+                    android:layout_marginEnd="@dimen/_3dp"
+                    android:text="@string/CIPLA"
+                   android:maxLines="2"
+
+                    android:textColor="@color/colorBlack"
+                    android:textSize="@dimen/_15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/brand_discount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_5dp"
+                    android:layout_marginBottom="@dimen/_5dp"
+                    android:fontFamily="@font/montserrat_regular"
+                    android:gravity="center"
+                    android:text="@string/upto_20_percent_off"
+                    android:textColor="@color/colorBlack"
+                    android:textSize="@dimen/_12dp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
+</RelativeLayout>

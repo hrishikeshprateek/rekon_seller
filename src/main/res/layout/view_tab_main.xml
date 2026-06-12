@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:background="@android:color/white"
+    android:paddingBottom="@dimen/_8dp"
+    android:paddingTop="@dimen/_8dp">
+
+        <FrameLayout
+            android:id="@+id/frame"
+            android:layout_width="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:layout_height="wrap_content">
+                <ImageView
+                    android:id="@+id/viewTab_imgIcon"
+                    android:layout_width="@dimen/_30dp"
+                    android:layout_height="@dimen/_28dp"
+                    android:src="@mipmap/ic_launcher" />
+                <RelativeLayout
+                    android:id="@+id/relativelayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:alpha="0.1"
+                    android:layout_marginRight="@dimen/_4dp"
+                    android:layout_marginTop="@dimen/_2dp"
+                    android:layout_gravity="end"
+                    android:layout_marginBottom="3dp">
+                        <ImageView
+                            android:id="@+id/notiIcon"
+                            android:layout_width="@dimen/_10dp"
+                            android:layout_height="@dimen/_10dp"
+                            android:visibility="gone"
+                            android:src="@mipmap/ic_launcher" />
+
+                </RelativeLayout>
+
+        </FrameLayout>
+
+
+        <TextView
+            android:id="@+id/viewTab_tvTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/frame"
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:textColor="@color/slate_grey"
+            android:textSize="10sp" />
+        <TextView
+            android:id="@+id/viewTab_tvDot"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_toRightOf="@+id/frame"
+            android:paddingBottom="@dimen/_2dp"
+            android:paddingLeft="@dimen/_8dp"
+            android:layout_marginLeft="-8dp"
+            android:paddingRight="@dimen/_8dp"
+            android:paddingTop="@dimen/_2dp"
+            android:textColor="@color/white"
+            tools:visibility="visible"
+            android:visibility="gone"
+            android:textSize="10sp" />
+</RelativeLayout>

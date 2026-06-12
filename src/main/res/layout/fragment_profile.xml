@@ -1,0 +1,618 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@android:id/tabhost"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical"
+    tools:ignore="MissingPrefix">
+
+    <include layout="@layout/actionbar_base_dark" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/fragmentRegister_tvLogin"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="@dimen/_10dp"
+        android:layout_marginTop="@dimen/_10dp"
+        android:layout_marginRight="@dimen/_10dp"
+        android:layout_marginBottom="@dimen/_10dp"
+        app:cardElevation="@dimen/_10dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ScrollView
+                android:id="@+id/scroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_above="@+id/bottom_row_rl"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <include layout="@layout/view_line" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/blue0"
+                        android:orientation="vertical"
+                        android:paddingTop="@dimen/_20dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_18dp"
+                            android:gravity="start|center"
+                            android:text="@string/user_id"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/fragmentRegister_licNo_txt"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center"
+                            android:hint="@string/user_id"
+                            android:paddingLeft="@dimen/_18dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textColor="@color/black"
+                            android:textColorHint="@color/black"
+                            android:visibility="visible"
+                            android:textSize="14sp" />
+                        <LinearLayout
+                            android:id="@+id/loginType_ll"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="visible">
+                            <include layout="@layout/view_line" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_18dp"
+                                android:gravity="start|center"
+                                android:text="Role Type"
+                                android:textColor="@color/new_blue"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/fragmentProfile_role"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="start|center"
+                                android:hint="Role Type"
+                                android:textColor="@color/black"
+                                android:paddingLeft="@dimen/_18dp"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingRight="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:textSize="14sp"
+                                />
+
+                        </LinearLayout>
+                        <LinearLayout
+                            android:id="@+id/licence_ll"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:visibility="gone">
+                            <include layout="@layout/view_line" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_18dp"
+                                android:gravity="start|center"
+                                android:text="Licence Number"
+                                android:textColor="@color/new_blue"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/fragmentLogin_txtLicNo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="start|center"
+                                android:hint="Enter licence Number"
+                                android:textColor="@color/black"
+                                android:paddingLeft="@dimen/_18dp"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingRight="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:textSize="14sp"
+                                 />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+
+                    <include layout="@layout/view_line" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_horizontal"
+                        android:orientation="vertical"
+                        android:paddingLeft="@dimen/_10dp"
+                        android:paddingRight="@dimen/_10dp">
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/business_type"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <LinearLayout
+                            android:id="@+id/fragmentRegister_edtCategory"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center"
+                            android:orientation="horizontal"
+                            android:paddingLeft="@dimen/_7dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_weight=".3"
+                                android:background="@null"
+                                android:gravity="start|center"
+                                android:hint="@string/select_business_type"
+                                android:textSize="14sp"
+                                android:visibility="gone" />
+
+                            <Spinner
+                                android:id="@+id/business_type_spinner"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@color/white">
+
+                            </Spinner>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_10dp"
+                                android:layout_weight=".8"
+                                android:gravity="end"
+                                android:visibility="gone">
+
+                                <ImageView
+                                    android:layout_width="@dimen/_15dp"
+                                    android:layout_height="@dimen/_15dp"
+                                    android:src="@drawable/ic_select" />
+                            </LinearLayout>
+
+                        </LinearLayout>
+
+
+                        <include layout="@layout/view_line" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/gstin"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <LinearLayout
+                            android:id="@+id/fragmentRegister_edtGstin"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center"
+                            android:orientation="horizontal">
+
+                            <EditText
+                                android:id="@+id/fragmentRegister_ed_gstin"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@null"
+                                android:gravity="start|center"
+                                android:hint="@string/enter_gstin_number"
+                                android:inputType="text"
+                                android:paddingLeft="@dimen/_8dp"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingRight="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:textSize="14sp" />
+
+                        </LinearLayout>
+
+                        <include layout="@layout/view_line" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/shop_firm_name"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/fragmentRegister_edtName"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/shop_firm_full_name"
+                            android:inputType="text"
+                            android:paddingLeft="@dimen/_8dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textSize="14sp" />
+
+                        <include layout="@layout/view_line" />
+
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/address"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/fragmentRegister_edtAddress1"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/address_line_no_one"
+                            android:inputType="text"
+                            android:paddingLeft="@dimen/_8dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textSize="14sp" />
+
+                        <include
+                            layout="@layout/view_line_dots"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_7dp" />
+
+                        <EditText
+                            android:id="@+id/fragmentRegister_edtAddress2"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/address_line_no_two"
+                            android:inputType="text"
+                            android:paddingLeft="@dimen/_8dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textSize="14sp" />
+
+                        <include
+                            layout="@layout/view_line_dots"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/pincode"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/fragmentRegister_edtPinCode"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/enter_your_pincode"
+                            android:inputType="number"
+                            android:paddingLeft="@dimen/_8dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textSize="14sp" />
+
+                        <include
+                            layout="@layout/view_line_dots"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp" />
+
+
+                        <RelativeLayout
+                            android:id="@+id/select_country_rl"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:layout_marginTop="@dimen/_12dp">
+
+                            <TextView
+                                android:id="@+id/country_title"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_7dp"
+                                android:gravity="start|center"
+                                android:text="@string/country"
+                                android:textColor="@color/new_blue"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/countryTV"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_below="@+id/country_title"
+                                android:layout_marginLeft="@dimen/_7dp"
+                                android:layout_marginRight="@dimen/_30dp"
+                                android:ellipsize="end"
+                                android:hint="@string/select_county"
+                                android:paddingTop="@dimen/_12dp"
+                                android:paddingBottom="@dimen/_12dp"
+                                android:singleLine="true"
+                                android:text=""
+                                android:textColor="@color/black"
+                                android:textSize="@dimen/_14dp" />
+
+                            <ImageView
+                                android:id="@+id/countryImg"
+                                android:layout_width="16dp"
+                                android:layout_height="16dp"
+                                android:layout_below="@+id/country_title"
+                                android:layout_alignEnd="@+id/country_title"
+                                android:layout_alignRight="@+id/country_title"
+                                android:layout_marginTop="@dimen/_12dp"
+                                android:layout_marginRight="@dimen/_10dp"
+                                android:src="@drawable/ic_select" />
+
+                        </RelativeLayout>
+
+                        <include layout="@layout/view_line" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <RelativeLayout
+                                android:id="@+id/select_state_rl"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:layout_marginTop="@dimen/_12dp"
+                                android:layout_weight="1">
+
+                                <TextView
+                                    android:id="@+id/state_title"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginLeft="@dimen/_7dp"
+                                    android:gravity="start|center"
+                                    android:text="@string/state"
+                                    android:textColor="@color/new_blue"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/stateTV"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_below="@+id/state_title"
+                                    android:layout_marginLeft="@dimen/_7dp"
+                                    android:layout_marginRight="@dimen/_30dp"
+                                    android:ellipsize="end"
+                                    android:hint="@string/select_state"
+                                    android:paddingTop="@dimen/_12dp"
+                                    android:paddingBottom="@dimen/_12dp"
+                                    android:singleLine="true"
+                                    android:text=""
+                                    android:textColor="@color/black"
+                                    android:textSize="@dimen/_14dp" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_below="@+id/state_title"
+                                    android:layout_alignEnd="@+id/state_title"
+                                    android:layout_alignRight="@+id/state_title"
+                                    android:layout_marginTop="@dimen/_12dp"
+                                    android:layout_marginRight="@dimen/_10dp"
+                                    android:src="@drawable/ic_select" />
+
+                            </RelativeLayout>
+
+                            <RelativeLayout
+                                android:id="@+id/select_city_rl"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:layout_marginTop="@dimen/_12dp"
+                                android:layout_weight="1">
+
+                                <TextView
+                                    android:id="@+id/city_title"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginLeft="@dimen/_7dp"
+                                    android:gravity="start|center"
+                                    android:text="@string/city"
+                                    android:textColor="@color/new_blue"
+                                    android:textSize="14sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:id="@+id/cityTV"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_below="@+id/city_title"
+                                    android:layout_marginLeft="@dimen/_7dp"
+                                    android:layout_marginRight="@dimen/_30dp"
+                                    android:ellipsize="end"
+                                    android:hint="@string/select_city"
+                                    android:paddingTop="@dimen/_12dp"
+                                    android:paddingBottom="@dimen/_12dp"
+                                    android:singleLine="true"
+                                    android:text=""
+                                    android:textColor="@color/black"
+                                    android:textSize="@dimen/_14dp" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_below="@+id/city_title"
+                                    android:layout_alignEnd="@+id/city_title"
+                                    android:layout_alignRight="@+id/city_title"
+                                    android:layout_marginTop="@dimen/_12dp"
+                                    android:layout_marginRight="@dimen/_10dp"
+                                    android:src="@drawable/ic_select" />
+
+                            </RelativeLayout>
+                        </LinearLayout>
+
+                        <include layout="@layout/view_line" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/email_address"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/fragmentRegister_edtEmail"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/enter_email_address"
+                            android:inputType="textEmailAddress"
+                            android:paddingLeft="@dimen/_8dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textSize="14sp" />
+
+                        <include layout="@layout/view_line" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/telephone_number"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/fragmentRegister_edtTelephoneNumber"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/enter_telephone_number"
+                            android:inputType="number"
+                            android:paddingLeft="@dimen/_8dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:maxLength="10"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textSize="14sp" />
+
+                        <include layout="@layout/view_line" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginLeft="@dimen/_6dp"
+                            android:layout_marginTop="@dimen/_12dp"
+                            android:gravity="start|center"
+                            android:text="@string/drug_license_number"
+                            android:textColor="@color/new_blue"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/fragmentRegister_edtDrugLicense"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@null"
+                            android:gravity="start|center"
+                            android:hint="@string/enter_drug_license_number"
+                            android:paddingLeft="@dimen/_8dp"
+                            android:paddingTop="@dimen/_12dp"
+                            android:paddingRight="@dimen/_12dp"
+                            android:paddingBottom="@dimen/_12dp"
+                            android:textSize="14sp" />
+
+                        <include layout="@layout/view_line" />
+
+                        <FrameLayout
+                            android:id="@+id/fragmentRegister_frmUpdateAccount"
+                            android:layout_width="match_parent"
+                            android:layout_height="@dimen/_40dp"
+                            android:layout_marginTop="@dimen/_16dp"
+                            android:layout_marginBottom="@dimen/_16dp"
+                            android:background="@drawable/shape_radius_dark_khaki"
+                            android:clickable="true"
+                            android:foreground="?android:attr/selectableItemBackground">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center"
+                                android:text="@string/update_profile"
+                                android:textAllCaps="true"
+                                android:textColor="@color/white"
+                                android:textSize="14sp" />
+                        </FrameLayout>
+                    </LinearLayout>
+
+                </LinearLayout>
+            </ScrollView>
+
+        </RelativeLayout>
+    </androidx.cardview.widget.CardView>
+
+</LinearLayout>

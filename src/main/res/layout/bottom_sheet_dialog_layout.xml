@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/download"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?android:attr/selectableItemBackground"
+        android:orientation="horizontal"
+        android:padding="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_weight="2"
+            android:paddingLeft="@dimen/_10dp"
+            android:paddingTop="@dimen/_5dp"
+            android:paddingBottom="@dimen/_5dp"
+            android:text="Select Date"
+            android:textColor="@color/black"
+            android:textSize="@dimen/_20sp" />
+
+        <ImageView
+            android:id="@+id/closeDialogImv"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_margin="8dp"
+            android:src="@drawable/ic_clear_black_24dp" />
+    </LinearLayout>
+
+    <View
+        android:id="@+id/separatorView2"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginBottom="@dimen/_5dp"
+        android:background="@color/black" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/dateRv"
+        android:layout_marginStart="@dimen/_10dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+    <androidx.cardview.widget.CardView
+        android:id="@+id/clearDateCv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="@dimen/_10dp"
+        android:layout_marginEnd="@dimen/_20dp"
+        android:layout_marginStart="@dimen/_20dp"
+        android:layout_marginBottom="@dimen/_15dp"
+        app:cardBackgroundColor="@color/grey"
+        app:cardCornerRadius="@dimen/_5dp"
+        app:cardElevation="@dimen/_5dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/_35dp"
+            android:fontFamily="@font/montserrat_bold"
+            android:gravity="center"
+            android:textAllCaps="true"
+            android:text="@string/clear_date"
+            android:textColor="@color/white"
+            android:textSize="@dimen/_15sp" />
+
+    </androidx.cardview.widget.CardView>
+
+</LinearLayout>

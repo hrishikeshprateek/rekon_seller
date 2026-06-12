@@ -40,8 +40,11 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
     _future = widget.fetchDetail(widget.entry);
   }
 
-  /// Fetches the bill PDF via GetFile (response is JSON carrying a
-  /// base64-encoded PDF), decodes it and opens it in the in-app PDF viewer.
+  /// Fetches the bill PDF via GetFile and opens it in the in-app PDF viewer.
+  /// On success the server returns the raw PDF bytes (starting with "%PDF").
+  /// When an invoice has no bill it returns JSON like
+  /// {"success":false,"message":"No PDF available for this transaction"} with
+  /// status 400 — that message is shown in a dialog and the button disabled.
   Future<void> _viewBill() async {
     if (_isSharingBill) return;
     setState(() => _isSharingBill = true);
@@ -76,58 +79,78 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
             'package_name': auth.packageNameHeader,
             if (auth.getAuthHeader() != null) 'Authorization': auth.getAuthHeader(),
           },
-          // The backend replies 400 when an invoice has no bill PDF. Accept
-          // 4xx so we can inspect the body and show "Bill not found" instead
-          // of throwing into the generic error handler.
+          // Receive the body as raw bytes: on success it's a binary PDF, and
+          // treating it as text would corrupt it. Accept 4xx so the "no bill"
+          // JSON can be read instead of throwing into the error handler.
+          responseType: ResponseType.bytes,
           validateStatus: (status) => status != null && status < 500,
         ),
       );
 
-      // Response is JSON with the PDF as a base64 string.
-      final raw = response.data;
-      dynamic parsed;
-      try {
-        parsed = raw is Map
-            ? raw
-            : jsonDecode(raw.toString().replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '').trim());
-      } catch (_) {
-        parsed = null;
-      }
-
-      // Log the response shape (without dumping the huge base64) so we can see
-      // whether tm_base64_pdf came back for this invoice.
-      final bodyPreview = raw.toString();
-      debugPrint('[ViewBill] status=${response.statusCode} '
-          'topKeys=${parsed is Map ? parsed.keys.toList() : parsed.runtimeType} '
-          'body=${bodyPreview.length > 300 ? '${bodyPreview.substring(0, 300)}…' : bodyPreview}');
-
-      final b64 = _extractBase64(parsed);
-      debugPrint('[ViewBill] tm_base64_pdf '
-          '${b64.isEmpty ? 'MISSING/empty' : 'present, length=${b64.length}'}');
-      if (b64.isEmpty) {
-        // No tm_base64_pdf for this invoice. Surface the server's own message
-        // (e.g. "No PDF available for this transaction") in a dialog and
-        // disable the button so it isn't retried.
-        final serverMsg = (parsed is Map
-                ? (parsed['message'] ?? parsed['Message'])
-                : null)
-            ?.toString();
-        final dialogMsg = (serverMsg != null && serverMsg.trim().isNotEmpty)
-            ? serverMsg
-            : 'No PDF available for this transaction';
-        if (mounted) {
-          setState(() => _billUnavailable = true);
-          await _showBillDialog(dialogMsg);
-        }
-        return;
-      }
-
+      // Normalise the body to bytes.
+      final data = response.data;
       Uint8List bytes;
-      try {
-        bytes = base64Decode(b64);
-      } catch (_) {
-        throw 'Bill data is not a valid PDF.';
+      if (data is Uint8List) {
+        bytes = data;
+      } else if (data is List<int>) {
+        bytes = Uint8List.fromList(data);
+      } else {
+        bytes = Uint8List.fromList(utf8.encode(data?.toString() ?? ''));
       }
+
+      // A real PDF starts with the "%PDF" magic header (0x25 0x50 0x44 0x46).
+      final isPdf = bytes.length >= 4 &&
+          bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46;
+      debugPrint('[ViewBill] status=${response.statusCode} '
+          'bytes=${bytes.length} isPdf=$isPdf');
+
+      if (!isPdf) {
+        // Not raw PDF: it's the "no bill" JSON, or (legacy) a JSON wrapper
+        // carrying a base64 PDF. Decode as text and inspect.
+        String text;
+        try {
+          text = utf8.decode(bytes, allowMalformed: true);
+        } catch (_) {
+          text = '';
+        }
+        dynamic parsed;
+        try {
+          parsed = jsonDecode(text.trim());
+        } catch (_) {
+          parsed = null;
+        }
+
+        // Legacy fallback in case the server ever wraps the PDF as base64.
+        final b64 = _extractBase64(parsed);
+        if (b64.isNotEmpty) {
+          try {
+            bytes = base64Decode(b64);
+          } catch (_) {
+            bytes = Uint8List(0);
+          }
+        }
+
+        if (b64.isEmpty || bytes.isEmpty) {
+          // No PDF for this invoice: show the server's own message and disable
+          // the button so it isn't retried.
+          final serverMsg = (parsed is Map
+                  ? (parsed['message'] ?? parsed['Message'])
+                  : null)
+              ?.toString();
+          final dialogMsg = (serverMsg != null && serverMsg.trim().isNotEmpty)
+              ? serverMsg
+              : 'No PDF available for this transaction';
+          if (mounted) {
+            setState(() => _billUnavailable = true);
+            await _showBillDialog(dialogMsg);
+          }
+          return;
+        }
+      }
+
       if (bytes.isEmpty) throw 'Bill PDF is empty.';
 
       final dir = await getTemporaryDirectory();

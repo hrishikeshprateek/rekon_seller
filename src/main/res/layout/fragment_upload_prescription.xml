@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/gray92"
+    android:orientation="vertical"
+    tools:ignore="MissingPrefix">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <include layout="@layout/actionbar_base_dark" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/acceptedDetailCardView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="@dimen/_5dp"
+                android:layout_marginTop="@dimen/_5dp"
+                android:layout_marginRight="@dimen/_5dp"
+                android:layout_marginBottom="@dimen/_10dp"
+                android:visibility="visible"
+                app:cardElevation="@dimen/_3dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/_10dp"
+                    android:layout_marginBottom="@dimen/_10dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:id="@+id/imgFromCamera"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:visibility="visible">
+
+                        <ImageView
+                            android:layout_width="@dimen/_40dp"
+                            android:layout_height="@dimen/_35dp"
+                            android:layout_marginBottom="@dimen/_2dp"
+                            android:src="@mipmap/camera_icon" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:gravity="center"
+                            android:text="Camera"
+                            android:textColor="@color/dark_blue"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="0.5dp"
+                        android:layout_height="@dimen/_50dp"
+                        android:background="@color/grey" />
+
+                    <LinearLayout
+                        android:id="@+id/imgFromGallery"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:layout_gravity="center"
+                        android:layout_weight="1"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:visibility="visible">
+
+                        <ImageView
+                            android:layout_width="@dimen/_40dp"
+                            android:layout_height="@dimen/_35dp"
+                            android:layout_marginBottom="@dimen/_2dp"
+                            android:src="@mipmap/gallery_icon" />
+
+                        <TextView
+                            android:id="@+id/txt_refresh"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:ellipsize="end"
+                            android:gravity="center"
+                            android:text="Gallery"
+                            android:textColor="@color/dark_blue"
+                            android:textSize="14sp" />
+                    </LinearLayout>
+
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/_rvPhoto"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_150dp"
+                android:layout_marginLeft="@dimen/_2dp"
+                android:layout_marginBottom="@dimen/_8dp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:id="@+id/image_bg"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_140dp"
+                android:gravity="center">
+
+                <ImageView
+                    android:layout_width="@dimen/_70dp"
+                    android:layout_height="@dimen/_70dp"
+                    android:layout_gravity="center"
+                    android:layout_marginBottom="@dimen/_2dp"
+                    android:src="@drawable/photo1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:background="@drawable/base_bg">
+                <FrameLayout
+                    android:id="@+id/uploadImage_fl"
+                    android:layout_width="100dp"
+                    android:layout_height="@dimen/_40dp"
+                    android:layout_marginTop="@dimen/_16dp"
+                    android:layout_marginBottom="@dimen/_16dp"
+                    android:background="@drawable/shape_radius_dark_khaki"
+                    android:clickable="true"
+                    android:foreground="?android:attr/selectableItemBackground">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="upload"
+                        android:textAllCaps="true"
+                        android:textColor="@color/white"
+                        android:textSize="14sp" />
+                </FrameLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+
+</LinearLayout>

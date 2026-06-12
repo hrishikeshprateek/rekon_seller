@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/common_listing_ll"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/header"
+        layout="@layout/actionbar_base_dark"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/search_bar"
+        android:layout_width="match_parent"
+        android:layout_height="45dp"
+        android:layout_margin="@dimen/_10dp"
+        app:cardBackgroundColor="@color/white"
+        app:cardCornerRadius="@dimen/_10dp"
+        app:cardElevation="@dimen/_10dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="45dp"
+            android:background="@color/white"
+            android:gravity="start|center"
+            android:padding="@dimen/_2dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:layout_weight="0.9"
+                android:gravity="center">
+
+                <ImageView
+                    android:layout_width="@dimen/_22dp"
+                    android:layout_height="@dimen/_25dp"
+                    android:src="@drawable/search_icon_red" />
+            </LinearLayout>
+
+
+            <EditText
+                android:id="@+id/search_loc_et"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_weight=".1"
+                android:background="@null"
+                android:gravity="center_vertical"
+                android:hint="@string/search_location"
+                android:paddingLeft="@dimen/_5dp"
+                android:paddingRight="@dimen/_5dp"
+                android:singleLine="true"
+                android:textColor="@color/new_grey"
+                android:textColorHint="@color/new_grey"
+                android:textSize="@dimen/_18sp"
+                android:textStyle="bold" />
+
+
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <LinearLayout
+        android:id="@+id/acceptedDetailCardView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginLeft="@dimen/_10dp"
+        android:layout_marginTop="@dimen/_5dp"
+        android:layout_marginRight="@dimen/_10dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:id="@+id/fragmentProfile_llContainerSort"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="@dimen/_14dp"
+                android:layout_marginRight="@dimen/_14dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Sort by"
+                    android:textColor="@color/warm_grey"
+                    android:textSize="13sp" />
+
+                <FrameLayout
+                    android:layout_width="@dimen/_18dp"
+                    android:layout_height="@dimen/_4dp"
+                    android:background="@drawable/shape_dots_line"
+                    android:layerType="software"
+                    android:rotation="90" />
+
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <LinearLayout
+                    android:id="@+id/fragmentMyVendor_frmSortVendor"
+                    android:layout_width="@dimen/_170dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="right|center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingTop="@dimen/_10dp"
+                    android:paddingBottom="@dimen/_10dp">
+
+                    <TextView
+                        android:id="@+id/fragmentMyVendor_tvCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginRight="@dimen/_19dp"
+                        android:textColor="@color/black"
+                        android:textSize="13sp" />
+
+                    <ImageView
+                        android:id="@+id/fragmentMyVendor_imgSortVendors"
+                        android:layout_width="@dimen/_32dp"
+                        android:layout_height="@dimen/_32dp"
+                        android:src="@drawable/ic_select_down" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!--            <include layout="@layout/view_line" />-->
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_common_listing"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingLeft="@dimen/_30dp"
+                android:paddingTop="@dimen/_10dp"
+                android:paddingRight="@dimen/_30dp"
+                android:paddingBottom="@dimen/_10dp"
+                android:visibility="visible" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_distributor_listing"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="@dimen/_10dp"
+                android:visibility="gone" />
+
+            <androidx.core.widget.NestedScrollView
+                android:id="@+id/scrollView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone">
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvAccountFilterList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:paddingBottom="@dimen/_10dp" />
+            </androidx.core.widget.NestedScrollView>
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/noRecordTV"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginBottom="@dimen/_100dp"
+                android:gravity="center"
+                android:text="@string/noRecordFound" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

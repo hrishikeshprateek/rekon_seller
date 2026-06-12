@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="@dimen/toolbar_size"
+    android:id="@+id/containerLL"
+    android:background="@color/new_blue"
+    android:paddingTop="@dimen/_13dp"
+    tools:ignore="MissingPrefix">
+
+    <ImageView
+        android:id="@+id/actionbar_imgBack"
+        android:layout_width="@dimen/_32dp"
+        android:layout_height="@dimen/_32dp"
+        android:layout_marginLeft="@dimen/_14dp"
+        android:src="@drawable/ic_back_white" />
+
+    <TextView
+        android:id="@+id/actionbar_tvTitle"
+        fontPath="@string/font_crimson_SemiBold"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:layout_toRightOf="@+id/actionbar_imgBack"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:lines="1"
+        android:paddingLeft="@dimen/_6dp"
+        android:paddingRight="@dimen/_36dp"
+        android:textColor="@color/white"
+        android:textSize="18sp" />
+    <LinearLayout
+        android:id="@+id/actionbar_imgRefresh"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_centerVertical="true"
+        android:layout_marginLeft="@dimen/_5dp"
+        android:layout_toLeftOf="@+id/actionbar_imgLogout"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="invisible"
+        android:layout_toStartOf="@+id/actionbar_imgLogout">
+
+        <ImageView
+            android:id="@+id/imgView_refresh"
+            android:layout_width="@dimen/_22dp"
+            android:layout_height="@dimen/_18dp"
+            android:layout_marginBottom="@dimen/_2dp"
+            android:src="@mipmap/refresh_icon" />
+
+        <TextView
+            android:id="@+id/txt_refresh"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:text="Refresh"
+            android:textColor="@color/white"
+            android:textSize="11sp" />
+    </LinearLayout>
+    <LinearLayout
+        android:id="@+id/actionbar_imgLogout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentRight="true"
+        android:layout_centerVertical="true"
+        android:layout_marginLeft="@dimen/_14dp"
+        android:layout_marginRight="@dimen/_14dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="invisible">
+
+        <ImageView
+            android:id="@+id/imgView"
+            android:layout_width="@dimen/_25dp"
+            android:layout_height="@dimen/_20dp"
+            android:src="@mipmap/logout_white" />
+
+        <TextView
+            android:id="@+id/txt_"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:text="@string/logout"
+            android:textColor="@color/white"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+
+</RelativeLayout>

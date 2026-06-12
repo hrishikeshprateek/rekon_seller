@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <include
+        android:id="@+id/include_header"
+        layout="@layout/actionbar_base_dark" />
+
+    <LinearLayout
+        android:id="@+id/lll"
+        android:layout_width="match_parent"
+        android:layout_height="500dp"
+        android:layout_above="@+id/rl"
+        android:layout_below="@+id/include_header"
+        android:orientation="vertical">
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/scroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/order_agency_txt"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="#21a8d6"
+                    android:paddingLeft="@dimen/_5dp"
+                    android:paddingTop="@dimen/_20dp"
+                    android:paddingRight="@dimen/_5dp"
+                    android:paddingBottom="@dimen/_5dp"
+                    android:text="ORDER FIRM NAME"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_14dp" />
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv_my_order_listing"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="visible">
+
+                </androidx.recyclerview.widget.RecyclerView>
+            </LinearLayout>
+
+        </androidx.core.widget.NestedScrollView>
+    </LinearLayout>
+
+
+    <RelativeLayout
+        android:id="@+id/rl"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_alignParentBottom="true"
+        android:background="@color/cream_color"
+        android:orientation="vertical">
+
+
+        <LinearLayout
+            android:id="@+id/checkout_ll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentBottom="true"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/shape_border_grey_light">
+
+            <Button
+                android:id="@+id/checkout_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/new_blue"
+                android:text="BACK"
+                android:textAllCaps="false"
+                android:textColor="#ffffff"
+                android:visibility="visible" />
+        </LinearLayout>
+    </RelativeLayout>
+
+
+</RelativeLayout>

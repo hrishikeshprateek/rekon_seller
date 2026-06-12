@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#fafafa</color>
+    <color name="colorPrimaryDark">#000000</color>
+    <color name="colorAccent">#212121</color>
+    <color name="colorLine">#E0E0E0</color>
+    <color name="colorBlack">#000000</color>
+    <color name="colorGrayLight">#BDBDBD</color>
+    <color name="color_main">#9c8c59</color>
+    <color name="color_main_light">#DBD0AD</color>
+    <color name="color_black_light">#212121</color>
+    <color name="gray92">#ebebeb</color>
+    <color name="gray93">#959595</color>
+    <color name="gray94">#717074</color>
+    <color name="colorDisable">#9D9FA2</color>
+    <color name="grey">#797979</color>
+    <color name="red">#DA1D2F</color>
+    <color name="red_wine">#790000</color>
+    <color name="red_wine2">#e50000</color>
+<color name="gray_light_reckon_search_list"> #f5f5f5</color>
+    <color name="red_wine1">#990000</color>
+    <color name="dark_khaki">#9c8c59</color>
+    <color name="new_light_grey">#f5f3ee</color>
+    <color name="light_grey">#F8F8F8</color>
+    <color name="warm_grey">#959595</color>
+    <color name="slate_grey">#6d6f71</color>
+    <color name="slate_grey_two">#58585a</color>
+    <color name="pinkish_grey">#c8c8c8</color>
+    <color name="denim_blue">#3b5998</color>
+    <color name ="status_bar_color">#0A1172</color>
+    <color name="sky_blue">#4FF0F0</color>
+    <color name="purplish_grey">#717074</color>
+    <color name="pale_red">#dd4b39</color>
+    <color name="black">#252525</color>
+    <color name="white">#ffffff</color>
+    <color name="white_two">#ebebeb</color>
+    <color name="white_three">#e1e1e1</color>
+    <color name="yellow">#f1b34e</color>
+    <color name="gray_cd">#80cdcdcd</color>
+    <color name="blue0">#e6eeff</color>
+    <color name="blue1">#ccddff</color>
+    <color name="blue2">#b3ccff</color>
+    <color name="blue3">#99bbff</color>
+    <color name="blue4">#80aaff</color>
+    <color name="Cart_blue">#21a8d6</color>
+    <color name="blue5">#6699ff</color>
+    <color name="dark_blue">#08113c</color>
+    <color name="dark_blue1">#303F9F</color>
+    <color name="green">#008000</color>
+    <color name="invoice_header_grey">#C4C4C4</color>
+    <color name="polyline_color">#62bb47</color>
+    <color name="yellow1">#f0c23b</color>
+    <color name="accepted_color">#34d17a</color>
+    <color name="cream_color">#fdffd0</color>
+    <color name="cancelled_col">#EA7B7E</color>
+    <color name="mint_color">#98FB98</color>
+    <color name="red_border">#EA7B7E</color>
+    <color name="new_grey">#676767</color>
+    <color name="new_pink">#FC8EAC</color>
+    <color name="pink">#FFC1D6</color>
+    <color name="new_red">#EA7B7E</color>
+<!--    <color name="new_red">#DE3236</color>-->
+    <color name="divider_line_grey">#DADADA</color>
+    <color name="reconGrey">#676767</color>
+    <color name="orange">#FFA841</color>
+    <color name="green_reckon">#47D624</color>
+    <color name="darkGreen">#2E9F11</color>
+    <color name="darkGreen01">#198548</color>
+    <color name="paid_text_green">#34A853</color>
+
+    <color name="new_blue">#13A2DF</color>
+    <color name="btn_dark_grey">#727272</color>
+    <color name="box_fill_grey">#E5E5E5</color>
+    <color name="title_color_primary">#1E5FA6</color>
+    <color name="abliss_theme_color_primary">#85a03c</color>
+    <color name="abliss_theme_color_secondary">#1f6643</color>
+    <color name="selected_filter_color_blue">#cfecf9</color>
+    <color name="color">#767578</color>
+    <color name="baby_blue">#DBF5F0</color>
+    <color name="tiffany_blue">#A4E5E0</color>
+    <color name="baby_blue1">#BFD7ED</color>
+    <color name="text_color_level">#13A2DF</color>
+    <color name="btn_color">#13A2DF</color>
+    <color name="section_color_primary">#FFFFFF</color>
+    <color name="text_green">#257E3E</color>
+    <color name="text_grey1">#554D4D</color>
+    <color name="text_grey2">#8E8989</color>
+    <color name="text_grey3">#636262</color>
+    <color name="text_shadow">#7F000000</color>
+
+
+
+
+
+
+
+    <!--
+       Smart Connect:
+
+           <color name="new_blue">#3D5F7C</color>
+        <color name="btn_dark_grey">#727272</color>
+        <color name="box_fill_grey">#E5E5E5</color>
+        <color name="title_color_primary">#3D5F7C</color>
+        <color name="abliss_theme_color_primary">#85a03c</color>
+        <color name="abliss_theme_color_secondary">#1f6643</color>
+        <color name="selected_filter_color_blue">#cfecf9</color>-->
+<!--
+   Abliss
+   <color name="new_blue">#85a03c</color>
+    <color name="btn_dark_grey">#727272</color>
+    <color name="box_fill_grey">#E5E5E5</color>
+    <color name="title_color_primary">#85a03c</color>
+    <color name="abliss_theme_color_primary">#85a03c</color>
+    <color name="abliss_theme_color_secondary">#1f6643</color>
+    <color name="selected_filter_color_blue">#cfecf9</color>-->
+
+</resources>

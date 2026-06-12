@@ -1,0 +1,635 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/parentRlContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    tools:context=".NewDesign.NewFragments.AccountStatementFragment">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_above="@+id/shareStatementCard">
+        <LinearLayout
+            android:id="@+id/topSectionLL"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <androidx.cardview.widget.CardView
+                android:id="@+id/selectFirmCv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/_6dp"
+                android:layout_marginTop="@dimen/_10dp"
+                android:layout_marginEnd="@dimen/_8dp"
+                android:layout_marginBottom="@dimen/_5dp"
+                android:visibility="visible"
+                app:cardBackgroundColor="@color/new_blue"
+                app:cardCornerRadius="@dimen/_5dp"
+                app:cardElevation="@dimen/_5dp">
+
+                <androidx.cardview.widget.CardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="@dimen/_1dp"
+                    app:cardCornerRadius="@dimen/_5dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="start|center"
+                        android:layout_margin="@dimen/_2dp"
+                        android:background="@color/white"
+                        android:orientation="horizontal"
+                        android:padding="@dimen/_1dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="2"
+                            android:gravity="center"
+                            android:orientation="horizontal">
+
+                            <ImageView
+                                android:layout_width="@dimen/_20dp"
+                                android:layout_height="@dimen/_20dp"
+                                android:src="@drawable/user_ic"
+                                android:visibility="gone"/>
+
+                            <TextView
+                                android:id="@+id/tvFirmName"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="@dimen/_8dp"
+                                android:layout_weight="2"
+                                android:fontFamily="@font/montserrat_regular"
+                                android:gravity="start|center"
+                                android:text="@string/select_your_firm"
+                                android:textColor="@color/black"
+                                android:textStyle="bold"
+                                android:textSize="@dimen/_14sp" />
+
+                            <ImageView
+                                android:layout_width="@dimen/_25dp"
+                                android:layout_height="@dimen/_25dp"
+                                android:src="@drawable/ic_baseline_arrow_drop_down_24" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:id="@+id/ivClearFirm"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:paddingStart="@dimen/_10dp"
+                            android:paddingEnd="@dimen/_10dp"
+                            android:src="@drawable/ic_clear_black_24dp"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                </androidx.cardview.widget.CardView>
+
+
+            </androidx.cardview.widget.CardView>
+
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/invoiceSelectorCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentTop="true"
+                app:cardCornerRadius="@dimen/_5dp"
+                app:cardElevation="@dimen/_5dp"
+                app:cardUseCompatPadding="true">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="@dimen/_10dp">
+
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvHeadingPartyName"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/_5dp"
+                            android:layout_weight="1"
+                            android:fontFamily="@font/montserrat_regular"
+                            android:textColor="@color/black"
+                            android:textSize="@dimen/_16sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:id="@+id/info_imv"
+                            android:layout_width="@dimen/_24dp"
+                            android:layout_height="@dimen/_24dp"
+                            android:layout_gravity="center"
+                            android:layout_marginStart="@dimen/_10dp"
+                            android:src="@drawable/ic_info" />
+                    </LinearLayout>
+
+
+                    <TextView
+                        android:id="@+id/tvHeadingAddress"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/_5dp"
+                        android:fontFamily="@font/roboto_regular"
+                        android:textColor="@color/reconGrey"
+                        android:textSize="@dimen/_12sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="horizontal">
+
+                            <androidx.cardview.widget.CardView
+                                android:id="@+id/startDateCalenderCard"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="@dimen/_5dp"
+                                android:layout_marginRight="@dimen/_5dp"
+                                android:layout_marginBottom="@dimen/_5dp"
+                                android:layout_weight="1"
+                                app:cardBackgroundColor="@color/black"
+                                app:cardCornerRadius="@dimen/_5dp"
+                                app:cardElevation="@dimen/_3dp">
+
+                                <androidx.cardview.widget.CardView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_margin="@dimen/_1dp"
+                                    app:cardCornerRadius="@dimen/_5dp">
+
+                                    <LinearLayout
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/dateStart"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:background="@color/white"
+                                            android:hint="@string/from_date"
+                                            android:maxLines="1"
+                                            android:padding="@dimen/_5dp"
+                                            android:textSize="@dimen/_13sp" />
+
+                                        <ImageView
+                                            android:id="@+id/calendarStart"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:layout_alignParentEnd="true"
+                                            android:layout_centerVertical="true"
+                                            android:layout_marginEnd="@dimen/_10dp"
+                                            android:padding="@dimen/_5dp"
+                                            android:src="@drawable/ic_calender" />
+
+
+                                    </LinearLayout>
+                                </androidx.cardview.widget.CardView>
+
+                            </androidx.cardview.widget.CardView>
+
+                            <ImageView
+                                android:layout_width="@dimen/_30dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_route" />
+
+                            <androidx.cardview.widget.CardView
+                                android:id="@+id/endDateCalenderCard"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginLeft="@dimen/_5dp"
+                                android:layout_marginTop="@dimen/_5dp"
+                                android:layout_marginBottom="@dimen/_5dp"
+                                android:layout_weight="1"
+                                app:cardBackgroundColor="@color/black"
+                                app:cardCornerRadius="@dimen/_5dp"
+                                app:cardElevation="@dimen/_3dp">
+
+                                <androidx.cardview.widget.CardView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_margin="@dimen/_1dp"
+                                    app:cardCornerRadius="@dimen/_5dp">
+
+                                    <LinearLayout
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:orientation="horizontal">
+
+                                        <TextView
+                                            android:id="@+id/dateEnd"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="wrap_content"
+                                            android:layout_weight="1"
+                                            android:background="@color/white"
+                                            android:hint="@string/to_date"
+                                            android:maxLines="1"
+                                            android:padding="@dimen/_5dp"
+                                            android:textSize="@dimen/_13sp" />
+
+                                        <ImageView
+                                            android:id="@+id/calendarEnd"
+                                            android:layout_width="wrap_content"
+                                            android:layout_height="wrap_content"
+                                            android:layout_alignParentEnd="true"
+                                            android:layout_centerVertical="true"
+                                            android:layout_marginEnd="@dimen/_10dp"
+                                            android:padding="@dimen/_5dp"
+                                            android:src="@drawable/ic_calender" />
+
+
+                                    </LinearLayout>
+                                </androidx.cardview.widget.CardView>
+                            </androidx.cardview.widget.CardView>
+
+                        </LinearLayout>
+
+                        <ImageView
+                            android:id="@+id/iv_clear_date_filter"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:layout_weight="9"
+                            android:src="@drawable/ic_clear_black_24dp"
+                            android:visibility="gone" />
+
+                        <ImageView
+                            android:id="@+id/iv_ok_date_filter"
+                            android:layout_width="match_parent"
+                            android:layout_height="35dp"
+                            android:layout_gravity="center"
+                            android:layout_weight="9"
+                            android:src="@drawable/ic_ok"
+                            android:visibility="gone" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/tvToDate"
+                            android:layout_width="@dimen/_80dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginStart="@dimen/_5dp"
+                            android:fontFamily="@font/roboto_regular"
+                            android:gravity="center_vertical"
+                            android:text="@string/to_date"
+                            android:textStyle="bold"
+                            android:visibility="gone" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:orientation="horizontal">
+
+                        <androidx.cardview.widget.CardView
+                            android:id="@+id/accountNameList"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="@dimen/_5dp"
+                            android:layout_marginEnd="@dimen/_5dp"
+                            android:layout_weight="2"
+                            app:cardBackgroundColor="@color/black"
+                            app:cardCornerRadius="@dimen/_5dp"
+                            app:cardElevation="@dimen/_3dp">
+
+                            <androidx.cardview.widget.CardView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_margin="@dimen/_1dp"
+                                app:cardCornerRadius="@dimen/_5dp">
+
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal">
+
+                                    <EditText
+                                        android:id="@+id/searchBox"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="wrap_content"
+                                        android:background="@color/white"
+                                        android:hint="@string/search"
+                                        android:maxLines="1"
+                                        android:padding="@dimen/_5dp"
+                                        android:textSize="@dimen/_15sp"
+                                        tools:ignore="TouchTargetSizeCheck" />
+
+                                    <ImageView
+                                        android:id="@+id/searchButton"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:layout_marginEnd="@dimen/_10dp"
+                                        android:padding="@dimen/_5dp"
+                                        android:src="@drawable/ic_vector" />
+                                </LinearLayout>
+                            </androidx.cardview.widget.CardView>
+                        </androidx.cardview.widget.CardView>
+
+                        <LinearLayout
+                            android:id="@+id/shareLl"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_weight="6">
+
+                            <ImageView
+                                android:id="@+id/shareViaWhatsappIv"
+                                android:layout_width="@dimen/_40dp"
+                                android:layout_height="@dimen/_40dp"
+                                android:layout_gravity="center"
+                                android:padding="@dimen/_5dp"
+                                android:src="@drawable/ic_whatsapp"
+                                />
+
+                            <ImageView
+                                android:id="@+id/share"
+                                android:layout_width="@dimen/_40dp"
+                                android:layout_height="@dimen/_40dp"
+                                android:layout_gravity="center"
+                                android:padding="@dimen/_5dp"
+                                android:src="@drawable/ic_share_new"
+                                />
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/seeOutStandingTv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/_5dp"
+                        android:fontFamily="@font/montserrat_regular"
+                        android:gravity="center"
+                        android:text="See Outstanding"
+                        android:textColor="@color/new_blue"
+                        android:textSize="@dimen/_16sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/listOfData"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/topSectionLL"
+            android:layout_marginStart="@dimen/_35dp"
+            android:layout_marginEnd="@dimen/_35dp"
+            android:elevation="@dimen/_10dp"
+            android:visibility="gone"
+            app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/openingBalanceCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/topSectionLL"
+            android:layout_marginLeft="@dimen/_5dp"
+            android:layout_marginRight="@dimen/_5dp"
+            android:layout_marginBottom="@dimen/_5dp"
+            android:visibility="gone"
+            app:cardCornerRadius="5dp"
+            app:cardElevation="@dimen/_3dp">
+
+            <LinearLayout
+                android:id="@+id/openingBalanceCardLl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/blue4"
+                android:orientation="horizontal"
+                android:padding="@dimen/_10dp">
+
+                <TextView
+                    android:id="@+id/tvOpeningBalance"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/roboto_regular"
+                    android:gravity="start"
+                    android:text="@string/opening_balance"
+                    android:textAllCaps="true"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/openingBalance"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/roboto_regular"
+                    android:gravity="end"
+                    android:text="@string/rs1000"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_18sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/pullToRefresh"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_below="@+id/openingBalanceCard">
+
+            <androidx.core.widget.NestedScrollView
+                android:id="@+id/scrollView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tvSelectedDate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="@color/white"
+                        android:fontFamily="@font/montserrat_regular"
+                        android:gravity="center"
+                        android:paddingTop="@dimen/_5dp"
+                        android:paddingBottom="@dimen/_5dp"
+                        android:textColor="@color/new_blue"
+                        android:textSize="@dimen/_14sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/invoiceRecycler"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_below="@+id/tvSelectedDate"
+                        android:layoutAnimation="@anim/layout_animation"
+                        android:nestedScrollingEnabled="false"
+                        android:orientation="vertical"
+                        android:visibility="visible"
+                        app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
+                        app:layout_behavior="@string/appbar_scrolling_view_behavior" />
+
+                    <LinearLayout
+                        android:id="@+id/noRecordTV"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:layout_marginTop="@dimen/_100dp"
+                        android:gravity="center"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:gravity="center"
+                            android:text="@string/noRecordFound"
+                            android:textColor="@color/black"
+                            android:textSize="18sp" />
+                    </LinearLayout>
+
+                </RelativeLayout>
+            </androidx.core.widget.NestedScrollView>
+
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        <!--      <com.google.android.material.floatingactionbutton.FloatingActionButton
+                  android:layout_width="wrap_content"
+                  android:layout_height="wrap_content"
+                  android:layout_alignParentEnd="true"
+                  android:layout_alignParentBottom="true"
+                  android:layout_marginEnd="@dimen/_20dp"
+                  android:backgroundTint="@color/white"
+                  android:contentDescription="@string/account_statement"
+                  android:src="@drawable/ic_tick_vector"
+                  app:fabSize="mini"
+                  app:shapeAppearance="@dimen/_52dp" />-->
+    </RelativeLayout>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/shareStatementCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_margin="@dimen/_5dp"
+        android:visibility="gone"
+        app:cardCornerRadius="5dp"
+        app:cardElevation="@dimen/_3dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+
+            <LinearLayout
+                android:id="@+id/closingBalanceLL"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/blue4"
+                android:orientation="horizontal"
+                android:padding="@dimen/_10dp">
+
+                <TextView
+                    android:id="@+id/tvClosingBalance"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/roboto_regular"
+                    android:gravity="start"
+                    android:text="@string/closing_balance"
+                    android:textAllCaps="true"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/closingBalance"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/roboto_regular"
+                    android:gravity="end"
+                    android:text="@string/_inr_250000"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_18sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/shareStatement"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/_15dp"
+                android:layout_marginTop="@dimen/_5dp"
+                android:layout_marginEnd="@dimen/_15dp"
+                android:layout_marginBottom="@dimen/_15dp"
+                android:visibility="gone"
+                app:cardBackgroundColor="@color/red"
+                app:cardCornerRadius="@dimen/_5dp"
+                app:cardElevation="@dimen/_5dp">
+
+                <TextView
+                    android:id="@+id/tvShareStatement"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/montserrat_bold"
+                    android:gravity="center"
+                    android:padding="@dimen/_10dp"
+                    android:text="@string/proceed_to_submit"
+                    android:textColor="@color/white"
+                    android:textSize="@dimen/_18sp" />
+
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+
+
+    </androidx.cardview.widget.CardView>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/open_calender_fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentRight="true"
+        android:layout_alignParentBottom="true"
+        android:layout_gravity="end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="60dp"
+        android:src="@drawable/ic_baseline_date_range_24"
+        android:visibility="visible"
+        app:backgroundTint="@color/pale_red"
+        app:borderWidth="20dp"
+        app:elevation="10dp"
+        app:fabCustomSize="@dimen/_60dp"
+        app:maxImageSize="@dimen/_30dp" />
+</RelativeLayout>

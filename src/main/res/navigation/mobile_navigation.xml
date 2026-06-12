@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/nav_home">
+
+    <fragment
+        android:id="@+id/nav_receipt_entry"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.CreateReceiptEntryFragment"
+        tools:layout="@layout/fragment_create_receipt_entry" />
+    <fragment
+        android:id="@+id/nav_add_bills"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.AddBillsFragment"
+        tools:layout="@layout/fragment_add_bills">
+
+        <action
+            android:id="@+id/action_back_to_receipt_entry_page"
+            app:destination="@id/nav_receipt"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_receipt"
+            app:popUpToInclusive="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_credit_voucher"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.CreditNoteVoucherFragment"
+        tools:layout="@layout/fragment_credit_note_voucher" />
+    <!--    <fragment
+            android:id="@+id/nav_feedback"
+            android:name="com.reckon.reckonorders.NewDesign.NewFragments.Feedback"
+            tools:layout="@layout/fragment_feedback" />-->
+
+    <fragment
+        android:id="@+id/nav_settings"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.SettingsFragment"
+        tools:layout="@layout/fragment_settings" />
+
+    <fragment
+        android:id="@+id/nav_statement"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.StatementFragment"
+        tools:layout="@layout/fragment_statement">
+
+
+    </fragment>
+    <fragment
+        android:id="@+id/nav_receipt"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.ReceiptFragment"
+        tools:layout="@layout/fragment_receipt" />
+
+    <!--  <fragment
+          android:id="@+id/nav_notification"
+          android:name="com.reckon.reckonorders.NewDesign.NewFragments.NotificationFragment"
+          tools:layout="@layout/fragment_notification2" />-->
+    <fragment
+        android:id="@+id/nav_find_stockist"
+        android:name="com.reckon.reckonorders.Fragment.Home.AddDistributorFragment"
+        tools:layout="@layout/fragment_add_distributor">
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_new_arrival"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.NewArrivalFragment"
+        tools:layout="@layout/fragment_new_arrival" />
+    <fragment
+        android:id="@+id/nav_account_statement"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.AccountStatementFragment"
+        tools:layout="@layout/fragment_account_statement" />
+
+    <fragment
+        android:id="@+id/nav_sale_voucher"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.SaleVoucherFragment"
+        tools:layout="@layout/fragment_sale_voucher">
+        <action
+            android:id="@+id/action_back_to_account_statement"
+            app:destination="@id/nav_account_statement"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_account_statement"
+            app:popUpToInclusive="true" />
+    </fragment>
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="com.reckon.reckonorders.Fragment.Home.HomeFragment"
+        android:label="@string/menu_home"
+        tools:layout="@layout/fragment_home">
+        <action
+            android:id="@+id/action_nav_home_to_menu_newOrder2"
+            app:destination="@id/nav_Order_Entry" />
+        <action
+            android:id="@+id/action_nav_home_to_nav_cart"
+            app:destination="@id/nav_cart" />
+
+    </fragment>
+    <fragment
+        android:id="@+id/nav_brands"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.BrandsFragment"
+        tools:layout="@layout/fragment_brands">
+
+        <action
+            android:id="@+id/action_brand_item_to_new_order_list"
+            app:destination="@id/nav_Order_Entry" />
+    </fragment>
+    <fragment
+        android:id="@+id/nav_order_details"
+        android:name="com.reckon.reckonorders.Fragment.Home.OrderDetailsFragment"
+        tools:layout="@layout/fragment_order_details2" />
+    <fragment
+        android:id="@+id/nav_distributor_details"
+        android:name="com.reckon.reckonorders.Fragment.Home.DistributorDetailsScreen"
+        tools:layout="@layout/fragment_distributor_details" />
+    <fragment
+        android:id="@+id/nav_receipt_details"
+        android:name="com.reckon.reckonorders.Fragment.Home.ReceiptDetailsFragment"
+        tools:layout="@layout/fragment_receipt_details" />
+
+    <fragment
+        android:id="@+id/nav_outstanding"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.OutstandingFragment"
+        tools:layout="@layout/fragment_outstanding" />
+    <fragment
+        android:id="@+id/nav_my_bills"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.MyBillsFragment"
+        tools:layout="@layout/fragment_my_bills" />
+    <fragment
+        android:id="@+id/nav_order_history"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.OrderHistory"
+        tools:layout="@layout/fragment_order_history" />
+    <fragment
+        android:id="@+id/nav_receipt_book"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.ReceiptBook"
+        tools:layout="@layout/fragment_receipt_book" />
+
+    <fragment
+        android:id="@+id/nav_order_confirmation"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.OrderConfimation"
+        tools:layout="@layout/fragment_order_confimation">
+        <action
+            android:id="@+id/nav_to_home"
+            app:destination="@id/nav_home"
+            app:popUpToInclusive="true" />
+    </fragment>
+    <fragment
+        android:id="@+id/nav_account_details"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.AccountDetailsFragment"
+        tools:layout="@layout/fragment_account_details" />
+    <fragment
+        android:id="@+id/nav_payment_details"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.PaymentDetails"
+        tools:layout="@layout/fragment_payment_details" />
+    <fragment
+        android:id="@+id/nav_delivery_details"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.DeliveryDetails"
+        tools:layout="@layout/fragment_delivery_details" />
+
+    <fragment
+        android:id="@+id/nav_common_listing"
+        android:name="com.reckon.reckonorders.Fragment.Account.CommonListingFragment"
+        tools:layout="@layout/fragment_listing">
+        <action
+            android:id="@+id/cation_back_to_profile"
+            app:destination="@id/nav_profile"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/mobile_navigation"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/cation_back_to_request_distributor"
+            app:destination="@id/nav_request_distributor"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_request_distributor"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_back_to_account_filter"
+            app:destination="@id/navAccountFilterFragment"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/navAccountFilterFragment"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_back_to_order_entry"
+            app:destination="@id/nav_Order_Entry"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_Order_Entry"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_back_to_recent_ordered"
+            app:destination="@id/nav_Recent_Ordered_Products"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_Recent_Ordered_Products"
+            app:popUpToInclusive="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_request_distributor"
+        android:name="com.reckon.reckonorders.Fragment.Home.RequestDistributorFragment"
+        tools:layout="@layout/fragment_request"></fragment>
+    <fragment
+        android:id="@+id/nav_profile"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.UserProfileFragment"
+        tools:layout="@layout/fragment_user_profile" />
+    <fragment
+        android:id="@+id/nav_outlet_details"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.OutstandingBillWiseFragment"
+        tools:layout="@layout/fragment_outlet_details" />
+    <fragment
+        android:id="@+id/navPartyLisingFragment"
+        android:name="com.reckon.reckonorders.Fragment.Home.PartyListingFragment"
+        tools:layout="@layout/fragment_party_listing">
+        <action
+            android:id="@+id/action_back_to_order_entry"
+            app:destination="@id/nav_Order_Entry"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_Order_Entry"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_back_to_recent_ordered"
+            app:destination="@id/nav_Recent_Ordered_Products"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_Recent_Ordered_Products"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_back_to_Party_List"
+            app:destination="@id/navPartyLisingFragment"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/navPartyLisingFragment"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_go_to_account_filter"
+            app:destination="@id/navAccountFilterFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+
+        <action
+            android:id="@+id/action_back_to_receipt_entry"
+            app:destination="@id/nav_receipt"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_receipt"
+            app:popUpToInclusive="true" />
+
+        <action
+            android:id="@+id/action_go_to_product_filter"
+            app:destination="@id/navProductFilterFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+
+    </fragment>
+    <fragment
+        android:id="@+id/navAccountFilterFragment"
+        android:name="com.reckon.reckonorders.NewDesign.AccountFilterScreen"
+        tools:layout="@layout/fragment_account_filter_screen">
+        <action
+            android:id="@+id/action_back_to_Party_screen"
+            app:destination="@id/navPartyLisingFragment"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/navPartyLisingFragment"
+            app:popUpToInclusive="true" />
+
+    </fragment>
+
+    <fragment
+        android:id="@+id/navProductFilterFragment"
+        android:name="com.reckon.reckonorders.NewDesign.ProductFilterScreen"
+        tools:layout="@layout/fragment_product_filter_screen">
+        <action
+            android:id="@+id/action_back_to_product_screen"
+            app:destination="@id/nav_Order_Entry"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_Order_Entry"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_back_to_party_screen"
+            app:destination="@id/navPartyLisingFragment"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/navPartyLisingFragment"
+            app:popUpToInclusive="true" />
+        <action
+            android:id="@+id/action_back_to_recent_product_screen"
+            app:destination="@id/nav_Recent_Ordered_Products"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_Recent_Ordered_Products"
+            app:popUpToInclusive="true" />
+    </fragment>
+    <fragment
+        android:id="@+id/nav_ProductDetailsFragment"
+        android:name="com.reckon.reckonorders.NewDesign.NewFragments.ProductDetailsFragment"
+        android:label="@string/productDetail"
+        tools:layout="@layout/fragment_product_details">
+        <action
+            android:id="@+id/toProductDetails"
+            app:destination="@+id/nav_ProductDetailsFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+
+
+    </fragment>
+    <fragment
+        android:id="@+id/nav_gallery"
+        android:name="com.reckon.reckonorders.NewDesign.ui.gallery.GalleryFragment"
+        android:label="@string/menu_gallery"
+        tools:layout="@layout/fragment_gallery" />
+
+    <fragment
+        android:id="@+id/nav_slideshow"
+        android:name="com.reckon.reckonorders.NewDesign.ui.slideshow.SlideshowFragment"
+        android:label="@string/menu_slideshow"
+        tools:layout="@layout/fragment_slideshow" />
+    <fragment
+        android:id="@+id/nav_Order_Entry"
+        android:name="com.reckon.reckonorders.Fragment.Home.NewOrderFragment"
+        tools:layout="@layout/fragment_new_order">
+        <action
+            android:id="@+id/toProductDetails"
+            app:destination="@+id/nav_ProductDetailsFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+
+        <action
+            android:id="@+id/action_nav_new_order_to_party"
+            app:destination="@id/navPartyLisingFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+        <action
+            android:id="@+id/action_go_to_product_filter"
+            app:destination="@id/navProductFilterFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+        <action
+            android:id="@+id/action_nav_new_order_to_recent_ordered"
+            app:destination="@id/nav_Recent_Ordered_Products"
+            app:launchSingleTop="true"
+            app:popUpTo="@+id/nav_Recent_Ordered_Products"
+            app:popUpToInclusive="true"/>
+    </fragment>
+    <fragment
+        android:id="@+id/nav_Recent_Ordered_Products"
+        android:name="com.reckon.reckonorders.Fragment.Home.RecentOrderedProductsFragment"
+        tools:layout="@layout/fragment_recent_ordered_products">
+        <action
+            android:id="@+id/toProductDetails"
+            app:destination="@+id/nav_ProductDetailsFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+
+        <action
+            android:id="@+id/action_nav_new_order_to_party"
+            app:destination="@id/navPartyLisingFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+        <action
+            android:id="@+id/action_go_to_product_filter"
+            app:destination="@id/navProductFilterFragment"
+            app:enterAnim="@anim/enter_from_right"
+            app:exitAnim="@anim/exit_to_right" />
+
+
+    </fragment>
+    <fragment
+        android:id="@+id/nav_MyOrder"
+        android:name="com.reckon.reckonorders.Fragment.Home.MyOrderFragment"
+        tools:layout="@layout/fragment_new_order" />
+
+    <fragment
+        android:id="@+id/nav_cart"
+        android:name="com.reckon.reckonorders.Fragment.Home.CartFragment"
+        android:label="@string/_cart"
+        tools:layout="@layout/fragment_cart" />
+
+    <fragment
+        android:id="@+id/my_cart"
+        android:name="com.reckon.reckonorders.Fragment.Home.CartFragment"
+        android:label="@string/_cart"
+        tools:layout="@layout/car_fragment_layout">
+
+        <action
+            android:id="@+id/goToNewOrder"
+            app:destination="@id/nav_Order_Entry" />
+    </fragment>
+
+</navigation>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/_300dp"
+    android:layout_height="@dimen/_400dp"
+    android:background="@color/white"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/_5dp"
+        android:background="@color/new_blue"
+        android:gravity="center"
+        android:padding="@dimen/_10dp"
+        android:text="Select A Country"
+        android:textAllCaps="true"
+        android:textColor="#fff"
+        android:textSize="@dimen/_20sp"
+        android:textStyle="bold" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/popupSelect_recyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/shape_border_radius_light_grey"
+        android:padding="@dimen/_5dp" />
+
+</LinearLayout>

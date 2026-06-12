@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/constraintLayoutNewArrival"
+    android:layout_width="@dimen/_170dp"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="@dimen/_5dp"
+    android:layout_marginEnd="@dimen/_2dp"
+    android:layout_marginBottom="@dimen/_2dp"
+
+    app:layout_constraintWidth_max="@dimen/_170dp"
+    app:layout_constraintWidth_min="@dimen/_150dp">
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/imageCardHolder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardElevation="@dimen/_2dp"
+        app:cardBackgroundColor="@color/white"
+        app:cardUseCompatPadding="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:id="@+id/product_image"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/_80dp"
+            android:layout_gravity="center"
+            android:adjustViewBounds="true"
+            android:src="@drawable/calpol_tab" />
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/_155dp"
+        app:cardElevation="@dimen/_2dp"
+        app:cardBackgroundColor="@color/white"
+        app:cardUseCompatPadding="true"
+        app:layout_constraintTop_toBottomOf="@+id/imageCardHolder">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="@dimen/_10dp">
+
+            <TextView
+                android:id="@+id/product_name"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_40dp"
+                android:layout_gravity="start"
+                android:fontFamily="@font/montserrat_regular"
+                android:maxLines="2"
+                android:text="@string/calpol_500mg"
+                android:textColor="@color/colorBlack"
+                android:textSize="@dimen/_15dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/product_description"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_40dp"
+                android:layout_gravity="start"
+                android:fontFamily="@font/montserrat_regular"
+                android:maxLines="2"
+                android:lines="2"
+                android:text="@string/paracetamol_500mg_1mutli15"
+                android:textColor="@color/new_grey"
+                android:textSize="@dimen/_12dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/product_name" />
+
+            <View
+                android:id="@+id/separatorView"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/_1dp"
+                android:layout_marginTop="@dimen/_5dp"
+                android:background="@color/new_grey"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/product_description" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@+id/priceLL">
+
+                <TextView
+                    android:id="@+id/product_discount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/montserrat_regular"
+                    android:text="@string/Rs550"
+                    android:textColor="@color/new_grey"
+                    android:textSize="@dimen/_13dp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/priceLL"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/_5dp"
+                android:orientation="horizontal"
+
+                app:layout_constraintTop_toBottomOf="@+id/separatorView">
+
+
+                <TextView
+                    android:id="@+id/product_real_price"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginTop="@dimen/_3dp"
+                    android:layout_marginBottom="@dimen/_5dp"
+                    android:layout_weight="1"
+                    android:fontFamily="@font/montserrat_regular"
+                    android:text="@string/Rs550"
+                    android:textColor="@color/new_grey"
+                    android:textSize="@dimen/_12dp" />
+
+
+                <TextView
+                    android:id="@+id/product_price_after_discount"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:layout_marginStart="@dimen/_10dp"
+                    android:layout_marginTop="@dimen/_3dp"
+                    android:layout_marginBottom="@dimen/_5dp"
+                    android:fontFamily="@font/montserrat_regular"
+                    android:text="@string/ten_plus_one"
+                    android:textColor="@color/colorBlack"
+                    android:textSize="@dimen/_12dp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </androidx.cardview.widget.CardView>
+
+
+</androidx.constraintlayout.widget.ConstraintLayout>

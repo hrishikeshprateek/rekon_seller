@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+<!--    <color name="new_blue">#3D5F7C</color>
+    <color name="btn_dark_grey">#727272</color>
+    <color name="box_fill_grey">#E5E5E5</color>
+    <color name="title_color_primary">#3D5F7C</color>
+    <color name="abliss_theme_color_primary">#85a03c</color>
+    <color name="abliss_theme_color_secondary">#1f6643</color>
+    <color name="selected_filter_color_blue">#cfecf9</color>-->
+    <color name="color">#767578</color>
+    <!--
+       Smart Connect:
+           <color name="new_blue">#3D5F7C</color>
+        <color name="btn_dark_grey">#727272</color>
+        <color name="box_fill_grey">#E5E5E5</color>
+        <color name="title_color_primary">#3D5F7C</color>
+        <color name="abliss_theme_color_primary">#85a03c</color>
+        <color name="abliss_theme_color_secondary">#1f6643</color>
+        <color name="selected_filter_color_blue">#cfecf9</color>-->
+<!--   Abliss-->
+   <color name="new_blue">#85a03c</color>
+    <color name="btn_dark_grey">#727272</color>
+    <color name="box_fill_grey">#E5E5E5</color>
+    <color name="title_color_primary">#85a03c</color>
+    <color name="abliss_theme_color_primary">#85a03c</color>
+    <color name="abliss_theme_color_secondary">#1f6643</color>
+    <color name="selected_filter_color_blue">#cfecf9</color>
+    <color name="text_color_level">#1f6643</color>
+    <color name="btn_color">#1f6643</color>
+    <color name="text_green">#257E3E</color>
+ <color name="text_grey1">#554D4D</color>
+
+</resources>

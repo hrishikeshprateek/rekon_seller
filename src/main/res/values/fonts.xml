@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="font_light">fonts/OpenSans-Light.ttf</string>
+    <string name="font_regular">fonts/OpenSans-Regular.ttf</string>
+    <string name="font_SemiBold">fonts/OpenSans-Semibold.ttf</string>
+    <string name="font_bold">fonts/OpenSans-Bold.ttf</string>
+    <string name="font_italic">fonts/OpenSans-Italic.ttf</string>
+    <string name="font_light_italic">fonts/OpenSans-LightItalic.ttf</string>
+
+    <string name="font_crimson_SemiBold">fonts/CrimsonText-Semibold.ttf</string>
+    <string name="font_crimson_Roman">fonts/CrimsonText-Roman.ttf</string>
+    <string name="font_crimson_Italic">fonts/CrimsonText-Italic.ttf</string>
+    <string name="font_crimson_SemiBoldItalic">fonts/CrimsonText-SemiboldItalic.ttf</string>
+
+
+</resources>

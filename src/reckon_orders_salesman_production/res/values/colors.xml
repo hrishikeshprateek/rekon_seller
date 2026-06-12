@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="new_blue">#13A2DF</color>
+    <color name="btn_dark_grey">#727272</color>
+    <color name="box_fill_grey">#E5E5E5</color>
+    <color name="title_color_primary">#1E5FA6</color>
+    <color name="abliss_theme_color_primary">#85a03c</color>
+    <color name="abliss_theme_color_secondary">#1f6643</color>
+    <color name="selected_filter_color_blue">#cfecf9</color>
+    <color name="color">#767578</color>
+    <color name="baby_blue">#DBF5F0</color>
+    <color name="tiffany_blue">#A4E5E0</color>
+    <color name="baby_blue1">#BFD7ED</color>
+    <color name="text_color_level">#13A2DF</color>
+    <color name="btn_color">#13A2DF</color>
+    <color name="section_color_primary">#FFFFFF</color>
+    <color name="text_green">#257E3E</color>
+    <color name="text_grey1">#554D4D</color>
+
+</resources>
