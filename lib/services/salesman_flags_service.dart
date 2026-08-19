@@ -11,7 +11,6 @@ class SalesmanFlagsService with ChangeNotifier {
   // API configuration is now centralized in ApiConstants
   static String get baseUrl => ApiConstants.baseUrl;
   static const String _storageKey = 'salesman_flags';
-  static const String tenantId = '456';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final Dio _dio = Dio();
@@ -54,7 +53,9 @@ class SalesmanFlagsService with ChangeNotifier {
       final response = await _dio.get(
         '/GetSalesmanFlags',
         queryParameters: {
-          'tenantId': tenantId,
+          // Flags are now filtered by the logged-in user's license number
+          // (was tenantId previously).
+          'licNo': authService.currentUser?.licenseNumber ?? '',
         },
         options: Options(
           headers: {

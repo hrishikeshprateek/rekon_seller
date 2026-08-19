@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -274,7 +275,7 @@ class _DoAccountSelectorPageState extends State<DoAccountSelectorPage> {
     return Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         scrolledUnderElevation: 0,
         title: Text(
           'SELECT ACCOUNT',

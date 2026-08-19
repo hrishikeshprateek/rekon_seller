@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
+import 'constants/branding.dart';
 import 'create_password_screen.dart';
 import 'create_mpin_screen.dart';
 import 'forgot_password_otp_screen.dart';
@@ -449,6 +450,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    // Hide the "Powered by" footer while the keyboard is open so it doesn't
+    // ride up above the keyboard — it should only sit at the bottom.
+    final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -464,6 +468,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   constraints: const BoxConstraints(maxWidth: 400),
                   child: Form(
                     key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.stretch, // Ensures inputs fill width
@@ -473,14 +478,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         Column(
                           children: [
                             Image.asset(
-                              'assets/images/reckon.png',
+                              Branding.logo,
                               width: 180,
                               height: 180,
                               fit: BoxFit.contain,
                             ),
                             const SizedBox(height: 20),
                             Text(
-                              "Reckon Seller 2.0",
+                              Branding.appName,
                               textAlign: TextAlign.center,
                               style: theme.textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -663,8 +668,9 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // --- 5. PINNED FOOTER ---
-            Positioned(
+            // --- 5. PINNED FOOTER (hidden while the keyboard is open) ---
+            if (!keyboardOpen)
+              Positioned(
               left: 0,
               right: 0,
               bottom: 16,

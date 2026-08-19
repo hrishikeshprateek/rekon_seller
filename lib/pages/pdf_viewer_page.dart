@@ -1,12 +1,14 @@
 import 'dart:io';
+import '../constants/branding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:printing/printing.dart';
 
 /// Simple in-app PDF viewer. Renders a local PDF [filePath] with swipe paging,
-/// plus Save (to Downloads) and Share actions.
+/// plus Save (to Downloads), Share and Print actions.
 class PdfViewerPage extends StatefulWidget {
   final String filePath;
   final String title;
@@ -61,6 +63,25 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
     }
   }
 
+  /// Opens the system print dialog with the bill PDF, so the user can send it
+  /// to any printer the OS knows about (Wi-Fi printer, "Save as PDF", or any
+  /// printer with an Android print service).
+  Future<void> _print() async {
+    try {
+      final bytes = await File(widget.filePath).readAsBytes();
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: _fileName(),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Unable to print: $e')),
+        );
+      }
+    }
+  }
+
   /// Saves the bill PDF into the device's Downloads folder (Android) or the
   /// app documents directory (iOS).
   Future<void> _save() async {
@@ -108,7 +129,7 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
       backgroundColor: const Color(0xFF424242),
       appBar: AppBar(
         title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         actions: [
           if (_ready && _pages > 0)
@@ -131,6 +152,11 @@ class _PdfViewerPageState extends State<PdfViewerPage> {
                 : const Icon(Icons.download_rounded),
             tooltip: 'Save to Downloads',
             onPressed: (_ready && !_saving) ? _save : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.print_rounded),
+            tooltip: 'Print',
+            onPressed: _ready ? _print : null,
           ),
           IconButton(
             icon: const Icon(Icons.share_rounded),

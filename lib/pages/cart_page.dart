@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../constants/branding.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -427,7 +428,7 @@ class _CartPageState extends State<CartPage> {
       backgroundColor: Colors.white,
       appBar: AppBar(
         scrolledUnderElevation: 0,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         elevation: 0,
         title: GestureDetector(
           onTap: _openSelectAccount,
@@ -825,7 +826,7 @@ class _CartPageState extends State<CartPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E88E5),
+              color: Branding.primary,
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Row(
@@ -1049,6 +1050,7 @@ class _CartUpdateBottomSheet extends StatefulWidget {
 
 class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   late final TextEditingController qtyController;
+  late final TextEditingController boxController;
   late final TextEditingController priceController;
   late final TextEditingController freeQtyController;
   late final TextEditingController schemeController;
@@ -1081,6 +1083,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     super.initState();
     final it = widget.item;
     qtyController        = TextEditingController(text: it.qty.toString());
+    boxController        = TextEditingController(text: '');
     priceController      = TextEditingController(text: (it.rate ?? 0).toStringAsFixed(2));
     freeQtyController    = TextEditingController(text: (it.freeQty ?? 0).toString());
     // scheme: map SchQty / SchDQty
@@ -1097,6 +1100,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   @override
   void dispose() {
     qtyController.dispose();
+    boxController.dispose();
     priceController.dispose();
     freeQtyController.dispose();
     schemeController.dispose();
@@ -1106,6 +1110,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
     addDiscPerController.dispose();
     remarkController.dispose();
     _qtyFocus.dispose();
+    _boxFocus.dispose();
     _freeQtyFocus.dispose();
     _schemeFocus.dispose();
     _dSchemeFocus.dispose();
@@ -1133,16 +1138,20 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   DraftOrderRequest _buildRequest({required int insertRecord}) {
     String orZero(String s) => s.trim().isEmpty ? '0' : s.trim();
     final qty = int.tryParse(qtyController.text.trim()) ?? 0;
+    final box = int.tryParse(boxController.text.trim()) ?? 0;
     final rate = double.tryParse(priceController.text.trim()) ?? 0;
     return DraftOrderRequest(
       itemCode: widget.item.code,
       idCol: widget.item.idCol,
-      itemQty: orZero(qtyController.text),
+      // When boxes are entered, send base 0 so the server returns
+      // box × conversion (no compounding); the total is shown in the Qty field.
+      itemQty: box > 0 ? '0' : orZero(qtyController.text),
+      itemUnit1Qty: orZero(boxController.text),
       itemRate: orZero(priceController.text),
       itemFQty: orZero(freeQtyController.text),
       itemSchQty: orZero(schemeController.text),
       itemDSchQty: orZero(dSchemeController.text),
-      itemAmt: (rate * qty).toStringAsFixed(2),
+      itemAmt: (rate * (box > 0 ? 0 : qty)).toStringAsFixed(2),
       discountPercentage: orZero(discPerController.text),
       discountPercentage1: orZero(addDiscPerController.text),
       discountPcs: orZero(discPcsController.text),
@@ -1155,11 +1164,20 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   }
 
   // Mirrors order_entry_page.runPreview verbatim.
+  // When the Box is cleared/zero, reset the Qty (it was holding the box-driven
+  // total), then re-run the preview.
+  void _onBoxChanged() {
+    final b = int.tryParse(boxController.text.trim()) ?? 0;
+    if (b <= 0) qtyController.text = '';
+    _onChanged();
+  }
+
   void _onChanged() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () async {
       final qty = int.tryParse(qtyController.text.trim()) ?? 0;
-      if (qty <= 0) {
+      final box = int.tryParse(boxController.text.trim()) ?? 0;
+      if (qty <= 0 && box <= 0) {
         if (mounted) setState(() { _goodsValue = 0; _schemeValue = 0; _discountValue = 0; _gst = 0; _netValue = 0; _discAmt = 0; _disc1Amt = 0; _disc2Amt = 0; _loading = false; });
         return;
       }
@@ -1178,6 +1196,12 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
           _disc1Amt      = result.disc1Amt;
           _disc2Amt      = result.disc2Amt;
           _loading       = false;
+          // Box-driven: show the server's total quantity in the Qty field.
+          if (box > 0 && result.qty.isNotEmpty) {
+            // Quantity as a whole number (server sends e.g. "40.00").
+            final n = double.tryParse(result.qty);
+            qtyController.text = n != null ? n.toInt().toString() : result.qty;
+          }
         });
         // One-shot prefill of discount % boxes from the first preview's
         // server-applied values — only seeds a field that's still empty/zero,
@@ -1257,6 +1281,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
 
   // Explicit FocusNodes so the keyboard "Next" key reliably hops to every
   // visible field — including the flag-gated Free Qty and Pcs Discount rows.
+  final FocusNode _boxFocus        = FocusNode();
   final FocusNode _qtyFocus        = FocusNode();
   final FocusNode _freeQtyFocus    = FocusNode();
   final FocusNode _schemeFocus     = FocusNode();
@@ -1268,7 +1293,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
   final FocusNode _remarkFocus     = FocusNode();
 
   List<FocusNode> get _orderedFocus => [
-        _qtyFocus, _freeQtyFocus, _schemeFocus, _dSchemeFocus, _priceFocus,
+        _boxFocus, _qtyFocus, _freeQtyFocus, _schemeFocus, _dSchemeFocus, _priceFocus,
         _discPcsFocus, _discPerFocus, _addDiscPerFocus, _remarkFocus,
       ];
 
@@ -1298,7 +1323,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
       );
 
-  Widget _rowField(ColorScheme cs, TextTheme tt, String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false}) => Row(
+  Widget _rowField(ColorScheme cs, TextTheme tt, String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false, VoidCallback? onFieldChanged}) => Row(
         children: [
           Expanded(child: Text(label, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
           SizedBox(
@@ -1319,7 +1344,7 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
               },
               textAlign: TextAlign.right,
               enabled: enabled,
-              onChanged: (_) => _onChanged(),
+              onChanged: (_) => (onFieldChanged ?? _onChanged)(),
               style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               decoration: _fieldDeco(cs),
             ),
@@ -1494,7 +1519,11 @@ class _CartUpdateBottomSheetState extends State<_CartUpdateBottomSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _rowField(colorScheme, textTheme, 'Quantity', qtyController, TextInputType.number, focusNode: _qtyFocus, autofocus: true),
+                    if (context.watch<SalesmanFlagsService>().flags?.showBoxQty ?? true) ...[
+                      _rowField(colorScheme, textTheme, 'Box', boxController, TextInputType.number, focusNode: _boxFocus, autofocus: true, onFieldChanged: _onBoxChanged),
+                      const SizedBox(height: 8),
+                    ],
+                    _rowField(colorScheme, textTheme, 'Quantity', qtyController, TextInputType.number, focusNode: _qtyFocus, autofocus: !(context.watch<SalesmanFlagsService>().flags?.showBoxQty ?? true)),
                     const SizedBox(height: 8),
                     if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
                       ...[

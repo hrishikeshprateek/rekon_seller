@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import 'dart:convert';
@@ -539,7 +540,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Colors.white),
@@ -585,14 +586,14 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                   fontSize: 14,
                   color: colorScheme.onSurfaceVariant,
                 ),
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   Icons.search,
-                  color: Color(0xFFFF6F00),
+                  color: Branding.secondary,
                   size: 20,
                 ),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, color: Color(0xFFFF6F00)),
+                        icon: Icon(Icons.clear, color: Branding.secondary),
                         onPressed: () {
                           _searchController.clear();
                           if (mounted) {
@@ -876,12 +877,12 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                         side: BorderSide(
                             color: (bill.latitude != null && bill.longitude != null &&
                                     bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
-                                ? const Color(0xFFFF6F00)
+                                ? Branding.secondary
                                 : Colors.grey.shade200,
                             width: 1.5),
                         foregroundColor: (bill.latitude != null && bill.longitude != null &&
                                          bill.latitude!.trim().isNotEmpty && bill.longitude!.trim().isNotEmpty)
-                            ? const Color(0xFFFF6F00)
+                            ? Branding.secondary
                             : Colors.grey.shade400,
                       ),
                       child: const Icon(Icons.near_me_outlined, size: 20),
@@ -894,7 +895,7 @@ class _DeliveryBookPageState extends State<DeliveryBookPage> {
                       child: ElevatedButton.icon(
                         onPressed: () => _navigateToDetails(bill),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6F00),
+                          backgroundColor: Branding.secondary,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(

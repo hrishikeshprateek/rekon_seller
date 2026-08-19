@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class DeliveryDetailPage extends StatelessWidget {
@@ -63,7 +64,7 @@ class DeliveryDetailPage extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 0,
             pinned: true,
-            backgroundColor: const Color(0xFF1E88E5),
+            backgroundColor: Branding.primary,
             foregroundColor: Colors.white,
             elevation: 0,
             scrolledUnderElevation: 1,
@@ -95,10 +96,10 @@ class DeliveryDetailPage extends StatelessWidget {
                   children: [
                     Text(
                       _getString('acname', 'Account'),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E88E5),
+                        color: Branding.primary,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -106,10 +107,10 @@ class DeliveryDetailPage extends StatelessWidget {
                     const SizedBox(height: 8),
                     Text(
                       'Bill No: ${_getString('billno')}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
-                        color: Color(0xFFFF6F00),
+                        color: Branding.secondary,
                       ),
                     ),
                   ],

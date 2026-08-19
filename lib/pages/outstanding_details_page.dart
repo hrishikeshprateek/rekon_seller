@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
@@ -553,7 +554,7 @@ class _OutstandingDetailsPageState extends State<OutstandingDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF1E88E5);
+    final primaryColor = Branding.primary;
     final scaffoldBg = Colors.grey.shade100;
     final selectedTotal = _selectedTotal;
     final currencyFormat = NumberFormat.simpleCurrency(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
@@ -34,12 +35,20 @@ class _OrderBookPageState extends State<OrderBookPage> {
 
   // --- LOGIC REMAINS EXACTLY THE SAME ---
 
+  void _resetDateFilter() {
+    setState(() {
+      _fromDate = null;
+      _tillDate = null;
+    });
+  }
+
   Future<void> _selectAccountAndFetchOrders() async {
     final account = await DoAccountSelectorPage.show(context);
     if (account != null) {
       setState(() {
         _selectedAccount = account;
       });
+      _resetDateFilter();
       _fetchOrders();
     } else {
       // If user cancels and no account was previously selected, exit to home
@@ -250,11 +259,29 @@ class _OrderBookPageState extends State<OrderBookPage> {
     );
   }
 
+  double _calculateOrderTotal() {
+    return _orders.fold<double>(0.0, (total, order) {
+      final value = order is Map ? order['OrderValue'] : null;
+      return total + _parseAmount(value);
+    });
+  }
+
+  double _parseAmount(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+
+    final normalized = value.toString().replaceAll(RegExp(r'[^0-9.-]'), '');
+    if (normalized.isEmpty) return 0.0;
+    return double.tryParse(normalized) ?? 0.0;
+  }
+
   // --- MAIN BUILD METHOD ---
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final orderTotal = _calculateOrderTotal();
+    final orderCount = _orders.length;
 
     // Trigger account selection if not selected
     if (_selectedAccount == null && !_accountSelectionTriggered) {
@@ -271,7 +298,7 @@ class _OrderBookPageState extends State<OrderBookPage> {
       appBar: AppBar(
         title: const Text('ORDER BOOK', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -344,7 +371,7 @@ class _OrderBookPageState extends State<OrderBookPage> {
               ),
             )
                 : ListView.builder(
-              padding: const EdgeInsets.only(top: 12, bottom: 24),
+              padding: const EdgeInsets.only(top: 12, bottom: 12),
               itemCount: _orders.length,
               itemBuilder: (context, idx) {
                 final order = _orders[idx];
@@ -450,6 +477,49 @@ class _OrderBookPageState extends State<OrderBookPage> {
                   ),
                 );
               },
+            ),
+          ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(top: BorderSide(color: cs.outlineVariant.withAlpha((0.5 * 255).toInt()))),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Bills', style: TextStyle(fontSize: 12, color: cs.outline)),
+                        Text('$orderCount', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.onSurface)),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Total', style: TextStyle(fontSize: 12, color: cs.outline)),
+                        Text(
+                          NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 2).format(orderTotal),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: cs.primary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],

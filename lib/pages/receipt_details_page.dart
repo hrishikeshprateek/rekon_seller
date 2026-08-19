@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:intl/intl.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
 
@@ -20,51 +22,56 @@ class ReceiptDetailsPage extends StatefulWidget {
 class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
   bool _isLoadingPdf = false;
 
-  Future<void> _shareReceiptPdf() async {
+  /// Fetches the receipt PDF bytes from /GetReceiptDetail. Throws on failure.
+  Future<Uint8List> _fetchReceiptPdfBytes() async {
     final auth = Provider.of<AuthService>(context, listen: false);
     final receiptId = widget.receipt['id']?.toString() ?? '0';
+    final lid = int.tryParse(receiptId) ?? 0;
 
+    final payload = {
+      'lLicNo': auth.currentUser?.licenseNumber ?? '',
+      'lUserId': auth.currentUser?.mobileNumber ?? '',
+      'lid': lid,
+      'lStatus': -1,
+      'lFirm': '',
+      'lSharePdf': 1,
+    };
+
+    debugPrint('[ReceiptDetails] GetReceiptDetail payload: $payload');
+
+    final dio = auth.getDioClient();
+    final response = await dio.post(
+      '/GetReceiptDetail',
+      data: payload,
+      options: Options(
+        responseType: ResponseType.bytes,
+        headers: {
+          'Content-Type': 'application/json',
+          'package_name': auth.packageNameHeader,
+        },
+      ),
+    );
+
+    Uint8List? bytes;
+    if (response.data is Uint8List) {
+      bytes = response.data as Uint8List;
+    } else if (response.data is List<int>) {
+      bytes = Uint8List.fromList(List<int>.from(response.data));
+    }
+
+    if (bytes == null || bytes.isEmpty) {
+      throw 'No PDF data received from server.';
+    }
+    return bytes;
+  }
+
+  /// Fetches the receipt PDF and shares it via the system share sheet.
+  Future<void> _shareReceiptPdf() async {
+    if (_isLoadingPdf) return;
     setState(() => _isLoadingPdf = true);
-
     try {
-      // Parse receipt ID as integer
-      final lid = int.tryParse(receiptId) ?? 0;
-
-      final payload = {
-        'lLicNo': auth.currentUser?.licenseNumber ?? '',
-        'lUserId': auth.currentUser?.mobileNumber ?? '',
-        'lid': lid,
-        'lStatus': -1,
-        'lFirm': '',
-        'lSharePdf': 1,
-      };
-
-      debugPrint('[ReceiptDetails] GetReceiptDetail payload: $payload');
-
-      final dio = auth.getDioClient();
-      final response = await dio.post(
-        '/GetReceiptDetail',
-        data: payload,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: {
-            'Content-Type': 'application/json',
-            'package_name': auth.packageNameHeader,
-          },
-        ),
-      );
-
-      Uint8List? bytes;
-      if (response.data is Uint8List) {
-        bytes = response.data as Uint8List;
-      } else if (response.data is List<int>) {
-        bytes = Uint8List.fromList(List<int>.from(response.data));
-      }
-
-      if (bytes == null || bytes.isEmpty) {
-        throw 'No PDF data received from server.';
-      }
-
+      final bytes = await _fetchReceiptPdfBytes();
+      final receiptId = widget.receipt['id']?.toString() ?? '0';
       final dir = await getTemporaryDirectory();
       final file = File(
         '${dir.path}/receipt_${receiptId}_${DateTime.now().millisecondsSinceEpoch}.pdf',
@@ -72,7 +79,6 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
       await file.writeAsBytes(bytes, flush: true);
 
       final xfile = XFile(file.path, mimeType: 'application/pdf');
-
       final accountName = widget.receipt['acName']?.toString() ?? 'Receipt';
 
       if (mounted) {
@@ -87,6 +93,34 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Could not fetch/share PDF: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPdf = false);
+      }
+    }
+  }
+
+  /// Fetches the receipt PDF and opens the system print dialog.
+  Future<void> _printReceiptPdf() async {
+    if (_isLoadingPdf) return;
+    setState(() => _isLoadingPdf = true);
+    try {
+      final bytes = await _fetchReceiptPdfBytes();
+      final receiptId = widget.receipt['id']?.toString() ?? '0';
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: 'receipt_$receiptId',
+      );
+    } catch (e) {
+      debugPrint('[ReceiptDetails] Print PDF error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not print: $e'),
             duration: const Duration(seconds: 3),
           ),
         );
@@ -143,7 +177,7 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
     return Scaffold(
       backgroundColor: colorScheme.surfaceContainerHigh,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         elevation: 0,
         centerTitle: true,
         title: const Text("RECEIPT DETAILS",
@@ -414,34 +448,58 @@ class _ReceiptDetailsPageState extends State<ReceiptDetailsPage> {
 
             const SizedBox(height: 32),
 
-            // --- SHARE BUTTON ---
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: FilledButton.icon(
-                onPressed: _isLoadingPdf ? null : _shareReceiptPdf,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  foregroundColor: colorScheme.onPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  elevation: 2,
-                  disabledBackgroundColor: colorScheme.primary.withOpacity(0.6),
+            // --- PRINT + SHARE BUTTONS ---
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: _isLoadingPdf ? null : _printReceiptPdf,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: colorScheme.primary,
+                        side: BorderSide(color: colorScheme.primary),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      icon: const Icon(Icons.print_rounded),
+                      label: const Text(
+                        "Print",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
                 ),
-                icon: _isLoadingPdf
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
-                        ),
-                      )
-                    : const Icon(Icons.share_rounded),
-                label: Text(
-                  _isLoadingPdf ? "Generating PDF..." : "Share Receipt",
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 56,
+                    child: FilledButton.icon(
+                      onPressed: _isLoadingPdf ? null : _shareReceiptPdf,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        elevation: 2,
+                        disabledBackgroundColor: colorScheme.primary.withOpacity(0.6),
+                      ),
+                      icon: _isLoadingPdf
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimary),
+                              ),
+                            )
+                          : const Icon(Icons.share_rounded),
+                      label: Text(
+                        _isLoadingPdf ? "..." : "Share",
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

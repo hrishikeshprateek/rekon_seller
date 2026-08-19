@@ -10,11 +10,29 @@ import 'auth_service.dart';
 import 'dashboard_service.dart';
 import 'services/account_selection_service.dart';
 import 'services/salesman_flags_service.dart';
+import 'constants/api_constants.dart';
+import 'constants/branding.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
-// Platform channel for screenshot prevention (mobile only)
+// Platform channel for screenshot prevention (mobile only).
+// NOTE: this channel name is the native namespace and is shared across all
+// flavors — it must stay 'com.reckon.reckonbiz' to match MainActivity.
 const platform = MethodChannel('com.reckon.reckonbiz/screenshot');
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Resolve the real running package name (per flavor) and use it for all API
+  // calls, instead of a hardcoded one.
+  try {
+    final info = await PackageInfo.fromPlatform();
+    if (info.packageName.isNotEmpty) {
+      ApiConstants.packageName = info.packageName;
+      ApiConstants.tenantId = info.packageName;
+      debugPrint('[main] API package_name set to ${info.packageName}');
+    }
+  } catch (e) {
+    debugPrint('[main] Could not resolve package name, using default: $e');
+  }
   runApp(const MyApp());
 }
 
@@ -55,24 +73,24 @@ class _MyAppState extends State<MyApp> {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
             navigatorKey: appNavigatorKey,
-            title: 'Reckon Seller 2.0',
+            title: Branding.appName,
             theme: ThemeData(
               useMaterial3: true,
               // Modern Blue-Orange theme with Material Design 3
               colorScheme: ColorScheme.fromSeed(
-                seedColor: const Color(0xFF1E88E5), // Modern vibrant blue
+                seedColor: Branding.primary, // Modern vibrant blue
                 brightness: Brightness.light,
-                secondary: const Color(0xFFFF6F00), // Vibrant orange
+                secondary: Branding.secondary, // Vibrant orange
                 surface: const Color(0xFFFAFBFC),
                 surfaceContainerHighest: const Color(0xFFF0F2F5),
               ),
               // Enhanced AppBar styling
               appBarTheme: AppBarTheme(
-                backgroundColor: const Color(0xFF1E88E5),
+                backgroundColor: Branding.primary,
                 foregroundColor: Colors.white,
                 elevation: 2,
                 scrolledUnderElevation: 4,
-                shadowColor: const Color(0xFF1E88E5).withValues(alpha: 0.3),
+                shadowColor: Branding.primary.withValues(alpha: 0.3),
                 centerTitle: true,
                 titleTextStyle: const TextStyle(
                   fontSize: 18,
@@ -104,7 +122,7 @@ class _MyAppState extends State<MyApp> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Color(0xFF1E88E5), width: 2),
+                  borderSide: BorderSide(color: Branding.primary, width: 2),
                 ),
                 errorBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -128,10 +146,10 @@ class _MyAppState extends State<MyApp> {
               // Enhanced button styling
               elevatedButtonTheme: ElevatedButtonThemeData(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1E88E5),
+                  backgroundColor: Branding.primary,
                   foregroundColor: Colors.white,
                   elevation: 4,
-                  shadowColor: const Color(0xFF1E88E5).withValues(alpha: 0.4),
+                  shadowColor: Branding.primary.withValues(alpha: 0.4),
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -146,7 +164,7 @@ class _MyAppState extends State<MyApp> {
               // Enhanced text button styling
               textButtonTheme: TextButtonThemeData(
                 style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF1E88E5),
+                  foregroundColor: Branding.primary,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -161,8 +179,8 @@ class _MyAppState extends State<MyApp> {
               // Enhanced outlined button styling
               outlinedButtonTheme: OutlinedButtonThemeData(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF1E88E5),
-                  side: const BorderSide(color: Color(0xFF1E88E5), width: 1.5),
+                  foregroundColor: Branding.primary,
+                  side: BorderSide(color: Branding.primary, width: 1.5),
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -175,7 +193,7 @@ class _MyAppState extends State<MyApp> {
                 ),
               ),
               // Enhanced typography
-              textTheme: const TextTheme(
+              textTheme: TextTheme(
                 displayLarge: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.w800,
@@ -251,19 +269,19 @@ class _MyAppState extends State<MyApp> {
                 labelLarge: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E88E5),
+                  color: Branding.primary,
                   letterSpacing: 0.1,
                 ),
                 labelMedium: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E88E5),
+                  color: Branding.primary,
                   letterSpacing: 0.5,
                 ),
                 labelSmall: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF1E88E5),
+                  color: Branding.primary,
                   letterSpacing: 0.5,
                 ),
               ),
@@ -288,7 +306,7 @@ class _MyAppState extends State<MyApp> {
               ),
               // Enhanced floating action button styling
               floatingActionButtonTheme: FloatingActionButtonThemeData(
-                backgroundColor: const Color(0xFF1E88E5),
+                backgroundColor: Branding.primary,
                 foregroundColor: Colors.white,
                 elevation: 6,
                 shape: RoundedRectangleBorder(
@@ -312,7 +330,7 @@ class _MyAppState extends State<MyApp> {
               checkboxTheme: CheckboxThemeData(
                 fillColor: WidgetStateProperty.resolveWith((states) {
                   if (states.contains(WidgetState.selected)) {
-                    return const Color(0xFF1E88E5);
+                    return Branding.primary;
                   }
                   return Colors.grey.shade300;
                 }),
@@ -325,7 +343,7 @@ class _MyAppState extends State<MyApp> {
               radioTheme: RadioThemeData(
                 fillColor: WidgetStateProperty.resolveWith((states) {
                   if (states.contains(WidgetState.selected)) {
-                    return const Color(0xFF1E88E5);
+                    return Branding.primary;
                   }
                   return Colors.grey.shade400;
                 }),
@@ -520,14 +538,14 @@ class _AuthWrapperState extends State<AuthWrapper> with WidgetsBindingObserver {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.asset(
-                    'assets/images/reckon.png',
+                    Branding.logo,
                     width: 128,
                     height: 128,
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Reckon Seller 2.0',
+                    Branding.appName,
                     style: textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: colorScheme.onSurface,

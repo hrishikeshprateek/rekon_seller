@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'constants/branding.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
@@ -418,7 +419,7 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Colors.white, letterSpacing: 0.5),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         scrolledUnderElevation: 0,
         leading: IconButton(
@@ -433,6 +434,10 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Form(
                 key: _formKey,
+                // Re-validate each field as the user fills it in, so a shown
+                // "Required" error clears once a valid value is entered
+                // (Amount, Payment Mode, etc.).
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -586,7 +591,13 @@ class _CreateReceiptScreenState extends State<CreateReceiptScreen> {
                         initialValue: _selectedPaymentMode,
                         isExpanded: true,
                         alignment: AlignmentDirectional.centerEnd,
-                        items: _paymentModes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                        items: _paymentModes
+                            .map((e) => DropdownMenuItem(
+                                  value: e,
+                                  alignment: AlignmentDirectional.centerEnd,
+                                  child: Text(e, textAlign: TextAlign.right),
+                                ))
+                            .toList(),
                         onChanged: (v) => setState(() => _selectedPaymentMode = v),
                         decoration: _inlineInputDeco('Select Mode'),
                         validator: (v) => v == null ? 'Required' : null,
@@ -1103,7 +1114,7 @@ class _ReceiptSubmissionConfirmationState
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,

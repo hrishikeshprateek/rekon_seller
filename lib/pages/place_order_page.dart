@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
 import '../models/account_model.dart' as models;
@@ -252,7 +253,7 @@ class _PlaceOrderPageState extends State<PlaceOrderPage> {
       appBar: AppBar(
         title: const Text('REVIEW ORDER', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18, color: Colors.white)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),

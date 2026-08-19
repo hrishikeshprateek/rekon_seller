@@ -30,15 +30,30 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.reckon.reckonbiz"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        // applicationId is set per product flavor below (reckon / amareorder).
+        // namespace stays com.reckon.reckonbiz so MainActivity + MethodChannels
+        // (com.reckon.reckonbiz/files, /screenshot) work for every flavor.
         // Android 10 (API 29) — required minimum.
         minSdk = 29
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Default app name; each flavor overrides via manifestPlaceholders.
+        manifestPlaceholders["appLabel"] = "Reckon Seller 2.0"
+    }
+
+    flavorDimensions += "brand"
+    productFlavors {
+        create("reckon") {
+            dimension = "brand"
+            applicationId = "com.reckon.reckonbiz"
+            manifestPlaceholders["appLabel"] = "Reckon Seller 2.0"
+        }
+        create("amareorder") {
+            dimension = "brand"
+            applicationId = "com.reckon.amareorder"
+            manifestPlaceholders["appLabel"] = "Amar eOrder"
+        }
     }
 
     signingConfigs {

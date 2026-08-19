@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/delivery_task_model.dart';
@@ -109,7 +110,7 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         scrolledUnderElevation: 0,
         elevation: 0,
@@ -117,6 +118,7 @@ class _MarkCollectionPageState extends State<MarkCollectionPage> {
       ),
       body: Form(
         key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [

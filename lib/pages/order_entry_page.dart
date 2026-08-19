@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'dart:async';
@@ -730,7 +731,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       appBar: AppBar(
         title: const Text('New Order', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         scrolledUnderElevation: 0,
         actions: [
@@ -992,7 +993,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                         ),
                       ),
                     ),
-                  Text('${product.name}, ${product.unit}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: Color(0xFF1E88E5))),
+                  Text('${product.name}, ${product.unit}', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17, color: Branding.primary)),
                   const SizedBox(height: 6),
                   // Price · MRP · GST — right below the name; each part gated by the API's Show* flags
                   if (product.showRate || product.showMrp)
@@ -1516,6 +1517,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     // hint shows "0" so users can just tap and type. For an existing cart
     // edit, prefill with the saved values.
     final qtyController        = TextEditingController(text: currentQuantity != null ? currentQuantity.toString() : '');
+    final boxController        = TextEditingController(text: '');
     final priceController      = TextEditingController(text: cartData != null ? _safeDouble(cartData['rate']).toStringAsFixed(2) : product.price.toStringAsFixed(2));
     final freeQtyController    = TextEditingController(text: cartData != null ? _safeInt(cartData['freeQty']).toString() : '');
     // Item's own scheme narration ("4.00 + 1.00 Full") → split into the two
@@ -1542,6 +1544,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
 
     // Explicit FocusNodes so the keyboard "Next" key reliably hops to every
     // visible field — including the flag-gated Free Qty and Pcs Discount rows.
+    final boxFocus        = FocusNode();
     final qtyFocus        = FocusNode();
     final freeQtyFocus    = FocusNode();
     final schemeFocus     = FocusNode();
@@ -1552,7 +1555,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
     final addDiscPerFocus = FocusNode();
     final remarkFocus     = FocusNode();
     final orderedFocus = [
-      qtyFocus, freeQtyFocus, schemeFocus, dSchemeFocus, priceFocus,
+      boxFocus, qtyFocus, freeQtyFocus, schemeFocus, dSchemeFocus, priceFocus,
       discPcsFocus, discPerFocus, addDiscPerFocus, remarkFocus,
     ];
     // Find the next currently-mounted focus node after `current`.
@@ -1619,7 +1622,8 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               previewDebounce?.cancel();
               previewDebounce = Timer(const Duration(milliseconds: 350), () async {
                 final qty = int.tryParse(qtyController.text.trim()) ?? 0;
-                if (qty <= 0) {
+                final box = int.tryParse(boxController.text.trim()) ?? 0;
+                if (qty <= 0 && box <= 0) {
                   setModalState(() {
                     preview = null;
                     isPreviewLoading = false;
@@ -1638,14 +1642,19 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                 idCol = product.iidcol ?? int.tryParse(product.id) ?? 0;
 
                 final acCode = _selectedAccount?.code ?? (_selectedAccount?.acIdCol != null ? _selectedAccount!.acIdCol.toString() : _selectedAccount?.id ?? '');
+                // When boxes are entered, the box drives the quantity: send an
+                // empty base so the server returns box × conversion (never
+                // compounding the previously-shown total), then display it.
+                final baseQty = box > 0 ? '' : qtyController.text.trim();
                 final request = _buildDraftOrderRequest(
                   product: product,
-                  qty: qtyController.text.trim(),
+                  qty: baseQty,
+                  box: boxController.text.trim(),
                   rate: priceController.text.trim(),
                   freeQty: freeQtyController.text.trim(),
                   schemeQty: schemeController.text.trim(),
                   dSchemeQty: dSchemeController.text.trim(),
-                  itemAmt: ((double.tryParse(priceController.text.trim()) ?? product.price) * qty).toStringAsFixed(2),
+                  itemAmt: ((double.tryParse(priceController.text.trim()) ?? product.price) * (int.tryParse(baseQty) ?? 0)).toStringAsFixed(2),
                   discountPer: discPerController.text.trim(),
                   addDiscountPer: addDiscPerController.text.trim(),
                   discountPcs: discPcsController.text.trim(),
@@ -1680,6 +1689,13 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     preview = result;
                     isPreviewLoading = false;
                     syncFromPreview();
+                    // Box-driven: show the server's total quantity in the Qty
+                    // field. We sent base 0, so this can never compound.
+                    if (box > 0 && result.qty.isNotEmpty) {
+                      // Quantity as a whole number (server sends e.g. "40.00").
+                      final n = double.tryParse(result.qty);
+                      qtyController.text = n != null ? n.toInt().toString() : result.qty;
+                    }
                     // First preview after the sheet opens: prefill the discount
                     // boxes with the default % the server applied — only where
                     // the user (or a saved cart entry) hasn't typed anything.
@@ -1711,6 +1727,14 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               runPreview();
             }
 
+            // When the Box is cleared/zero, reset the Qty (it was holding the
+            // box-driven total), then re-run the preview.
+            void onBoxChanged() {
+              final b = int.tryParse(boxController.text.trim()) ?? 0;
+              if (b <= 0) qtyController.text = '';
+              updateFields();
+            }
+
             // On first open, if item is already in cart, run preview immediately
             // so the summary section shows the correct server-calculated values
             if (_firstBuild) {
@@ -1720,7 +1744,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               }
             }
 
-            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false}) => Row(
+            Widget rowField(String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false, VoidCallback? onFieldChanged}) => Row(
               children: [
                 Expanded(child: Text(label, style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
                 SizedBox(
@@ -1741,7 +1765,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                     },
                     textAlign: TextAlign.right,
                     enabled: enabled,
-                    onChanged: (_) => updateFields(),
+                    onChanged: (_) => (onFieldChanged ?? updateFields)(),
                     style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
                     decoration: _fieldDeco(colorScheme),
                   ),
@@ -1892,7 +1916,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                           child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            rowField('Quantity', qtyController, TextInputType.number, focusNode: qtyFocus, autofocus: true),
+                            if (context.watch<SalesmanFlagsService>().flags?.showBoxQty ?? true) ...[
+                              rowField('Box', boxController, TextInputType.number, focusNode: boxFocus, autofocus: true, onFieldChanged: onBoxChanged),
+                              const SizedBox(height: 8),
+                            ],
+                            rowField('Quantity', qtyController, TextInputType.number, focusNode: qtyFocus, autofocus: !(context.watch<SalesmanFlagsService>().flags?.showBoxQty ?? true)),
                             const SizedBox(height: 8),
                             if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
                               ...[
@@ -2195,6 +2223,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   DraftOrderRequest _buildDraftOrderRequest({
     required Product product,
     required String qty,
+    required String box,
     required String rate,
     required String freeQty,
     required String schemeQty,
@@ -2210,6 +2239,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       itemCode: product.code ?? product.id,
       idCol: product.iidcol ?? int.tryParse(product.id) ?? 0,
       itemQty: qty,
+      itemUnit1Qty: box.isEmpty ? '0' : box,
       itemRate: rate,
       itemFQty: freeQty.isEmpty ? '0' : freeQty,
       itemSchQty: schemeQty.isEmpty ? '0' : schemeQty,

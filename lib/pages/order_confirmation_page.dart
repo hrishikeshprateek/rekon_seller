@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 
 class OrderConfirmationPage extends StatelessWidget {
   /// Pass the `data` object from your API response here.
@@ -101,7 +102,7 @@ class OrderConfirmationPage extends StatelessWidget {
         automaticallyImplyLeading: false, // Remove default back button for a confirmation screen
         title: const Text('ORDER CONFIRMED', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),

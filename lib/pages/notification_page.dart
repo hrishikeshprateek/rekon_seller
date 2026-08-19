@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
@@ -9,7 +10,7 @@ class NotificationPage extends StatelessWidget {
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text('NOTIFICATION'),
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
       ),
       body: Center(
@@ -20,10 +21,10 @@ class NotificationPage extends StatelessWidget {
               width: 96,
               height: 96,
               decoration: BoxDecoration(
-                color: const Color(0xFF1E88E5).withValues(alpha: 0.10),
+                color: Branding.primary.withValues(alpha: 0.10),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.notifications_none_rounded, size: 46, color: Color(0xFF1E88E5)),
+              child: Icon(Icons.notifications_none_rounded, size: 46, color: Branding.primary),
             ),
             const SizedBox(height: 20),
             const Text(

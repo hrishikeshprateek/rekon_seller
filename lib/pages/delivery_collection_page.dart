@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 // Note: Ensure these imports point to your actual file structure
@@ -266,7 +267,7 @@ class _DeliveryCollectionPageState extends State<DeliveryCollectionPage> {
       expandedHeight: 220.0,
       floating: false,
       pinned: true,
-      backgroundColor: const Color(0xFF1E88E5), // Theme Primary
+      backgroundColor: Branding.primary, // Theme Primary
       iconTheme: IconThemeData(color: colorScheme.onPrimary),
       flexibleSpace: FlexibleSpaceBar(
         background: Container(

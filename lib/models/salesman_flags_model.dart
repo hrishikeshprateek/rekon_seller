@@ -27,6 +27,9 @@ class SalesmanFlags {
   final bool showItemMfgCompSalesMan;
   final bool showitemCategorySalesMan;
   final String searchfieldlistSalesman;
+  // Show/hide the Box quantity field. Nullable: null (flag not sent by the
+  // API) means SHOW the field by default.
+  final bool? showBoxQty;
 
   SalesmanFlags({
     required this.tenantId,
@@ -55,6 +58,7 @@ class SalesmanFlags {
     required this.showItemMfgCompSalesMan,
     required this.showitemCategorySalesMan,
     required this.searchfieldlistSalesman,
+    this.showBoxQty,
   });
 
   factory SalesmanFlags.fromJson(Map<String, dynamic> json) {
@@ -85,6 +89,13 @@ class SalesmanFlags {
       showItemMfgCompSalesMan: json['showItemMfgComp_SalesMan'] ?? false,
       showitemCategorySalesMan: json['showitemCategory_SalesMan'] ?? false,
       searchfieldlistSalesman: json['searchfieldlist_Salesman']?.toString() ?? '0',
+      // Robust to whatever key/casing the backend uses; null when absent.
+      showBoxQty: _nullableBool(
+        json['ShowBoxQty_SalesMan'] ??
+            json['showBoxQty_Salesman'] ??
+            json['showBoxQty'] ??
+            json['showboxqty'],
+      ),
     );
   }
 
@@ -116,6 +127,7 @@ class SalesmanFlags {
       'showItemMfgComp_SalesMan': showItemMfgCompSalesMan,
       'showitemCategory_SalesMan': showitemCategorySalesMan,
       'searchfieldlist_Salesman': searchfieldlistSalesman,
+      'ShowBoxQty_SalesMan': showBoxQty,
     };
   }
 
@@ -123,6 +135,17 @@ class SalesmanFlags {
 
   factory SalesmanFlags.fromJsonString(String jsonString) {
     return SalesmanFlags.fromJson(jsonDecode(jsonString));
+  }
+
+  // Parses a nullable bool: null stays null (so callers can default to "show"),
+  // accepts real bools and "true"/"false"/"1"/"0" strings.
+  static bool? _nullableBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    final s = value.toString().trim().toLowerCase();
+    if (s == 'true' || s == '1') return true;
+    if (s == 'false' || s == '0') return false;
+    return null;
   }
 
   static double _safeDouble(dynamic value) {

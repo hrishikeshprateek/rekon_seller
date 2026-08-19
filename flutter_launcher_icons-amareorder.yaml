@@ -1,0 +1,9 @@
+# Flavor-specific launcher icon for the "amareorder" Android flavor.
+# Generates into android/app/src/amareorder/res/ so it overrides the default
+# Reckon icon only for the Amar eOrder build.
+# Run:  dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/amar.jpeg"
+  remove_alpha_ios: true

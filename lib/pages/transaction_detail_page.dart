@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../constants/branding.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -238,7 +239,7 @@ class _TransactionDetailPageState extends State<TransactionDetailPage> {
       backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text('Transaction Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 17)),
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         elevation: 1,
       ),

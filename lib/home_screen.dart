@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'constants/branding.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -59,8 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
   static const int _collapsedItemCount = 8;
 
   // App palette
-  static const Color _kBlue = Color(0xFF1E88E5);
-  static const Color _kIcon = Color(0xFF1565C0); // deep blue for the line icons
+  static Color get _kBlue => Branding.primary;
+  // Home line-icon colour: teal for Amar (matches its logo/theme), deep blue for
+  // Reckon (unchanged).
+  static Color get _kIcon =>
+      Branding.isAmar ? Branding.primary : const Color(0xFF1565C0);
   static const Color _kPageBg = Color(0xFFF0F2F5);
 
   @override
@@ -667,11 +671,11 @@ class _HomeScreenState extends State<HomeScreen> {
             elevation: 0,
             scrolledUnderElevation: 1,
             toolbarHeight: 70,
-            backgroundColor: const Color(0xFF1E88E5),
+            backgroundColor: Branding.primary,
             foregroundColor: Colors.white,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                color: const Color(0xFF1E88E5),
+                color: Branding.primary,
                 child: Align(
                   alignment: Alignment.bottomCenter,
                   child: Container(
@@ -703,11 +707,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.asset(
-                        'assets/images/reckon.png',
+                        Branding.logo,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            color: const Color(0xFF1E88E5),
+                            color: Branding.primary,
                             child: const Icon(
                               Icons.business_rounded,
                               size: 22,
@@ -897,18 +901,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: Container(
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              Color(0xFF1E88E5),
+              Branding.primary,
               Color(0xFF1565C0),
             ],
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF1E88E5).withValues(alpha: 0.4),
+              color: Branding.primary.withValues(alpha: 0.4),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -954,12 +958,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF1E88E5).withValues(alpha: 0.12),
+                      color: Branding.primary.withValues(alpha: 0.12),
                       blurRadius: 16,
                       offset: const Offset(0, 6),
                     ),
                     BoxShadow(
-                      color: const Color(0xFFFF6F00).withValues(alpha: 0.08),
+                      color: Branding.secondary.withValues(alpha: 0.08),
                       blurRadius: 12,
                       offset: const Offset(0, 3),
                     ),
@@ -1022,12 +1026,12 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(4),
                 color: active
-                    ? const Color(0xFF1E88E5)
-                    : const Color(0xFF1E88E5).withValues(alpha: 0.3),
+                    ? Branding.primary
+                    : Branding.primary.withValues(alpha: 0.3),
                 boxShadow: active
                     ? [
                         BoxShadow(
-                          color: const Color(0xFF1E88E5).withValues(alpha: 0.4),
+                          color: Branding.primary.withValues(alpha: 0.4),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -1096,7 +1100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
                     child: Text(
                       expanded ? 'See less' : 'See more',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: _kBlue,

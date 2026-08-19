@@ -4,11 +4,12 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../auth_service.dart';
+import '../constants/branding.dart';
 
 /// "Share and Rate" — presented as a bottom sheet (no separate page).
 /// Call [ShareAndRateSheet.show] to open the two options (Share / Rate).
 class ShareAndRateSheet {
-  static const String _appName = 'Reckon Seller 2.0';
+  static String get _appName => Branding.appName;
 
   static String _packageName(BuildContext context) =>
       Provider.of<AuthService>(context, listen: false).packageNameHeader;
@@ -64,7 +65,7 @@ class ShareAndRateSheet {
                 const SizedBox(height: 16),
                 _OptionTile(
                   icon: Icons.share_rounded,
-                  color: const Color(0xFF1E88E5),
+                  color: Branding.primary,
                   title: 'Share',
                   subtitle: 'Invite friends to $_appName',
                   onTap: () {
@@ -75,7 +76,7 @@ class ShareAndRateSheet {
                 const SizedBox(height: 12),
                 _OptionTile(
                   icon: Icons.star_rounded,
-                  color: const Color(0xFFFF6F00),
+                  color: Branding.secondary,
                   title: 'Rate Seller 2.0',
                   subtitle: 'Tell us how we are doing',
                   onTap: () {
@@ -143,8 +144,8 @@ class ShareAndRateSheet {
                 OutlinedButton.icon(
                   onPressed: () => _launch(context, Uri.parse(playUrl)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF1E88E5),
-                    side: const BorderSide(color: Color(0xFF1E88E5)),
+                    foregroundColor: Branding.primary,
+                    side: BorderSide(color: Branding.primary),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   ),
@@ -240,10 +241,10 @@ class ShareAndRateSheet {
                       onPressed: () => Navigator.pop(ctx),
                     ),
                   ),
-                  const Text(
+                  Text(
                     'Love $_appName ?',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: Color(0xFF1A1A1A)),
                   ),
                   const SizedBox(height: 8),
                   Text(

@@ -10,11 +10,14 @@ class ApiConstants {
   static const String getReceiptDetailUrl = '$baseUrl/GetReceiptDetail';
   static const String getSalesmanFlagsUrl = '$baseUrl/GetSalesmanFlags';
 
-  // Tenant Configuration
-  static const String tenantId = 'com.reckon.reckonbiz';
+  // Tenant Configuration.
+  // Set once at startup (main.dart) to the real running package name so each
+  // flavor (e.g. com.reckon.reckonbiz, com.reckon.amareorder) reports itself.
+  static String tenantId = 'com.reckon.reckonbiz';
 
-  // API Headers
-  static const String packageName = 'com.reckon.reckonbiz';
+  // API Headers.
+  // Set once at startup to the real running package name. NOT const.
+  static String packageName = 'com.reckon.reckonbiz';
   static const String contentType = 'application/json';
 }
 

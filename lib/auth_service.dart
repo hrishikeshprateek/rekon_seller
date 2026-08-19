@@ -17,8 +17,9 @@ class AuthService with ChangeNotifier {
   // API configuration is now centralized in ApiConstants
   static String get baseUrl => ApiConstants.baseUrl;
   static String get tenantId => ApiConstants.tenantId;
-  // Updated API header package name
-  static const String packageName = 'com.reckon.reckonbiz';
+  // Real running package name (set at startup from package_info_plus), so each
+  // flavor reports its own applicationId to the API.
+  static String get packageName => ApiConstants.packageName;
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   final Dio _dio = Dio();
@@ -320,7 +321,7 @@ class AuthService with ChangeNotifier {
     required String mobile,
     required String password,
     String countryCode = '91',
-    String apkName = 'com.reckon.reckonbiz',
+    String? apkName,
     String appRole = 'SalesMan',
     int vCode = 31,
     String versionName = '1.7.23',
@@ -331,7 +332,7 @@ class AuthService with ChangeNotifier {
       // Make sure the real device id is resolved before we build the payload.
       await ensureDeviceInfo();
       final payload = {
-        'lApkName': apkName,
+        'lApkName': apkName ?? ApiConstants.packageName,
         'LicNo': licenseNumber,
         'MobileNo': mobile,
         'Password': password,
@@ -347,6 +348,8 @@ class AuthService with ChangeNotifier {
         // unbind the old device and register this one.
         if (changeDevice) 'ChangeDevice': true,
       };
+
+      debugPrint('[AuthService] ValidateLicense REQUEST body: ${jsonEncode(payload)}');
 
       final response = await _dio.post(
         '/ValidateLicense',
@@ -787,7 +790,7 @@ class AuthService with ChangeNotifier {
     String? licenseNumber,
     String? cuId,
     bool updateDeviceId = false,
-    String apkName = 'com.reckon.reckonbiz',
+    String? apkName,
     String appRole = 'SalesMan',
     int vCode = 31,
     String versionName = '1.7.23',
@@ -795,7 +798,7 @@ class AuthService with ChangeNotifier {
     try {
       await ensureDeviceInfo();
       final payload = <String, dynamic>{
-        'lApkName': apkName,
+        'lApkName': apkName ?? ApiConstants.packageName,
         'MobileNo': mobile,
         'OTP': otp,
         'CountryCode': countryCode,
@@ -862,11 +865,10 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Create or set user password
-  /// Uses endpoint POST /forgotpassword with payload: { licNo, countryCode, password, otp? }
-  /// When [otp] is provided (forgot-password flow), it is verified server-side
-  /// in the same call — no separate OTP-validation endpoint is needed.
-  Future<Map<String, dynamic>> createPassword({
+  /// Forgot-password / reset: verifies the OTP and sets a new password.
+  /// Uses endpoint POST /forgotpassword with payload: { licNo, countryCode, password, otp }
+  /// The OTP is verified server-side in the same call.
+  Future<Map<String, dynamic>> resetPassword({
     required String mobile,
     required String password,
     String countryCode = '91',
@@ -887,7 +889,7 @@ class AuthService with ChangeNotifier {
         if (otp != null && otp.trim().isNotEmpty) 'otp': otp.trim(),
       };
 
-      debugPrint('[AuthService.createPassword] payload: $payload');
+      debugPrint('[AuthService.resetPassword] /forgotpassword payload: $payload');
 
       final response = await _dio.post(
         '/forgotpassword',
@@ -902,7 +904,7 @@ class AuthService with ChangeNotifier {
         ),
       );
 
-      debugPrint('[AuthService.createPassword] raw response: ${response.data}');
+      debugPrint('[AuthService.resetPassword] raw response: ${response.data}');
 
       final data = _normalizeResponse(response.data);
       // Treat a truthy status/Status/success (bool or "true" string, any case) as success.
@@ -912,6 +914,69 @@ class AuthService with ChangeNotifier {
         'success': success,
         'message': data['Message'] ?? data['message'] ??
             (success ? 'Password reset successfully' : 'Failed to reset password'),
+        'data': data,
+        'raw': response.data,
+      };
+    } on DioException catch (e) {
+      return {
+        'success': false,
+        'message': e.response?.data?.toString() ?? e.message ?? 'Network error',
+        'data': null,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'An unexpected error occurred: ${e.toString()}',
+        'data': null,
+      };
+    }
+  }
+
+  /// First-time password creation (login flow: ValidateLicense returned
+  /// CreatePasswd:true). Distinct from the forgot-password reset above.
+  /// Uses endpoint POST /createPassword with payload: { licNo, countryCode, password }
+  /// No OTP and no Authorization header.
+  Future<Map<String, dynamic>> createPassword({
+    required String mobile,
+    required String password,
+    String countryCode = '91',
+    String? licenseNumber,
+  }) async {
+    try {
+      // licNo carries the user's phone number (digits only, last 10).
+      String lic = (mobile.isNotEmpty) ? mobile : (licenseNumber ?? '');
+      lic = lic.replaceAll(RegExp(r'[^0-9]'), '');
+      if (lic.length > 10) lic = lic.substring(lic.length - 10);
+
+      final payload = {
+        'licNo': lic,
+        'countryCode': countryCode,
+        'password': password,
+      };
+
+      debugPrint('[AuthService.createPassword] /createPassword payload: $payload');
+
+      final response = await _dio.post(
+        '/createPassword',
+        data: payload,
+        options: Options(
+          headers: {
+            'Content-Type': 'application/json',
+            'package_name': packageNameHeader,
+          },
+          contentType: Headers.jsonContentType,
+        ),
+      );
+
+      debugPrint('[AuthService.createPassword] raw response: ${response.data}');
+
+      final data = _normalizeResponse(response.data);
+      bool isTruthy(dynamic v) => v == true || v?.toString().toLowerCase() == 'true';
+      final success = isTruthy(data['success']) || isTruthy(data['Status']) || isTruthy(data['status']);
+      return {
+        'success': success,
+        'message': data['Message'] ?? data['message'] ??
+            (success ? 'Password created successfully' : 'Failed to create password'),
         'data': data,
         'raw': response.data,
       };

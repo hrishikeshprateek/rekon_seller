@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../constants/branding.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -951,7 +952,7 @@ class _StatementPageState extends State<StatementPage> {
           ),
         )
             : const Text('ACCOUNT STATEMENT', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 2,

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'auth_service.dart';
 import 'constants/api_constants.dart';
+import 'constants/branding.dart';
 
 class DashboardService {
   // API configuration is now centralized in ApiConstants
@@ -146,7 +147,7 @@ class DashboardData {
 
   factory DashboardData.fromJson(Map<String, dynamic> json) {
     return DashboardData(
-      appTitle: json['appTitle'] ?? 'Reckon Seller 2.0',
+      appTitle: json['appTitle'] ?? Branding.appName,
       userInfo: UserInfoData.fromJson(json['userInfo'] ?? {}),
       brands: BrandsData.fromJson(json['brands'] ?? {}),
       tenantDetail: TenantDetail.fromJson(json['tenantDetail'] ?? {}),

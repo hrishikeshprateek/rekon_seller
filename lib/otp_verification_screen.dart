@@ -150,6 +150,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
               constraints: const BoxConstraints(maxWidth: 360), // Narrower for compactness
               child: Form(
                 key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [

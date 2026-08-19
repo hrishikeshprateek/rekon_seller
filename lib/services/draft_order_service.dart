@@ -54,6 +54,9 @@ class DraftOrderRequest {
   final String itemCode;
   final int idCol;
   final String itemQty;
+  // Box quantity — sent to the API as `ItemUnit1Qty`. Defaults to '0' so
+  // existing callers are unaffected.
+  final String itemUnit1Qty;
   final String itemRate;
   final String itemFQty;
   final String itemSchQty;
@@ -70,6 +73,7 @@ class DraftOrderRequest {
     required this.itemCode,
     required this.idCol,
     required this.itemQty,
+    this.itemUnit1Qty = '0',
     required this.itemRate,
     required this.itemFQty,
     required this.itemSchQty,
@@ -85,6 +89,7 @@ class DraftOrderRequest {
 
   DraftOrderRequest copyWith({
     String? itemQty,
+    String? itemUnit1Qty,
     String? itemRate,
     String? itemFQty,
     String? itemSchQty,
@@ -101,6 +106,7 @@ class DraftOrderRequest {
       itemCode: itemCode,
       idCol: idCol,
       itemQty: itemQty ?? this.itemQty,
+      itemUnit1Qty: itemUnit1Qty ?? this.itemUnit1Qty,
       itemRate: itemRate ?? this.itemRate,
       itemFQty: itemFQty ?? this.itemFQty,
       itemSchQty: itemSchQty ?? this.itemSchQty,
@@ -132,6 +138,7 @@ class DraftOrderRequest {
       'IdCol': idCol,
       'cu_id': context.cuId,
       'ItemQty': itemQty,
+      'ItemUnit1Qty': itemUnit1Qty,
       'ItemRate': itemRate,
       'ItemFQty': itemFQty,
       'ItemSchQty': itemSchQty,

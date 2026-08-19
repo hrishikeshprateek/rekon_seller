@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:dio/dio.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
@@ -567,7 +568,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         centerTitle: true,
         elevation: 0,
         scrolledUnderElevation: 0,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         surfaceTintColor: Colors.transparent,
         actions: [
           Stack(
@@ -1389,6 +1390,7 @@ class _AddToCartSheet extends StatefulWidget {
 
 class _AddToCartSheetState extends State<_AddToCartSheet> {
   late final TextEditingController qtyCtrl;
+  late final TextEditingController boxController;
   late final TextEditingController fQtyCtrl;
   late final TextEditingController schQtyCtrl;
   late final TextEditingController dSchQtyCtrl;
@@ -1423,6 +1425,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     // edit of an existing cart item, prefill with the saved values.
     final bool isNew = d.isEmpty || si(d['Qty']) == 0;
     qtyCtrl        = TextEditingController(text: isNew ? '' : si(d['Qty']).toString());
+    boxController  = TextEditingController(text: '');
     fQtyCtrl       = TextEditingController(text: isNew ? '' : si(d['FQty']).toString());
     schQtyCtrl     = TextEditingController(text: isNew ? '' : sd(d['SchQty']).toStringAsFixed(0));
     dSchQtyCtrl    = TextEditingController(text: isNew ? '' : sd(d['DSchQty']).toStringAsFixed(0));
@@ -1442,6 +1445,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
 
   // Explicit FocusNodes so the keyboard "Next" key reliably hops to every
   // visible field — including the flag-gated Free Qty and Pcs Discount rows.
+  final FocusNode _boxFocus        = FocusNode();
   final FocusNode _qtyFocus        = FocusNode();
   final FocusNode _freeQtyFocus    = FocusNode();
   final FocusNode _schemeFocus     = FocusNode();
@@ -1453,7 +1457,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
   final FocusNode _remarkFocus     = FocusNode();
 
   List<FocusNode> get _orderedFocus => [
-        _qtyFocus, _freeQtyFocus, _schemeFocus, _dSchemeFocus, _priceFocus,
+        _boxFocus, _qtyFocus, _freeQtyFocus, _schemeFocus, _dSchemeFocus, _priceFocus,
         _discPcsFocus, _discPerFocus, _addDiscPerFocus, _remarkFocus,
       ];
 
@@ -1472,11 +1476,12 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
 
   @override
   void dispose() {
-    qtyCtrl.dispose(); fQtyCtrl.dispose(); schQtyCtrl.dispose();
+    qtyCtrl.dispose(); boxController.dispose(); fQtyCtrl.dispose(); schQtyCtrl.dispose();
     dSchQtyCtrl.dispose(); priceCtrl.dispose(); discPcsCtrl.dispose();
     discPerCtrl.dispose(); addDiscPerCtrl.dispose();
     schNarrCtrl.dispose(); remarkCtrl.dispose();
     _qtyFocus.dispose();
+    _boxFocus.dispose();
     _freeQtyFocus.dispose();
     _schemeFocus.dispose();
     _dSchemeFocus.dispose();
@@ -1523,16 +1528,20 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     String code = ''; int idCol = 0;
     _resolveProductIds((c, i) { code = c; idCol = i; });
     final qty  = int.tryParse(qtyCtrl.text.trim()) ?? 0;
+    final box  = int.tryParse(boxController.text.trim()) ?? 0;
     final rate = double.tryParse(priceCtrl.text.trim()) ?? 0.0;
     String orZero(String s) => s.trim().isEmpty ? '0' : s.trim();
     return DraftOrderRequest(
       itemCode: code, idCol: idCol,
-      itemQty: orZero(qtyCtrl.text),
+      // When boxes are entered, send base 0 so the server returns
+      // box × conversion (no compounding); the total is shown in the Qty field.
+      itemQty: box > 0 ? '0' : orZero(qtyCtrl.text),
+      itemUnit1Qty: orZero(boxController.text),
       itemRate: rate.toStringAsFixed(2),
       itemFQty:    orZero(fQtyCtrl.text),
       itemSchQty:  orZero(schQtyCtrl.text),
       itemDSchQty: orZero(dSchQtyCtrl.text),
-      itemAmt: (rate * qty).toStringAsFixed(2),
+      itemAmt: (rate * (box > 0 ? 0 : qty)).toStringAsFixed(2),
       discountPercentage:  orZero(discPerCtrl.text),
       discountPercentage1: orZero(addDiscPerCtrl.text),
       discountPcs:         orZero(discPcsCtrl.text),
@@ -1541,11 +1550,20 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     );
   }
 
+  // When the Box is cleared/zero, reset the Qty (it was holding the box-driven
+  // total), then re-run the preview.
+  void _onBoxChanged() {
+    final b = int.tryParse(boxController.text.trim()) ?? 0;
+    if (b <= 0) qtyCtrl.text = '';
+    _onChanged();
+  }
+
   void _onChanged() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () async {
       final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
-      if (qty <= 0) {
+      final box = int.tryParse(boxController.text.trim()) ?? 0;
+      if (qty <= 0 && box <= 0) {
         if (mounted) setState(() { goodsValue = 0; schemeValue = 0; discountValue = 0; gst = 0; netValue = 0; preview = null; _loading = false; });
         return;
       }
@@ -1559,6 +1577,12 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
           goodsValue = result.amt; schemeValue = result.schemeAmt;
           discountValue = result.totalDisc; gst = result.taxAmt; netValue = result.netAmt;
           _loading = false;
+          // Box-driven: show the server's total quantity in the Qty field.
+          if (box > 0 && result.qty.isNotEmpty) {
+            // Quantity as a whole number (server sends e.g. "40.00").
+            final n = double.tryParse(result.qty);
+            qtyCtrl.text = n != null ? n.toInt().toString() : result.qty;
+          }
           // First preview after the sheet opens: prefill the scheme & discount
           // fields with the default the server applied — but only where the
           // user (or a saved cart entry) hasn't already filled something in.
@@ -1603,7 +1627,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.primary, width: 2)),
       );
 
-  Widget _rowField(ColorScheme cs, TextTheme tt, String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false}) => Row(
+  Widget _rowField(ColorScheme cs, TextTheme tt, String label, TextEditingController ctrl, TextInputType kbType, {bool enabled = true, FocusNode? focusNode, bool autofocus = false, VoidCallback? onFieldChanged}) => Row(
         children: [
           Expanded(child: Text(label, style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600))),
           SizedBox(
@@ -1624,7 +1648,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
               },
               textAlign: TextAlign.right,
               enabled: enabled,
-              onChanged: (_) => _onChanged(),
+              onChanged: (_) => (onFieldChanged ?? _onChanged)(),
               style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w700),
               decoration: _fieldDeco(cs),
             ),
@@ -1816,7 +1840,11 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _rowField(colorScheme, textTheme, 'Quantity', qtyCtrl, TextInputType.number, focusNode: _qtyFocus, autofocus: true),
+                    if (context.watch<SalesmanFlagsService>().flags?.showBoxQty ?? true) ...[
+                      _rowField(colorScheme, textTheme, 'Box', boxController, TextInputType.number, focusNode: _boxFocus, autofocus: true, onFieldChanged: _onBoxChanged),
+                      const SizedBox(height: 8),
+                    ],
+                    _rowField(colorScheme, textTheme, 'Quantity', qtyCtrl, TextInputType.number, focusNode: _qtyFocus, autofocus: !(context.watch<SalesmanFlagsService>().flags?.showBoxQty ?? true)),
                     const SizedBox(height: 8),
                     if (context.watch<SalesmanFlagsService>().flags?.showFreeQtySalesMan ?? false)
                       ...[
@@ -2089,6 +2117,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
         itemCode: itemCode,
         idCol: idCol,
         qty: qtyCtrl.text.trim(),
+        box: boxController.text.trim(),
         rate: usedPrice.toStringAsFixed(2),
         freeQty: fQtyCtrl.text.trim(),
         schemeQty: schQtyCtrl.text.trim(),
@@ -2135,6 +2164,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
     required String itemCode,
     required int idCol,
     required String qty,
+    required String box,
     required String rate,
     required String freeQty,
     required String schemeQty,
@@ -2151,6 +2181,7 @@ class _AddToCartSheetState extends State<_AddToCartSheet> {
       itemCode: itemCode,
       idCol: idCol,
       itemQty: orZero(qty),
+      itemUnit1Qty: orZero(box),
       itemRate: rate,
       itemFQty: orZero(freeQty),
       itemSchQty: orZero(schemeQty),

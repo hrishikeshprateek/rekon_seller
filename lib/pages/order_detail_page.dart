@@ -1,4 +1,5 @@
 import 'dart:io';
+import '../constants/branding.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
@@ -27,7 +28,7 @@ class OrderDetailPage extends StatefulWidget {
 }
 
 class _OrderDetailPageState extends State<OrderDetailPage> {
-  static const Color _blue = Color(0xFF1E88E5);
+  static Color get _blue => Branding.primary;
   static const Color _bg = Color(0xFFF5F7FA);
 
   bool _itemsExpanded = true;
@@ -386,7 +387,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                       ? null
                       : _viewInvoice,
                   icon: _isOpeningInvoice
-                      ? const SizedBox(
+                      ? SizedBox(
                           height: 16,
                           width: 16,
                           child: CircularProgressIndicator(
@@ -396,7 +397,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                   label: const Text('View Invoice'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: _blue,
-                    side: const BorderSide(color: _blue),
+                    side: BorderSide(color: _blue),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
@@ -444,7 +445,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
             onTap: () => setState(() => _itemsExpanded = !_itemsExpanded),
             child: Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
                     'ITEM PURCHASED',
                     textAlign: TextAlign.center,
@@ -496,7 +497,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
         const SizedBox(height: 8),
         Text(
           name,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
             color: _blue,
@@ -618,7 +619,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     return Text(
       title,
       textAlign: TextAlign.center,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.bold,
         color: _blue,

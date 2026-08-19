@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Contact-support options shown as a bottom sheet (Call / WhatsApp / Email).
@@ -63,7 +64,7 @@ class ContactSupportSheet {
                   children: [
                     _ContactIcon(
                       icon: Icons.call_rounded,
-                      color: const Color(0xFF1E88E5),
+                      color: Branding.primary,
                       label: 'Call',
                       value: _phoneDisplay,
                       onTap: () {
@@ -83,7 +84,7 @@ class ContactSupportSheet {
                     ),
                     _ContactIcon(
                       icon: Icons.email_rounded,
-                      color: const Color(0xFFFF6F00),
+                      color: Branding.secondary,
                       label: 'Email',
                       value: _email,
                       onTap: () {

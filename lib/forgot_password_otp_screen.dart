@@ -58,7 +58,7 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
     setState(() => _isLoading = true);
     try {
       final auth = Provider.of<AuthService>(context, listen: false);
-      final result = await auth.createPassword(
+      final result = await auth.resetPassword(
         mobile: widget.mobile,
         password: _passwordController.text.trim(),
         countryCode: widget.countryCode,
@@ -146,6 +146,7 @@ class _ForgotPasswordOtpScreenState extends State<ForgotPasswordOtpScreen> {
               constraints: const BoxConstraints(maxWidth: 380),
               child: Form(
                 key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,

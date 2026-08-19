@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +10,7 @@ import 'dart:io';
 import 'dart:convert';
 import '../models/delivery_task_model.dart';
 import '../auth_service.dart';
+import '../constants/api_constants.dart';
 
 class DeliveryStatus {
   final int code;
@@ -227,10 +229,10 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
         options: Options(
           validateStatus: (status) => true, // Accept all status codes to see error response
           headers: {
-            'package_name': 'com.reckon.reckonbiz',
+            'package_name': ApiConstants.packageName,
             'MobileNo': mobile,
             'CountryCode': '91',
-            'lApkName': 'com.reckon.reckonbiz',
+            'lApkName': ApiConstants.packageName,
             'GenerateOtp': '0',
           },
         ),
@@ -358,7 +360,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
         options: Options(headers: {
           'Content-Type': 'application/json',
           'Authorization': auth.getAuthHeader() ?? '',
-          'package_name': 'com.reckon.reckonbiz',
+          'package_name': ApiConstants.packageName,
         }),
       );
 
@@ -630,7 +632,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
       final response = await dio.post('/markDelivery', data: formData,
           options: Options(headers: {
             'Authorization': auth.getAuthHeader() ?? '',
-            'package_name': 'com.reckon.reckonbiz',
+            'package_name': ApiConstants.packageName,
           }));
 
       debugPrint('[MarkDeliveredPage] Response: ${response.data}');
@@ -684,7 +686,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
       final response = await dio.post('/markDelivery', data: formData,
           options: Options(headers: {
             'Authorization': auth.getAuthHeader() ?? '',
-            'package_name': 'com.reckon.reckonbiz',
+            'package_name': ApiConstants.packageName,
           }));
 
       debugPrint('[MarkDeliveredPage] Reason Response: ${response.data}');
@@ -925,7 +927,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
             expandedHeight: 56.0,
             floating: false,
             pinned: true,
-            backgroundColor: const Color(0xFF1E88E5),
+            backgroundColor: Branding.primary,
             iconTheme: const IconThemeData(color: Colors.white),
             title: Text(
               'MARK DELIVERY',
@@ -980,6 +982,7 @@ class _MarkDeliveredPageState extends State<MarkDeliveredPage> {
 
                 Form(
                   key: _formKey,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   child: Column(
                     children: [
                       // Party Details Card

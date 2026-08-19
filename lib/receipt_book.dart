@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'constants/branding.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
@@ -350,7 +351,7 @@ class _ReceiptBookPageState extends State<ReceiptBookPage> {
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),

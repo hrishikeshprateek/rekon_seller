@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'constants/branding.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'auth_service.dart';
@@ -106,7 +107,7 @@ class _CreateMpinScreenState extends State<CreateMpinScreen> {
             style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.white)
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         foregroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -126,6 +127,7 @@ class _CreateMpinScreenState extends State<CreateMpinScreen> {
               constraints: const BoxConstraints(maxWidth: 400),
               child: Form(
                 key: _formKey,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../constants/branding.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -489,7 +490,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       appBar: AppBar(
         title: const Text('SELECT ACCOUNT', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
         centerTitle: true,
-        backgroundColor: const Color(0xFF1E88E5),
+        backgroundColor: Branding.primary,
         scrolledUnderElevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22, color: Colors.white),
@@ -512,8 +513,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                     child: Container(
                       width: 9,
                       height: 9,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF6F00),
+                      decoration: BoxDecoration(
+                        color: Branding.secondary,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -651,7 +652,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: isSelected ? const Color(0xFF1E88E5) : const Color(0xFFE0E0E0), width: isSelected ? 2 : 1),
+        side: BorderSide(color: isSelected ? Branding.primary : const Color(0xFFE0E0E0), width: isSelected ? 2 : 1),
       ),
       child: InkWell(
         onTap: () => _selectAccount(account),
@@ -714,7 +715,7 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                               width: 36,
                               height: 36,
                               alignment: Alignment.center,
-                              child: const Icon(Icons.navigation, size: 18, color: Color(0xFF1E88E5)),
+                              child: Icon(Icons.navigation, size: 18, color: Branding.primary),
                             ),
                           ),
                         ),
@@ -793,10 +794,10 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.map_outlined, size: 16, color: Color(0xFF1E88E5)),
+                    children: [
+                      Icon(Icons.map_outlined, size: 16, color: Branding.primary),
                       SizedBox(width: 8),
-                      Text("View location on map", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E88E5))),
+                      Text("View location on map", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Branding.primary)),
                     ],
                   ),
                 ),
@@ -837,9 +838,9 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, size: 18, color: isEnabled ? const Color(0xFF1E88E5) : Colors.grey[300]),
+                Icon(icon, size: 18, color: isEnabled ? Branding.primary : Colors.grey[300]),
                 const SizedBox(width: 8),
-                Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isEnabled ? const Color(0xFF1E88E5) : Colors.grey[300])),
+                Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: isEnabled ? Branding.primary : Colors.grey[300])),
               ],
             ),
           ),
@@ -892,8 +893,8 @@ class _SelectAccountPageState extends State<SelectAccountPage> {
                         label: const Text('Share Details'),
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          side: const BorderSide(color: Color(0xFFFF6F00), width: 1.5),
-                          foregroundColor: const Color(0xFFFF6F00),
+                          side: BorderSide(color: Branding.secondary, width: 1.5),
+                          foregroundColor: Branding.secondary,
                         ),
                       ),
                     ),

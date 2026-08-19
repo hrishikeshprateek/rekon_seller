@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../auth_service.dart';
+import '../constants/branding.dart';
 import '../widgets/change_password_dialog.dart';
 
 /// A Material 3 styled Settings page with sample settings options.
@@ -299,7 +300,7 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showAbout() {
     showAboutDialog(
       context: context,
-      applicationName: 'Reckon Seller 2.0',
+      applicationName: Branding.appName,
       applicationVersion: '1.0.0',
       applicationIcon: const FlutterLogo(size: 48),
       children: const [Text('A sample settings page implemented with Material 3.')],
