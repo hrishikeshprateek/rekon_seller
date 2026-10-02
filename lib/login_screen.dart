@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -67,27 +69,51 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Runs a login-screen network call with the spinner up, guaranteeing the
+  /// spinner comes down and a user-readable result comes back no matter how
+  /// the call fails. Dio's timeouts only cover the socket; a stalled platform
+  /// channel or a proxy that accepts the connection and never answers would
+  /// otherwise leave the spinner up forever (App Review hit exactly that).
+  Future<Map<String, dynamic>> _withSpinner(
+    Future<Map<String, dynamic>> Function() call,
+  ) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      return await call().timeout(const Duration(seconds: 45));
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message': 'The server took too long to respond. Check your connection and try again.',
+      };
+    } catch (e) {
+      debugPrint('[LoginScreen] network call threw: $e');
+      return {
+        'success': false,
+        'message': 'Could not reach the server. Check your connection and try again.',
+      };
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _sendOTP() async {
     if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-
       final authService = Provider.of<AuthService>(context, listen: false);
 
       // Always call ValidateLicense API (password is optional - can be empty)
       final password = _passwordController.text.trim();
       debugPrint('[LoginScreen] Calling ValidateLicense with password: ${password.isEmpty ? "(empty)" : "(provided)"}');
 
-      final result = await authService.validateLicense(
-        licenseNumber: _licenseController.text.trim(),
-        mobile: _mobileController.text.trim(),
-        password: password, // Can be empty string
-      );
+      final result = await _withSpinner(() => authService.validateLicense(
+            licenseNumber: _licenseController.text.trim(),
+            mobile: _mobileController.text.trim(),
+            password: password, // Can be empty string
+          ));
 
       if (!mounted) return;
-      setState(() => _isLoading = false);
 
       debugPrint('[LoginScreen] ValidateLicense result success: ${result['success']}');
       debugPrint('[LoginScreen] ValidateLicense result: $result');
@@ -180,13 +206,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     // 1) Send the OTP to the account's mobile before allowing the switch.
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-    final otpSend = await authService.generateOTPForMobile(mobile: mobile);
+    final otpSend = await _withSpinner(() => authService.generateOTPForMobile(mobile: mobile));
     if (!mounted) return;
-    setState(() => _isLoading = false);
     debugPrint('[LoginScreen] Device-change OTP send result: $otpSend');
     if (otpSend['success'] != true) {
       setState(() => _errorMessage =
@@ -200,17 +221,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // 3) Verify the OTP with updatedevice_id:true. On success this unbinds the
     //    old device, binds this one, and returns the login profile/token.
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-    final otpResult = await authService.validateMobileOTP(
-      mobile: mobile,
-      otp: otp,
-      licenseNumber: _licenseController.text.trim(),
-      cuId: cuid,
-      updateDeviceId: true,
-    );
+    final otpResult = await _withSpinner(() => authService.validateMobileOTP(
+          mobile: mobile,
+          otp: otp,
+          licenseNumber: _licenseController.text.trim(),
+          cuId: cuid,
+          updateDeviceId: true,
+        ));
     if (!mounted) return;
     debugPrint('[LoginScreen] Device-change OTP verify result: $otpResult');
     if (otpResult['success'] != true) {
@@ -226,14 +243,13 @@ class _LoginScreenState extends State<LoginScreen> {
     //    Profile/LicNo/Store data, so logging in off it leaves a blank license.
     //    Re-validating yields a clean, fully-populated session; changeDevice:true
     //    ensures the binding moves to this device.
-    final retry = await authService.validateLicense(
-      licenseNumber: _licenseController.text.trim(),
-      mobile: mobile,
-      password: _passwordController.text.trim(),
-      changeDevice: true,
-    );
+    final retry = await _withSpinner(() => authService.validateLicense(
+          licenseNumber: _licenseController.text.trim(),
+          mobile: mobile,
+          password: _passwordController.text.trim(),
+          changeDevice: true,
+        ));
     if (!mounted) return;
-    setState(() => _isLoading = false);
     debugPrint('[LoginScreen] Post-OTP ValidateLicense result: $retry');
     if (retry['success'] == true) {
       // Already-registered account → straight to Home, skip the setup screens.
@@ -453,17 +469,25 @@ class _LoginScreenState extends State<LoginScreen> {
     // Hide the "Powered by" footer while the keyboard is open so it doesn't
     // ride up above the keyboard — it should only sit at the bottom.
     final keyboardOpen = MediaQuery.of(context).viewInsets.bottom > 0;
+    // Shrink the header on short viewports (iPad running in iPhone-compatibility
+    // mode gives ~620pt) so LOGIN stays above the fold without scrolling.
+    final shortViewport = MediaQuery.sizeOf(context).height < 720;
+    final logoSize = shortViewport ? 120.0 : 180.0;
+    final headerGap = shortViewport ? 20.0 : 40.0;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
             // --- MAIN CONTENT (Scrollable) ---
-            Center(
+            // Expanded so the footer below gets its own row: on short viewports
+            // (iPad in iPhone-compatibility mode) an overlaid footer landed on
+            // top of the LOGIN button.
+            Expanded(
+              child: Center(
               child: SingleChildScrollView(
-                // Add bottom padding so content doesn't get hidden behind the pinned footer
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 80),
+                padding: const EdgeInsets.all(24),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 400),
                   child: Form(
@@ -479,8 +503,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             Image.asset(
                               Branding.logo,
-                              width: 180,
-                              height: 180,
+                              width: logoSize,
+                              height: logoSize,
                               fit: BoxFit.contain,
                             ),
                             const SizedBox(height: 20),
@@ -506,7 +530,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ],
                         ),
 
-                        const SizedBox(height: 40),
+                        SizedBox(height: headerGap),
 
                         // --- 2. INPUT FIELDS (Compact Typography) ---
 
@@ -667,13 +691,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
+            ),
 
-            // --- 5. PINNED FOOTER (hidden while the keyboard is open) ---
+            // --- 5. FOOTER (hidden while the keyboard is open) ---
             if (!keyboardOpen)
-              Positioned(
-              left: 0,
-              right: 0,
-              bottom: 16,
+              Padding(
+              padding: const EdgeInsets.only(bottom: 16),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
