@@ -1,14 +1,30 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// API Constants - Centralized configuration for all API endpoints
 class ApiConstants {
   // API Base Configuration
-  static const String apiHost = 'http://mobileappsandbox.reckonsales.com:8080';
+  static const String directHost = 'http://mobileappsandbox.reckonsales.com:8080';
+
+  /// Optional same-origin proxy for web builds, supplied at compile time:
+  ///   flutter run -d chrome --dart-define=API_PROXY=http://localhost:8010
+  ///
+  /// Only web honours it. The browser blocks the OTP endpoint outright because
+  /// its custom headers (MobileNo, CountryCode, lApkName, GenerateOtp) are not
+  /// in the server's Access-Control-Allow-Headers list, and blocks every call
+  /// as mixed content when the page itself is served over HTTPS. Routing web
+  /// traffic through a proxy sidesteps both. Mobile always talks direct.
+  static const String webProxy = String.fromEnvironment('API_PROXY');
+
+  static String get apiHost =>
+      (kIsWeb && webProxy.isNotEmpty) ? webProxy : directHost;
+
   static const String apiBasePath = '/reckon-biz/api';
 
   // API Endpoints
-  static const String baseUrl = '$apiHost$apiBasePath/reckonpwsorder';
-  static const String refreshUrl = '$apiHost$apiBasePath/refresh';
-  static const String getReceiptDetailUrl = '$baseUrl/GetReceiptDetail';
-  static const String getSalesmanFlagsUrl = '$baseUrl/GetSalesmanFlags';
+  static String get baseUrl => '$apiHost$apiBasePath/reckonpwsorder';
+  static String get refreshUrl => '$apiHost$apiBasePath/refresh';
+  static String get getReceiptDetailUrl => '$baseUrl/GetReceiptDetail';
+  static String get getSalesmanFlagsUrl => '$baseUrl/GetSalesmanFlags';
 
   // Tenant Configuration.
   // Set once at startup (main.dart) to the real running package name so each
