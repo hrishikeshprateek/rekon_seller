@@ -3,6 +3,7 @@ import 'login_screen.dart';
 import 'home_screen.dart';
 import 'app_navigator.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
@@ -74,6 +75,15 @@ class _MyAppState extends State<MyApp> {
             debugShowCheckedModeBanner: false,
             navigatorKey: appNavigatorKey,
             title: Branding.appName,
+            // en_IN drives the date pickers' manual-entry format to dd/mm/yyyy
+            // (the en_US default is mm/dd/yyyy).
+            locale: const Locale('en', 'IN'),
+            supportedLocales: const [Locale('en', 'IN')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
             theme: ThemeData(
               useMaterial3: true,
               // Modern Blue-Orange theme with Material Design 3

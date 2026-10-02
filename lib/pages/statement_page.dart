@@ -375,6 +375,9 @@ class _StatementPageState extends State<StatementPage> {
       firmCode = '';
     }
 
+    // Mirror the selected range from the ledger list so the PDF covers the same
+    // period the user is looking at (empty = full ledger, same as the list call).
+    final df = DateFormat('yyyy-MM-dd');
     final payload = {
       'lLicNo': auth.currentUser?.licenseNumber ?? '',
       'lAcNo': acc.code ?? acc.id,
@@ -382,11 +385,13 @@ class _StatementPageState extends State<StatementPage> {
       'lSize': 50,
       'lExecuteTotalRows': 1,
       'lSharePdf': 1,
-      'firm_code': firmCode,
+      'lFirmCode': firmCode,
       'lSearchFieldValue': '',
-      'lFromDate': '',
-      'lTillDate': ''
+      'lFromDate': _fromDate != null ? df.format(_fromDate!) : '',
+      'lTillDate': _toDate != null ? df.format(_toDate!) : '',
     };
+
+    debugPrint('GetAccountLedger PDF payload: ${jsonEncode(payload)}');
 
     try {
       final response = await dio.post(
