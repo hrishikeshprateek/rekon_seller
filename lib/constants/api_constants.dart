@@ -15,8 +15,17 @@ class ApiConstants {
   /// traffic through a proxy sidesteps both. Mobile always talks direct.
   static const String webProxy = String.fromEnvironment('API_PROXY');
 
-  static String get apiHost =>
-      (kIsWeb && webProxy.isNotEmpty) ? webProxy : directHost;
+  static String get apiHost {
+    if (!kIsWeb || webProxy.isEmpty) return directHost;
+    // "/" means same origin: emit relative URLs like /reckon-biz/api/... so the
+    // host that served the page proxies the call (Vercel rewrites, nginx, ...).
+    // That avoids CORS entirely and sidesteps mixed-content blocking when the
+    // page is HTTPS and the API is not.
+    if (webProxy == '/') return '';
+    return webProxy.endsWith('/')
+        ? webProxy.substring(0, webProxy.length - 1)
+        : webProxy;
+  }
 
   static const String apiBasePath = '/reckon-biz/api';
 
