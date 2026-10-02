@@ -2,6 +2,7 @@
 import 'login_screen.dart';
 import 'home_screen.dart';
 import 'app_navigator.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
@@ -26,10 +27,22 @@ void main() async {
   // calls, instead of a hardcoded one.
   try {
     final info = await PackageInfo.fromPlatform();
-    if (info.packageName.isNotEmpty) {
-      ApiConstants.packageName = info.packageName;
-      ApiConstants.tenantId = info.packageName;
-      debugPrint('[main] API package_name set to ${info.packageName}');
+    // On web there is no bundle identifier, so package_info_plus reports the
+    // Dart package name ('reckon_seller_2_0'), which the backend rejects as an
+    // unknown tenant. Only accept a value that actually looks like a bundle id;
+    // otherwise keep the compiled-in default, overridable per web deployment
+    // with --dart-define=APP_PACKAGE_NAME=com.reckon.<flavor>.
+    const webOverride = String.fromEnvironment('APP_PACKAGE_NAME');
+    final resolved = kIsWeb
+        ? (webOverride.isNotEmpty ? webOverride : ApiConstants.packageName)
+        : info.packageName;
+    if (resolved.isNotEmpty && resolved.contains('.')) {
+      ApiConstants.packageName = resolved;
+      ApiConstants.tenantId = resolved;
+      debugPrint('[main] API package_name set to $resolved');
+    } else {
+      debugPrint('[main] Ignoring package name "$resolved"; '
+          'using default ${ApiConstants.packageName}');
     }
   } catch (e) {
     debugPrint('[main] Could not resolve package name, using default: $e');
